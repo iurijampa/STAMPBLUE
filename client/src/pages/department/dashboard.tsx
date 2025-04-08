@@ -181,10 +181,49 @@ export default function DepartmentDashboard() {
     // Recarregar a página completamente (como o F5)
     window.location.reload();
   };
+  
+  // Função para fazer logout
+  const handleLogout = async () => {
+    try {
+      const response = await fetch('/api/logout', {
+        method: 'POST',
+        credentials: 'include',
+      });
+      
+      if (response.ok) {
+        toast({
+          title: "Logout realizado com sucesso",
+        });
+        navigate("/auth");
+      } else {
+        throw new Error('Falha ao fazer logout');
+      }
+    } catch (error) {
+      console.error("Erro ao fazer logout:", error);
+      toast({
+        title: "Falha no logout",
+        description: error instanceof Error ? error.message : "Erro desconhecido",
+        variant: "destructive",
+      });
+    }
+  };
 
   return (
     <Layout title={`Dashboard - ${department ? capitalize(department) : 'Departamento'}`}>
-      <div className="flex justify-end mb-4">
+      <div className="flex justify-between items-center mb-4">
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-medium">
+            Bem-vindo, <span className="font-semibold">{user?.name || user?.username}</span>
+          </h3>
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={handleLogout}
+            className="flex items-center gap-1"
+          >
+            Sair
+          </Button>
+        </div>
         <Button 
           variant="outline" 
           size="sm" 
