@@ -107,14 +107,14 @@ export default function AuthPage() {
   };
   
   return (
-    <div className="min-h-screen flex flex-col md:flex-row">
+    <div className="min-h-screen flex flex-col md:flex-row overflow-auto">
       {/* Hero Section */}
-      <div className="w-full md:w-1/2 bg-gradient-to-br from-primary-600 to-primary-800 p-8 flex items-center justify-center">
+      <div className="w-full md:w-1/2 bg-gradient-to-br from-primary-600 to-primary-800 p-6 md:p-8 flex items-center justify-center py-12">
         <div className="max-w-md text-white space-y-6">
-          <h1 className="text-4xl font-bold tracking-tight">
+          <h1 className="text-3xl md:text-4xl font-bold tracking-tight">
             Sistema de Gerenciamento de Produção
           </h1>
-          <p className="text-lg text-primary-50">
+          <p className="text-base md:text-lg text-primary-50">
             Bem-vindo ao sistema de gerenciamento de fluxo de trabalho para fábrica de camisas. 
             Este sistema permite o controle completo do processo de produção entre diferentes setores.
           </p>
@@ -139,15 +139,15 @@ export default function AuthPage() {
       </div>
       
       {/* Form Section */}
-      <div className="w-full md:w-1/2 bg-background p-8 flex items-center justify-center">
+      <div className="w-full md:w-1/2 bg-background p-6 md:p-8 flex items-center justify-center py-12">
         <div className="w-full max-w-md space-y-6">
-          <div className="text-center mb-8">
-            <h2 className="text-3xl font-bold">Acesso ao Sistema</h2>
+          <div className="text-center mb-6 md:mb-8">
+            <h2 className="text-2xl md:text-3xl font-bold">Acesso ao Sistema</h2>
             <p className="text-muted-foreground mt-2">Faça login ou registre-se para acessar</p>
           </div>
 
           <Tabs defaultValue="login" className="w-full">
-            <TabsList className="grid w-full grid-cols-2 mb-8">
+            <TabsList className="grid w-full grid-cols-2 mb-4 md:mb-8">
               <TabsTrigger value="login">Login</TabsTrigger>
               <TabsTrigger value="register">Registro</TabsTrigger>
             </TabsList>

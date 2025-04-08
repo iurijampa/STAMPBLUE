@@ -121,7 +121,7 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="min-h-screen p-4 md:p-8 bg-gray-50">
+    <div className="min-h-screen p-4 md:p-8 bg-gray-50 overflow-x-hidden">
       <div className="max-w-6xl mx-auto">
         <div className="bg-white rounded-lg shadow-md p-4 md:p-6 mb-6">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
@@ -194,8 +194,8 @@ export default function AdminDashboard() {
               </div>
             ) : (
               <div className="border rounded-lg overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
+                <div className="overflow-x-auto w-full">
+                  <table className="w-full text-sm min-w-[650px]">
                     <thead>
                       <tr className="bg-muted">
                         <th className="px-4 py-3 text-left font-medium">Título</th>
@@ -209,8 +209,8 @@ export default function AdminDashboard() {
                     <tbody className="divide-y">
                       {activities.map((activity) => (
                         <tr key={activity.id} className="hover:bg-muted/50">
-                          <td className="px-4 py-3">{activity.title}</td>
-                          <td className="px-4 py-3">{activity.clientName || "—"}</td>
+                          <td className="px-4 py-3 truncate max-w-[150px]">{activity.title}</td>
+                          <td className="px-4 py-3 truncate max-w-[100px]">{activity.clientName || "—"}</td>
                           <td className="px-4 py-3">{activity.quantity}</td>
                           <td className="px-4 py-3">
                             <span className={`px-2 py-1 rounded-full text-xs font-medium 
