@@ -234,6 +234,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/users", isAdmin, async (req, res) => {
+    try {
+      // Verificar se o username já existe
+      const existingUser = await storage.getUserByUsername(req.body.username);
+      if (existingUser) {
+        return res.status(400).json({ message: "Nome de usuário já existe" });
+      }
+      
+      // Hash da senha já é feita no método createUser do auth.ts
+      const newUser = await storage.createUser(req.body);
+      res.status(201).json(newUser);
+    } catch (error) {
+      res.status(500).json({ message: "Erro ao criar usuário" });
+    }
+  });
+
   app.get("/api/users/:id", isAdmin, async (req, res) => {
     try {
       const userId = parseInt(req.params.id);

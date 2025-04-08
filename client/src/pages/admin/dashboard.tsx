@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { Activity, User } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, CircleX, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Loader2, CircleX, AlertCircle, CheckCircle2, Users } from "lucide-react";
 import CreateActivityModal from "@/components/create-activity-modal";
 
 export default function AdminDashboard() {
@@ -126,10 +126,19 @@ export default function AdminDashboard() {
         <div className="bg-white rounded-lg shadow-md p-4 md:p-6 mb-6">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
             <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Dashboard do Administrador</h1>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3">
               <p className="text-sm text-muted-foreground">
                 Bem-vindo, <span className="font-semibold">{user?.name || user?.username}</span>
               </p>
+              <Button 
+                variant="outline" 
+                onClick={() => navigate("/admin/users")}
+                size="sm"
+                className="flex items-center gap-1"
+              >
+                <Users className="h-4 w-4" />
+                Gerenciar Usuários
+              </Button>
               <Button variant="outline" onClick={handleLogout} size="sm">
                 Sair
               </Button>

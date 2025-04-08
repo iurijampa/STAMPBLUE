@@ -1,398 +1,550 @@
-import { useState } from "react";
-import Layout from "@/components/Layout";
 import { Button } from "@/components/ui/button";
-import { 
-  Card, 
-  CardContent, 
-  CardHeader, 
-  CardTitle 
-} from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { useLocation } from "wouter";
+import { useToast } from "@/hooks/use-toast";
+import { useEffect, useState } from "react";
+import { User } from "@shared/schema";
+import { apiRequest } from "@/lib/queryClient";
+import { useQuery } from "@tanstack/react-query";
+import { Loader2, CircleX, Plus, Pencil, Trash } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
-} from "@/components/ui/select";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { Loader2, Search, Plus, Edit, Trash2, MoreHorizontal } from "lucide-react";
-import { apiRequest, queryClient } from "@/lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/hooks/use-auth";
-import { z } from "zod";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-
-const userFormSchema = z.object({
-  username: z.string().min(1, { message: "Nome de usuário obrigatório" }),
-  name: z.string().min(1, { message: "Nome completo obrigatório" }),
-  role: z.string(),
-  password: z.string().optional(),
-});
-
-type UserFormValues = z.infer<typeof userFormSchema>;
 
 export default function AdminUsers() {
+  const [user, setUser] = useState<User | null>(null);
+  const [, navigate] = useLocation();
   const { toast } = useToast();
-  const { user: currentUser } = useAuth();
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [search, setSearch] = useState("");
-  const [currentEditId, setCurrentEditId] = useState<number | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
   
-  // Fetch users
+  // Novos dados do formulário
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
+  const [role, setRole] = useState("gabarito");
+  const [formLoading, setFormLoading] = useState(false);
+
+  // Query para buscar todos os usuários
   const { 
-    data: users = [], 
-    isLoading, 
-    error 
-  } = useQuery({
-    queryKey: ["/api/users"],
-  });
-  
-  // Form
-  const form = useForm<UserFormValues>({
-    resolver: zodResolver(userFormSchema),
-    defaultValues: {
-      username: "",
-      name: "",
-      role: "admin",
-      password: "",
-    },
-  });
-  
-  // Filter users based on search
-  const filteredUsers = users.filter((user: any) => {
-    return (
-      user.username.toLowerCase().includes(search.toLowerCase()) ||
-      user.name.toLowerCase().includes(search.toLowerCase()) ||
-      user.role.toLowerCase().includes(search.toLowerCase())
-    );
-  });
-  
-  // Create/Update user mutation
-  const userMutation = useMutation({
-    mutationFn: async (values: UserFormValues) => {
-      if (currentEditId) {
-        // If password is empty, remove it from the object
-        if (!values.password) {
-          const { password, ...userData } = values;
-          return await apiRequest("PUT", `/api/users/${currentEditId}`, userData);
-        }
-        return await apiRequest("PUT", `/api/users/${currentEditId}`, values);
-      } else {
-        // Ensure password is provided for new users
-        if (!values.password) {
-          throw new Error("Senha é obrigatória para novos usuários");
-        }
-        return await apiRequest("POST", "/api/register", values);
+    data: users, 
+    isLoading: usersLoading,
+    refetch: refetchUsers
+  } = useQuery<User[]>({
+    queryKey: ['/api/users'],
+    queryFn: async () => {
+      const response = await apiRequest("GET", "/api/users");
+      if (!response.ok) {
+        throw new Error("Falha ao carregar usuários");
       }
+      return response.json();
     },
-    onSuccess: () => {
-      toast({
-        title: currentEditId ? "Usuário atualizado" : "Usuário criado",
-        description: currentEditId ? "Usuário atualizado com sucesso" : "Usuário criado com sucesso",
-      });
-      setIsDialogOpen(false);
-      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Erro",
-        description: error.message || "Ocorreu um erro ao processar sua solicitação",
-        variant: "destructive",
-      });
-    },
+    enabled: !isLoading && !!user,
   });
-  
-  // Delete user mutation
-  const deleteUserMutation = useMutation({
-    mutationFn: async (id: number) => {
-      return await apiRequest("DELETE", `/api/users/${id}`);
-    },
-    onSuccess: () => {
-      toast({
-        title: "Usuário excluído",
-        description: "Usuário excluído com sucesso",
+
+  // Verificar autenticação
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const response = await fetch('/api/user', {
+          credentials: 'include'
+        });
+        
+        if (response.status === 401) {
+          navigate("/auth");
+          return;
+        }
+        
+        if (response.ok) {
+          const userData = await response.json();
+          setUser(userData);
+          
+          // Verificar se o usuário é admin
+          if (userData.role !== "admin") {
+            navigate("/department/dashboard");
+          }
+        }
+      } catch (err) {
+        console.error("Erro ao verificar autenticação:", err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    checkAuth();
+  }, [navigate]);
+
+  const handleLogout = async () => {
+    try {
+      const response = await fetch('/api/logout', {
+        method: 'POST',
+        credentials: 'include',
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
-    },
-    onError: (error: any) => {
+      
+      if (response.ok) {
+        toast({
+          title: "Logout realizado com sucesso",
+        });
+        navigate("/auth");
+      } else {
+        throw new Error('Falha ao fazer logout');
+      }
+    } catch (error) {
+      console.error("Erro ao fazer logout:", error);
       toast({
-        title: "Erro",
-        description: error.message || "Ocorreu um erro ao excluir o usuário",
+        title: "Falha no logout",
+        description: error instanceof Error ? error.message : "Erro desconhecido",
         variant: "destructive",
       });
-    },
-  });
-  
-  // Handle edit user
-  const handleEditUser = (user: any) => {
-    setCurrentEditId(user.id);
-    form.reset({
-      username: user.username,
-      name: user.name,
-      role: user.role,
-      password: "",
-    });
-    setIsDialogOpen(true);
+    }
   };
-  
-  // Handle new user
-  const handleNewUser = () => {
-    setCurrentEditId(null);
-    form.reset({
-      username: "",
-      name: "",
-      role: "admin",
-      password: "",
-    });
-    setIsDialogOpen(true);
+
+  const openCreateModal = () => {
+    // Resetar o formulário
+    setUsername("");
+    setPassword("");
+    setName("");
+    setRole("gabarito");
+    setIsCreateModalOpen(true);
   };
-  
-  // Handle delete user
-  const handleDeleteUser = (id: number) => {
-    if (id === currentUser?.id) {
+
+  const openEditModal = (user: User) => {
+    setSelectedUser(user);
+    setUsername(user.username);
+    setName(user.name);
+    setRole(user.role);
+    setPassword(""); // Não enviamos a senha atual por segurança
+    setIsEditModalOpen(true);
+  };
+
+  const openDeleteModal = (user: User) => {
+    setSelectedUser(user);
+    setIsDeleteModalOpen(true);
+  };
+
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormLoading(true);
+    
+    try {
+      const response = await apiRequest("POST", "/api/users", {
+        username,
+        password,
+        name,
+        role
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || "Falha ao criar usuário");
+      }
+      
       toast({
-        title: "Operação não permitida",
-        description: "Você não pode excluir seu próprio usuário",
+        title: "Usuário criado com sucesso",
+      });
+      
+      refetchUsers();
+      setIsCreateModalOpen(false);
+    } catch (error) {
+      console.error("Erro ao criar usuário:", error);
+      toast({
+        title: "Falha ao criar usuário",
+        description: error instanceof Error ? error.message : "Erro desconhecido",
         variant: "destructive",
       });
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  const handleEditUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!selectedUser) {
       return;
     }
     
-    if (window.confirm("Tem certeza que deseja excluir este usuário?")) {
-      deleteUserMutation.mutate(id);
+    setFormLoading(true);
+    
+    try {
+      const userData: any = {
+        username,
+        name,
+        role
+      };
+      
+      // Só enviar senha se for fornecida (opcional na edição)
+      if (password.trim()) {
+        userData.password = password;
+      }
+      
+      const response = await apiRequest("PUT", `/api/users/${selectedUser.id}`, userData);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || "Falha ao atualizar usuário");
+      }
+      
+      toast({
+        title: "Usuário atualizado com sucesso",
+      });
+      
+      refetchUsers();
+      setIsEditModalOpen(false);
+    } catch (error) {
+      console.error("Erro ao atualizar usuário:", error);
+      toast({
+        title: "Falha ao atualizar usuário",
+        description: error instanceof Error ? error.message : "Erro desconhecido",
+        variant: "destructive",
+      });
+    } finally {
+      setFormLoading(false);
     }
-  };
-  
-  // Handle form submission
-  const onSubmit = (values: UserFormValues) => {
-    userMutation.mutate(values);
   };
 
-  // Format role name
-  const formatRole = (role: string) => {
-    switch (role) {
-      case "admin": return "Administrador";
-      case "gabarito": return "Gabarito";
-      case "impressao": return "Impressão";
-      case "batida": return "Batida";
-      case "costura": return "Costura";
-      case "embalagem": return "Embalagem";
-      default: return role;
+  const handleDeleteUser = async () => {
+    if (!selectedUser) {
+      return;
+    }
+    
+    setFormLoading(true);
+    
+    try {
+      const response = await apiRequest("DELETE", `/api/users/${selectedUser.id}`);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || "Falha ao excluir usuário");
+      }
+      
+      toast({
+        title: "Usuário excluído com sucesso",
+      });
+      
+      refetchUsers();
+      setIsDeleteModalOpen(false);
+    } catch (error) {
+      console.error("Erro ao excluir usuário:", error);
+      toast({
+        title: "Falha ao excluir usuário",
+        description: error instanceof Error ? error.message : "Erro desconhecido",
+        variant: "destructive",
+      });
+    } finally {
+      setFormLoading(false);
     }
   };
   
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin mr-2" />
+        <p>Carregando...</p>
+      </div>
+    );
+  }
+
   return (
-    <Layout title="Usuários">
-      {/* Actions Row */}
-      <div className="flex flex-col sm:flex-row justify-between mb-6 gap-3">
-        <h2 className="text-xl font-semibold text-neutral-800">Gerenciar Usuários</h2>
-        
-        <div className="flex flex-col sm:flex-row gap-3">
-          <div className="relative">
-            <Input 
-              placeholder="Buscar usuários..." 
-              className="w-full sm:w-64 pl-9"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-500" />
+    <div className="min-h-screen p-4 md:p-8 bg-gray-50 overflow-x-hidden">
+      <div className="max-w-6xl mx-auto">
+        <div className="bg-white rounded-lg shadow-md p-4 md:p-6 mb-6">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+            <div>
+              <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Gerenciamento de Usuários</h1>
+              <p className="text-muted-foreground mt-1">
+                Crie, edite e exclua usuários do sistema
+              </p>
+            </div>
+            <div className="flex items-center gap-4">
+              <Button variant="outline" onClick={() => navigate("/admin/dashboard")} size="sm">
+                Voltar ao Dashboard
+              </Button>
+              <Button variant="outline" onClick={handleLogout} size="sm">
+                Sair
+              </Button>
+            </div>
           </div>
-          
-          <Button 
-            className="bg-primary-700 hover:bg-primary-800"
-            onClick={handleNewUser}
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Novo Usuário
-          </Button>
+
+          <Card>
+            <CardHeader className="flex flex-row justify-between items-center">
+              <CardTitle>Usuários</CardTitle>
+              <Button
+                onClick={openCreateModal}
+                size="sm"
+                className="flex items-center gap-1"
+              >
+                <Plus className="h-4 w-4" />
+                Novo Usuário
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {usersLoading ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin" />
+                </div>
+              ) : !users || users.length === 0 ? (
+                <div className="text-center py-12 border-2 border-dashed rounded-lg">
+                  <CircleX className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
+                  <h3 className="text-lg font-medium text-muted-foreground">Nenhum usuário encontrado</h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Clique em "Novo Usuário" para criar seu primeiro usuário
+                  </p>
+                </div>
+              ) : (
+                <div className="border rounded-lg overflow-hidden">
+                  <div className="overflow-x-auto w-full">
+                    <table className="w-full text-sm min-w-[650px]">
+                      <thead>
+                        <tr className="bg-muted">
+                          <th className="px-4 py-3 text-left font-medium">Nome</th>
+                          <th className="px-4 py-3 text-left font-medium">Usuário</th>
+                          <th className="px-4 py-3 text-left font-medium">Função</th>
+                          <th className="px-4 py-3 text-right font-medium">Ações</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {users.map((userItem) => (
+                          <tr key={userItem.id} className="hover:bg-muted/50">
+                            <td className="px-4 py-3 truncate max-w-[200px]">{userItem.name}</td>
+                            <td className="px-4 py-3 truncate max-w-[150px]">{userItem.username}</td>
+                            <td className="px-4 py-3">
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium 
+                                ${userItem.role === 'admin' ? 'bg-purple-100 text-purple-800' : 
+                                'bg-blue-100 text-blue-800'}`}>
+                                {userItem.role === 'admin' ? 'Administrador' : 
+                                 userItem.role === 'gabarito' ? 'Gabarito' : 
+                                 userItem.role === 'impressao' ? 'Impressão' :
+                                 userItem.role === 'batida' ? 'Batida' :
+                                 userItem.role === 'costura' ? 'Costura' :
+                                 'Embalagem'}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              <div className="flex justify-end gap-2">
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm"
+                                  onClick={() => openEditModal(userItem)}
+                                >
+                                  <Pencil className="h-4 w-4 mr-1" />
+                                  Editar
+                                </Button>
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm"
+                                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                  onClick={() => openDeleteModal(userItem)}
+                                  disabled={userItem.role === 'admin' && users.filter(u => u.role === 'admin').length === 1}
+                                >
+                                  <Trash className="h-4 w-4 mr-1" />
+                                  Excluir
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
       </div>
-      
-      {/* Users List */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-lg">Lista de Usuários</CardTitle>
-        </CardHeader>
-        
-        <CardContent>
-          {isLoading ? (
-            <div className="flex justify-center items-center p-8">
-              <Loader2 className="h-8 w-8 animate-spin text-primary-500" />
-            </div>
-          ) : error ? (
-            <div className="p-4 text-center">
-              <p className="text-red-500">Erro ao carregar usuários. Tente novamente mais tarde.</p>
-            </div>
-          ) : filteredUsers.length === 0 ? (
-            <div className="p-4 text-center">
-              <p className="text-neutral-500">Nenhum usuário encontrado.</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b">
-                    <th className="text-left font-medium p-3">Nome</th>
-                    <th className="text-left font-medium p-3">Usuário</th>
-                    <th className="text-left font-medium p-3">Função</th>
-                    <th className="text-right font-medium p-3">Ações</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredUsers.map((user: any) => (
-                    <tr key={user.id} className="border-b hover:bg-neutral-50">
-                      <td className="p-3">{user.name}</td>
-                      <td className="p-3">{user.username}</td>
-                      <td className="p-3">
-                        <span className="px-2 py-1 bg-primary-100 text-primary-800 rounded-full text-xs font-medium">
-                          {formatRole(user.role)}
-                        </span>
-                      </td>
-                      <td className="p-3 text-right">
-                        <Button 
-                          variant="ghost" 
-                          size="icon"
-                          onClick={() => handleEditUser(user)}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        
-                        <Button 
-                          variant="ghost" 
-                          size="icon"
-                          onClick={() => handleDeleteUser(user.id)}
-                          disabled={user.id === currentUser?.id}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-      
-      {/* User Dialog */}
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent>
+
+      {/* Modal de Criação de Usuário */}
+      <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
+        <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle>{currentEditId ? "Editar Usuário" : "Novo Usuário"}</DialogTitle>
+            <DialogTitle>Criar Novo Usuário</DialogTitle>
             <DialogDescription>
-              {currentEditId ? "Atualize os detalhes do usuário abaixo." : "Preencha os detalhes para criar um novo usuário."}
+              Preencha os dados para criar um novo usuário no sistema.
             </DialogDescription>
           </DialogHeader>
           
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-              <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Nome Completo</FormLabel>
-                    <FormControl>
-                      <Input {...field} placeholder="Digite o nome completo" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+          <form onSubmit={handleCreateUser} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="name">Nome completo</Label>
+              <Input
+                id="name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
               />
-              
-              <FormField
-                control={form.control}
-                name="username"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Nome de Usuário</FormLabel>
-                    <FormControl>
-                      <Input {...field} placeholder="Digite o nome de usuário" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="username">Nome de usuário</Label>
+              <Input
+                id="username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                required
               />
-              
-              <FormField
-                control={form.control}
-                name="role"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Função</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione uma função" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="admin">Administrador</SelectItem>
-                        <SelectItem value="gabarito">Gabarito</SelectItem>
-                        <SelectItem value="impressao">Impressão</SelectItem>
-                        <SelectItem value="batida">Batida</SelectItem>
-                        <SelectItem value="costura">Costura</SelectItem>
-                        <SelectItem value="embalagem">Embalagem</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="password">Senha</Label>
+              <Input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
               />
-              
-              <FormField
-                control={form.control}
-                name="password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>
-                      {currentEditId ? "Senha (deixe em branco para manter a atual)" : "Senha"}
-                    </FormLabel>
-                    <FormControl>
-                      <Input 
-                        type="password" 
-                        {...field} 
-                        placeholder={currentEditId ? "Digite a nova senha" : "Digite a senha"} 
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <DialogFooter>
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  onClick={() => setIsDialogOpen(false)}
-                >
-                  Cancelar
-                </Button>
-                <Button 
-                  type="submit"
-                  disabled={userMutation.isPending}
-                >
-                  {userMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  {currentEditId ? "Atualizar" : "Criar"}
-                </Button>
-              </DialogFooter>
-            </form>
-          </Form>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="role">Função</Label>
+              <select 
+                id="role"
+                className="w-full h-10 rounded-md border border-input bg-background px-3 py-2"
+                value={role} 
+                onChange={(e) => setRole(e.target.value)} 
+                required
+              >
+                <option value="admin">Administrador</option>
+                <option value="gabarito">Gabarito</option>
+                <option value="impressao">Impressão</option>
+                <option value="batida">Batida</option>
+                <option value="costura">Costura</option>
+                <option value="embalagem">Embalagem</option>
+              </select>
+            </div>
+            
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setIsCreateModalOpen(false)} disabled={formLoading}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={formLoading}>
+                {formLoading ? "Criando..." : "Criar Usuário"}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
-    </Layout>
+
+      {/* Modal de Edição de Usuário */}
+      <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Editar Usuário</DialogTitle>
+            <DialogDescription>
+              Atualize os dados do usuário selecionado. Deixe a senha em branco para mantê-la inalterada.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <form onSubmit={handleEditUser} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-name">Nome completo</Label>
+              <Input
+                id="edit-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="edit-username">Nome de usuário</Label>
+              <Input
+                id="edit-username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                required
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="edit-password">Nova senha (opcional)</Label>
+              <Input
+                id="edit-password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Deixe em branco para manter a senha atual"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="edit-role">Função</Label>
+              <select 
+                id="edit-role"
+                className="w-full h-10 rounded-md border border-input bg-background px-3 py-2"
+                value={role} 
+                onChange={(e) => setRole(e.target.value)} 
+                required
+              >
+                <option value="admin">Administrador</option>
+                <option value="gabarito">Gabarito</option>
+                <option value="impressao">Impressão</option>
+                <option value="batida">Batida</option>
+                <option value="costura">Costura</option>
+                <option value="embalagem">Embalagem</option>
+              </select>
+            </div>
+            
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setIsEditModalOpen(false)} disabled={formLoading}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={formLoading}>
+                {formLoading ? "Salvando..." : "Salvar Alterações"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Exclusão de Usuário */}
+      <Dialog open={isDeleteModalOpen} onOpenChange={setIsDeleteModalOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Excluir Usuário</DialogTitle>
+            <DialogDescription>
+              Tem certeza que deseja excluir este usuário? Esta ação não pode ser desfeita.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="py-4">
+            <p className="mb-2">
+              <span className="font-semibold">Nome:</span> {selectedUser?.name}
+            </p>
+            <p className="mb-2">
+              <span className="font-semibold">Usuário:</span> {selectedUser?.username}
+            </p>
+            <p>
+              <span className="font-semibold">Função:</span> {
+                selectedUser?.role === 'admin' ? 'Administrador' : 
+                selectedUser?.role === 'gabarito' ? 'Gabarito' : 
+                selectedUser?.role === 'impressao' ? 'Impressão' :
+                selectedUser?.role === 'batida' ? 'Batida' :
+                selectedUser?.role === 'costura' ? 'Costura' :
+                'Embalagem'
+              }
+            </p>
+          </div>
+          
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setIsDeleteModalOpen(false)} disabled={formLoading}>
+              Cancelar
+            </Button>
+            <Button 
+              type="button" 
+              variant="destructive" 
+              onClick={handleDeleteUser} 
+              disabled={formLoading}
+            >
+              {formLoading ? "Excluindo..." : "Excluir Usuário"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }
