@@ -7,7 +7,8 @@ import {
   insertActivitySchema, 
   insertActivityProgressSchema,
   DEPARTMENTS,
-  activityProgress
+  activityProgress,
+  activities
 } from "@shared/schema";
 import { fromZodError } from "zod-validation-error";
 import fs from 'fs';
@@ -15,6 +16,7 @@ import path from 'path';
 import { createBackup } from "./backup";
 import { db } from "./db";
 import { and, eq, sql } from "drizzle-orm";
+import { buscarAtividadesPorDepartamentoEmergencia } from "./solucao-emergencial";
 
 // Middleware to check if the user is authenticated
 function isAuthenticated(req: Request, res: Response, next: Function) {
@@ -46,7 +48,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } else if (req.user) {
         const department = req.user.role;
         console.log(`[DEBUG] Usuario ${req.user.username} (${department}) solicitando atividades`);
-        const activities = await storage.getActivitiesByDepartment(department);
+        // Usar também a solução emergencial para o gabarito
+        let activities = [];
+        if (department === 'gabarito') {
+          console.log(`[EMERGENCIA] Usando método direto para buscar atividades do departamento gabarito`);
+          activities = await buscarAtividadesPorDepartamentoEmergencia(department);
+        } else {
+          activities = await storage.getActivitiesByDepartment(department);
+        }
         return res.json(activities);
       } else {
         return res.status(401).json({ message: "Usuário não autenticado" });
@@ -95,8 +104,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       console.log(`[DEBUG] Chamando getActivitiesByDepartment('${department}')`);
-      // Obter as atividades para o departamento
-      const activities = await storage.getActivitiesByDepartment(department);
+      // SOLUÇÃO EMERGENCIAL: Usar método direto e seguro para o departamento gabarito
+      // e manter o método normal para outros departamentos
+      let activities = [];
+      
+      if (department === 'gabarito') {
+        console.log(`[EMERGENCIA] Usando método direto para buscar atividades do departamento gabarito`);
+        activities = await buscarAtividadesPorDepartamentoEmergencia(department);
+      } else {
+        // Para outros departamentos, continuar usando o método normal
+        activities = await storage.getActivitiesByDepartment(department);
+      }
       
       console.log(`[DEBUG] Encontradas ${activities.length} atividades para o departamento: ${department}`);
       if (activities.length > 0) {
