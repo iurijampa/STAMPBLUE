@@ -114,15 +114,15 @@ export default function Layout({ children, title }: LayoutProps) {
               {navItems.map((item) => (
                 <li key={item.href}>
                   <Link href={item.href}>
-                    <a className={cn(
-                      "flex items-center py-2 px-3 rounded-md transition-colors",
+                    <div className={cn(
+                      "flex items-center py-2 px-3 rounded-md transition-colors cursor-pointer",
                       location === item.href
                         ? "text-white bg-primary-700"
                         : "text-neutral-300 hover:bg-neutral-700"
                     )}>
                       <i className={`${item.icon} mr-3 text-lg`}></i>
                       <span>{item.name}</span>
-                    </a>
+                    </div>
                   </Link>
                 </li>
               ))}
@@ -179,9 +179,9 @@ export default function Layout({ children, title }: LayoutProps) {
                       {navItems.map((item) => (
                         <li key={item.href}>
                           <Link href={item.href}>
-                            <a 
+                            <div 
                               className={cn(
-                                "flex items-center py-2 px-3 rounded-md transition-colors",
+                                "flex items-center py-2 px-3 rounded-md transition-colors cursor-pointer",
                                 location === item.href
                                   ? "text-white bg-primary-700"
                                   : "text-neutral-300 hover:bg-neutral-700"
@@ -190,7 +190,7 @@ export default function Layout({ children, title }: LayoutProps) {
                             >
                               <i className={`${item.icon} mr-3 text-lg`}></i>
                               <span>{item.name}</span>
-                            </a>
+                            </div>
                           </Link>
                         </li>
                       ))}
