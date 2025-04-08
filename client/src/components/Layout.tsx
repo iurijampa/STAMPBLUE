@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useLocation, Link } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { Bell, Menu, LogOut, ChevronDown, CheckCircle2 } from "lucide-react";
+import { Notification } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { 
   DropdownMenu, 
@@ -32,12 +33,12 @@ export default function Layout({ children, title }: LayoutProps) {
   const { 
     data: notifications = [],
     refetch: refetchNotifications
-  } = useQuery({
+  } = useQuery<Notification[]>({
     queryKey: ["/api/notifications"],
     enabled: !!user
   });
 
-  const unreadCount = notifications.filter((n: any) => !n.read).length;
+  const unreadCount = notifications.filter((n) => !n.read).length;
 
   // Função para marcar notificação como lida
   const markAsRead = async (notificationId: number) => {
