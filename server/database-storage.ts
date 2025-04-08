@@ -11,7 +11,7 @@ import {
 } from "@shared/schema";
 import session from "express-session";
 import { db, sql as postgresClient, cachedQuery, clearCacheByPattern } from "./db";
-import { eq, desc, sql, inArray } from "drizzle-orm";
+import { eq, desc, sql, inArray, and } from "drizzle-orm";
 import connectPg from "connect-pg-simple";
 import { scrypt, randomBytes } from "crypto";
 import { promisify } from "util";
@@ -107,7 +107,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUsersByRole(role: string): Promise<User[]> {
-    return db.select().from(users).where(sql`${users.role} = ${role}`);
+    return db.select().from(users).where(eq(users.role, role as any));
   }
 
   async updateUser(id: number, userData: Partial<InsertUser>): Promise<User> {
@@ -157,13 +157,15 @@ export class DatabaseStorage implements IStorage {
     try {
       console.log(`[DEBUG] getActivitiesByDepartment: Buscando atividades pendentes para: ${department}`);
       
-      // Desabilitar o cache temporariamente para depuração
-      // Primeiro, obter IDs das atividades pendentes neste departamento
+      // Abordagem com parâmetros explícitos para evitar erros de SQL
       const progresses = await db
         .select()
         .from(activityProgress)
         .where(
-          sql`${activityProgress.department} = ${department} AND ${activityProgress.status} = 'pending'`
+          and(
+            eq(activityProgress.department, department as any),
+            eq(activityProgress.status, "pending")
+          )
         );
       
       console.log(`[DEBUG] getActivitiesByDepartment: Encontrados ${progresses.length} progresso(s) pendente(s) para ${department}`);
@@ -343,7 +345,10 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(activityProgress)
       .where(
-        sql`${activityProgress.activityId} = ${activityId} AND ${activityProgress.department} = ${department}`
+        and(
+          eq(activityProgress.activityId, activityId),
+          eq(activityProgress.department, department as any)
+        )
       );
     
     return progress;
@@ -371,7 +376,10 @@ export class DatabaseStorage implements IStorage {
         notes: notes || null
       })
       .where(
-        sql`${activityProgress.activityId} = ${activityId} AND ${activityProgress.department} = ${department}`
+        and(
+          eq(activityProgress.activityId, activityId),
+          eq(activityProgress.department, department as any)
+        )
       )
       .returning();
     
@@ -472,7 +480,10 @@ export class DatabaseStorage implements IStorage {
         .select()
         .from(activityProgress)
         .where(
-          sql`${activityProgress.department} = ${department} AND ${activityProgress.status} = 'completed'`
+          and(
+            eq(activityProgress.department, department as any),
+            eq(activityProgress.status, "completed")
+          )
         );
       
       if (completedProgress.length === 0) return [];
