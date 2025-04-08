@@ -110,9 +110,9 @@ export default function AuthPage() {
   };
   
   return (
-    <div className="flex flex-col md:flex-row min-h-screen h-full">
+    <div className="flex flex-col md:flex-row min-h-screen">
       {/* Hero Section - Oculto em telas muito pequenas */}
-      <div className="hidden sm:flex w-full md:w-1/2 bg-gradient-to-br from-primary-600 to-primary-800 items-center justify-center">
+      <div className="hidden md:flex md:w-1/2 bg-gradient-to-br from-primary-600 to-primary-800 items-center justify-center">
         <div className="max-w-md text-white space-y-4 px-4">
           <h1 className="text-3xl md:text-4xl font-bold tracking-tight">
             Sistema de Gerenciamento de Produção
@@ -141,9 +141,9 @@ export default function AuthPage() {
         </div>
       </div>
       
-      {/* Form Section - Tela inteira em mobile */}
-      <div className="w-full md:w-1/2 bg-background flex flex-1 justify-center items-center min-h-screen py-8">
-        <div className="w-full max-w-md px-4 py-6 flex flex-col items-center justify-center">
+      {/* Form Section - Ocupa a tela toda em mobile e metade em desktop */}
+      <div className="flex w-full md:w-1/2 bg-background items-center justify-center min-h-screen py-8">
+        <div className="w-full max-w-md px-4 flex flex-col items-center justify-center">
           <div className="text-center mb-6 md:mb-8 flex flex-col items-center">
             <div className="mb-4">
               <Logo size="xl" className="text-primary-600" />
