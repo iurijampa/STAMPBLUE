@@ -54,6 +54,7 @@ export default function Layout({ children, title }: LayoutProps) {
   };
 
   const isAdmin = user?.role === "admin";
+  const isDepartmentDashboard = location.startsWith('/department/') && location.includes('/dashboard');
   
   const adminNavItems = [
     { name: "Dashboard", href: "/admin/dashboard", icon: "ri-dashboard-line" },
@@ -88,125 +89,129 @@ export default function Layout({ children, title }: LayoutProps) {
 
   return (
     <div className="min-h-screen flex">
-      {/* Sidebar for desktop */}
-      <aside className="bg-neutral-800 text-white w-64 flex-shrink-0 hidden md:block">
-        <div className="p-4 h-full flex flex-col">
-          <div className="mb-8 mt-2">
-            <Logo size="lg" className="text-white" />
-          </div>
-          
-          {/* User Info */}
-          <div className="bg-neutral-700 rounded-lg p-3 mb-6 flex items-center">
-            <div className="bg-primary-700 h-10 w-10 rounded-full flex items-center justify-center mr-3">
-              <span className="text-white font-medium">{userInitials}</span>
+      {/* Sidebar for desktop - only show for admin, not for department dashboards */}
+      {!isDepartmentDashboard && (
+        <aside className="bg-neutral-800 text-white w-64 flex-shrink-0 hidden md:block">
+          <div className="p-4 h-full flex flex-col">
+            <div className="mb-8 mt-2">
+              <Logo size="lg" className="text-white" />
             </div>
-            <div>
-              <div className="font-medium">{user?.name}</div>
-              <div className="text-xs text-neutral-400">{formatDepartment(user?.role || '')}</div>
+            
+            {/* User Info */}
+            <div className="bg-neutral-700 rounded-lg p-3 mb-6 flex items-center">
+              <div className="bg-primary-700 h-10 w-10 rounded-full flex items-center justify-center mr-3">
+                <span className="text-white font-medium">{userInitials}</span>
+              </div>
+              <div>
+                <div className="font-medium">{user?.name}</div>
+                <div className="text-xs text-neutral-400">{formatDepartment(user?.role || '')}</div>
+              </div>
+            </div>
+            
+            {/* Navigation */}
+            <nav className="flex-1">
+              <ul className="space-y-2">
+                {navItems.map((item) => (
+                  <li key={item.href}>
+                    <Link href={item.href}>
+                      <div className={cn(
+                        "flex items-center py-2 px-3 rounded-md transition-colors cursor-pointer",
+                        location === item.href
+                          ? "text-white bg-primary-700"
+                          : "text-neutral-300 hover:bg-neutral-700"
+                      )}>
+                        <i className={`${item.icon} mr-3 text-lg`}></i>
+                        <span>{item.name}</span>
+                      </div>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </nav>
+            
+            <div className="mt-auto">
+              <button 
+                onClick={handleLogout}
+                className="flex items-center py-2 px-3 rounded-md text-neutral-300 hover:bg-neutral-700 transition-colors w-full"
+              >
+                <i className="ri-logout-box-line mr-3 text-lg"></i>
+                <span>Sair</span>
+              </button>
             </div>
           </div>
-          
-          {/* Navigation */}
-          <nav className="flex-1">
-            <ul className="space-y-2">
-              {navItems.map((item) => (
-                <li key={item.href}>
-                  <Link href={item.href}>
-                    <div className={cn(
-                      "flex items-center py-2 px-3 rounded-md transition-colors cursor-pointer",
-                      location === item.href
-                        ? "text-white bg-primary-700"
-                        : "text-neutral-300 hover:bg-neutral-700"
-                    )}>
-                      <i className={`${item.icon} mr-3 text-lg`}></i>
-                      <span>{item.name}</span>
-                    </div>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </nav>
-          
-          <div className="mt-auto">
-            <button 
-              onClick={handleLogout}
-              className="flex items-center py-2 px-3 rounded-md text-neutral-300 hover:bg-neutral-700 transition-colors w-full"
-            >
-              <i className="ri-logout-box-line mr-3 text-lg"></i>
-              <span>Sair</span>
-            </button>
-          </div>
-        </div>
-      </aside>
+        </aside>
+      )}
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Top Bar */}
         <header className="bg-white border-b border-neutral-200 px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            {/* Mobile Menu Button */}
-            <Sheet open={open} onOpenChange={setOpen}>
-              <SheetTrigger asChild>
-                <Button variant="ghost" size="icon" className="md:hidden">
-                  <Menu className="h-5 w-5" />
-                </Button>
-              </SheetTrigger>
-              <SheetContent side="left" className="bg-neutral-800 text-white border-neutral-700 p-0">
-                <div className="p-4 h-full flex flex-col">
-                  <div className="mb-8 mt-2">
-                    <Logo size="lg" className="text-white" />
-                  </div>
-                  
-                  {/* User Info */}
-                  <div className="bg-neutral-700 rounded-lg p-3 mb-6 flex items-center">
-                    <div className="bg-primary-700 h-10 w-10 rounded-full flex items-center justify-center mr-3">
-                      <span className="text-white font-medium">{userInitials}</span>
+            {/* Mobile Menu Button - only show if not on department dashboard */}
+            {!isDepartmentDashboard && (
+              <Sheet open={open} onOpenChange={setOpen}>
+                <SheetTrigger asChild>
+                  <Button variant="ghost" size="icon" className="md:hidden">
+                    <Menu className="h-5 w-5" />
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="left" className="bg-neutral-800 text-white border-neutral-700 p-0">
+                  <div className="p-4 h-full flex flex-col">
+                    <div className="mb-8 mt-2">
+                      <Logo size="lg" className="text-white" />
                     </div>
-                    <div>
-                      <div className="font-medium">{user?.name}</div>
-                      <div className="text-xs text-neutral-400">{formatDepartment(user?.role || '')}</div>
+                    
+                    {/* User Info */}
+                    <div className="bg-neutral-700 rounded-lg p-3 mb-6 flex items-center">
+                      <div className="bg-primary-700 h-10 w-10 rounded-full flex items-center justify-center mr-3">
+                        <span className="text-white font-medium">{userInitials}</span>
+                      </div>
+                      <div>
+                        <div className="font-medium">{user?.name}</div>
+                        <div className="text-xs text-neutral-400">{formatDepartment(user?.role || '')}</div>
+                      </div>
+                    </div>
+                    
+                    {/* Navigation */}
+                    <nav className="flex-1">
+                      <ul className="space-y-2">
+                        {navItems.map((item) => (
+                          <li key={item.href}>
+                            <Link href={item.href}>
+                              <div 
+                                className={cn(
+                                  "flex items-center py-2 px-3 rounded-md transition-colors cursor-pointer",
+                                  location === item.href
+                                    ? "text-white bg-primary-700"
+                                    : "text-neutral-300 hover:bg-neutral-700"
+                                )}
+                                onClick={() => setOpen(false)}
+                              >
+                                <i className={`${item.icon} mr-3 text-lg`}></i>
+                                <span>{item.name}</span>
+                              </div>
+                            </Link>
+                          </li>
+                        ))}
+                      </ul>
+                    </nav>
+                    
+                    <div className="mt-auto">
+                      <button 
+                        onClick={() => {
+                          handleLogout();
+                          setOpen(false);
+                        }}
+                        className="flex items-center py-2 px-3 rounded-md text-neutral-300 hover:bg-neutral-700 transition-colors w-full"
+                      >
+                        <i className="ri-logout-box-line mr-3 text-lg"></i>
+                        <span>Sair</span>
+                      </button>
                     </div>
                   </div>
-                  
-                  {/* Navigation */}
-                  <nav className="flex-1">
-                    <ul className="space-y-2">
-                      {navItems.map((item) => (
-                        <li key={item.href}>
-                          <Link href={item.href}>
-                            <div 
-                              className={cn(
-                                "flex items-center py-2 px-3 rounded-md transition-colors cursor-pointer",
-                                location === item.href
-                                  ? "text-white bg-primary-700"
-                                  : "text-neutral-300 hover:bg-neutral-700"
-                              )}
-                              onClick={() => setOpen(false)}
-                            >
-                              <i className={`${item.icon} mr-3 text-lg`}></i>
-                              <span>{item.name}</span>
-                            </div>
-                          </Link>
-                        </li>
-                      ))}
-                    </ul>
-                  </nav>
-                  
-                  <div className="mt-auto">
-                    <button 
-                      onClick={() => {
-                        handleLogout();
-                        setOpen(false);
-                      }}
-                      className="flex items-center py-2 px-3 rounded-md text-neutral-300 hover:bg-neutral-700 transition-colors w-full"
-                    >
-                      <i className="ri-logout-box-line mr-3 text-lg"></i>
-                      <span>Sair</span>
-                    </button>
-                  </div>
-                </div>
-              </SheetContent>
-            </Sheet>
+                </SheetContent>
+              </Sheet>
+            )}
             
             <h2 className="text-lg font-semibold text-neutral-800">{title}</h2>
           </div>
