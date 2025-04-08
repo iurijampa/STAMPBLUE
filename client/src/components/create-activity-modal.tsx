@@ -28,6 +28,7 @@ export default function CreateActivityModal({ isOpen, onClose, onSuccess }: Crea
   const [description, setDescription] = useState("");
   const [clientName, setClientName] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
+  const [additionalImageFiles, setAdditionalImageFiles] = useState<File[]>([]);
   const [priority, setPriority] = useState<string>("normal");
   const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]);
   const [deadline, setDeadline] = useState<Date | undefined>(undefined);
@@ -40,6 +41,23 @@ export default function CreateActivityModal({ isOpen, onClose, onSuccess }: Crea
 
   const handleRemoveDepartment = (department: string) => {
     setSelectedDepartments(selectedDepartments.filter(dep => dep !== department));
+  };
+
+  // Função auxiliar para lidar com o input de múltiplas imagens
+  const handleAddImages = (files: File | File[] | null) => {
+    if (!files) return;
+    
+    if (Array.isArray(files)) {
+      // Múltiplos arquivos
+      setAdditionalImageFiles(prev => [...prev, ...files]);
+    } else if (files instanceof File) {
+      // Arquivo único
+      setAdditionalImageFiles(prev => [...prev, files]);
+    }
+  };
+
+  const handleRemoveImage = (index: number) => {
+    setAdditionalImageFiles(prev => prev.filter((_, i) => i !== index));
   };
 
   const fileToBase64 = (file: File): Promise<string> => {
@@ -71,6 +89,13 @@ export default function CreateActivityModal({ isOpen, onClose, onSuccess }: Crea
         imageData = await fileToBase64(imageFile);
       }
       
+      // Converter todas as imagens adicionais para base64
+      const additionalImagesData = [];
+      for (const file of additionalImageFiles) {
+        const base64Data = await fileToBase64(file);
+        additionalImagesData.push(base64Data);
+      }
+      
       if (!deadline) {
         toast({
           title: "Erro ao criar atividade",
@@ -88,6 +113,7 @@ export default function CreateActivityModal({ isOpen, onClose, onSuccess }: Crea
         quantity: 1, // Valor padrão já que não usamos mais a quantidade
         clientName,
         image: imageData,
+        additionalImages: additionalImagesData,
         priority,
         deadline: deadline ? deadline.toISOString() : null,
         workflowSteps: selectedDepartments.map(department => ({
@@ -112,6 +138,7 @@ export default function CreateActivityModal({ isOpen, onClose, onSuccess }: Crea
       setDescription("");
       setClientName("");
       setImageFile(null);
+      setAdditionalImageFiles([]);
       setPriority("normal");
       setSelectedDepartments([]);
       setDeadline(undefined);
@@ -175,14 +202,80 @@ export default function CreateActivityModal({ isOpen, onClose, onSuccess }: Crea
           </div>
           
           <div className="space-y-2">
-            <Label htmlFor="image">Imagem (opcional)</Label>
+            <Label htmlFor="image">Imagem Principal</Label>
             <FileInput
               value={imageFile}
-              onChange={setImageFile}
+              onChange={(file) => {
+                // Tratamento para garantir que apenas aceitamos arquivos únicos
+                if (file instanceof File) {
+                  setImageFile(file);
+                } else if (file === null) {
+                  setImageFile(null);
+                }
+              }}
               accept="image/*"
               maxSize={5 * 1024 * 1024} // 5MB
-              placeholder="Selecione uma imagem..."
+              placeholder="Selecione uma imagem principal..."
             />
+          </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="additionalImages">Imagens Adicionais</Label>
+            <div className="flex items-center gap-2 mb-2">
+              <FileInput
+                multiple
+                accept="image/*"
+                maxSize={5 * 1024 * 1024} // 5MB
+                placeholder="Adicionar imagens..."
+                onChange={(files) => {
+                  if (files && Array.isArray(files)) {
+                    setAdditionalImageFiles(prev => [...prev, ...files]);
+                  }
+                }}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setAdditionalImageFiles([])}
+                disabled={additionalImageFiles.length === 0}
+                className="whitespace-nowrap"
+              >
+                Limpar Todas
+              </Button>
+            </div>
+            
+            <div className="bg-muted p-2 rounded-md min-h-[100px]">
+              {additionalImageFiles.length === 0 ? (
+                <p className="text-sm text-center text-muted-foreground p-4">
+                  Adicione imagens adicionais ao pedido
+                </p>
+              ) : (
+                <div className="grid grid-cols-4 gap-2">
+                  {additionalImageFiles.map((file, index) => (
+                    <div key={index} className="relative group">
+                      <div className="rounded-md overflow-hidden h-16 bg-background">
+                        <img
+                          src={URL.createObjectURL(file)}
+                          alt={`Imagem adicional ${index + 1}`}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        className="absolute top-0 right-0 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={() => {
+                          const newFiles = [...additionalImageFiles];
+                          newFiles.splice(index, 1);
+                          setAdditionalImageFiles(newFiles);
+                        }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
           
           <div className="grid grid-cols-2 gap-4">

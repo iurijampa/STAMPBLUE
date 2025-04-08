@@ -30,6 +30,8 @@ export default function EditActivityModal({ isOpen, onClose, onSuccess, activity
   const [clientName, setClientName] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imageData, setImageData] = useState<string | null>(null);
+  const [additionalImageFiles, setAdditionalImageFiles] = useState<File[]>([]);
+  const [additionalImagesData, setAdditionalImagesData] = useState<string[]>([]);
   const [priority, setPriority] = useState<string>("normal");
   const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]);
   const [deadline, setDeadline] = useState<Date | undefined>(undefined);
@@ -43,6 +45,13 @@ export default function EditActivityModal({ isOpen, onClose, onSuccess, activity
       setPriority(activity.priority || "normal");
       setImageData(activity.image || null);
       
+      // Carrega as imagens adicionais, se existirem
+      if (activity.additionalImages && Array.isArray(activity.additionalImages)) {
+        setAdditionalImagesData(activity.additionalImages);
+      } else {
+        setAdditionalImagesData([]);
+      }
+      
       // Defina a data de entrega
       if (activity.deadline) {
         setDeadline(new Date(activity.deadline));
@@ -54,6 +63,19 @@ export default function EditActivityModal({ isOpen, onClose, onSuccess, activity
     }
   }, [activity]);
 
+  // Função auxiliar para lidar com o input de múltiplas imagens
+  const handleAddImages = (files: File | File[] | null) => {
+    if (!files) return;
+    
+    if (Array.isArray(files)) {
+      // Múltiplos arquivos
+      setAdditionalImageFiles(prev => [...prev, ...files]);
+    } else if (files instanceof File) {
+      // Arquivo único
+      setAdditionalImageFiles(prev => [...prev, files]);
+    }
+  };
+  
   const fileToBase64 = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -87,9 +109,20 @@ export default function EditActivityModal({ isOpen, onClose, onSuccess, activity
     setIsLoading(true);
     
     try {
+      // Processando a imagem principal
       let finalImageData = imageData;
       if (imageFile) {
         finalImageData = await fileToBase64(imageFile);
+      }
+      
+      // Processando as imagens adicionais
+      let finalAdditionalImages = [...additionalImagesData];
+      
+      // Convertendo novos arquivos de imagens adicionais para base64
+      if (additionalImageFiles.length > 0) {
+        const additionalImagesPromises = additionalImageFiles.map(file => fileToBase64(file));
+        const newAdditionalImagesBase64 = await Promise.all(additionalImagesPromises);
+        finalAdditionalImages = [...finalAdditionalImages, ...newAdditionalImagesBase64];
       }
       
       if (!deadline) {
@@ -109,6 +142,7 @@ export default function EditActivityModal({ isOpen, onClose, onSuccess, activity
         quantity: 1, // Valor padrão fixo
         clientName,
         image: finalImageData,
+        additionalImages: finalAdditionalImages,
         priority,
         deadline: deadline ? deadline.toISOString() : null,
         // Não enviamos workflowSteps aqui pois o backend não usa essa propriedade diretamente
@@ -186,7 +220,7 @@ export default function EditActivityModal({ isOpen, onClose, onSuccess, activity
           </div>
           
           <div className="space-y-2">
-            <Label htmlFor="image">Imagem (opcional)</Label>
+            <Label htmlFor="image">Imagem Principal</Label>
             {imageData && !imageFile && (
               <div className="mb-2">
                 <p className="text-sm text-muted-foreground mb-2">Imagem atual:</p>
@@ -199,11 +233,93 @@ export default function EditActivityModal({ isOpen, onClose, onSuccess, activity
             )}
             <FileInput
               value={imageFile}
-              onChange={setImageFile}
+              onChange={(file) => {
+                // Tratamento para garantir que apenas aceitamos arquivos únicos
+                if (file instanceof File) {
+                  setImageFile(file);
+                } else if (file === null) {
+                  setImageFile(null);
+                }
+              }}
               accept="image/*"
               maxSize={5 * 1024 * 1024} // 5MB
-              placeholder="Selecione uma nova imagem..."
+              placeholder="Selecione uma nova imagem principal..."
             />
+          </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="additionalImages">Imagens Adicionais</Label>
+            
+            {/* Exibir imagens adicionais existentes */}
+            {additionalImagesData.length > 0 && (
+              <div className="mb-4">
+                <p className="text-sm text-muted-foreground mb-2">Imagens adicionais atuais:</p>
+                <div className="grid grid-cols-4 gap-2">
+                  {additionalImagesData.map((img, index) => (
+                    <div key={index} className="relative group">
+                      <img 
+                        src={img} 
+                        alt={`Imagem adicional ${index + 1}`} 
+                        className="h-16 w-full object-cover rounded-md"
+                      />
+                      <button
+                        type="button"
+                        className="absolute top-0 right-0 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={() => {
+                          const newImages = [...additionalImagesData];
+                          newImages.splice(index, 1);
+                          setAdditionalImagesData(newImages);
+                        }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {/* Adicionar novas imagens */}
+            <div className="flex items-center gap-2">
+              <FileInput
+                multiple
+                accept="image/*"
+                maxSize={5 * 1024 * 1024} // 5MB
+                placeholder="Adicionar mais imagens..."
+                onChange={(files) => {
+                  if (files && Array.isArray(files)) {
+                    setAdditionalImageFiles([...additionalImageFiles, ...files]);
+                  }
+                }}
+              />
+            </div>
+            
+            {/* Mostrar arquivos de imagens adicionais selecionados */}
+            {additionalImageFiles.length > 0 && (
+              <div className="mt-2">
+                <p className="text-sm text-muted-foreground mb-2">Novas imagens a serem adicionadas:</p>
+                <div className="grid grid-cols-4 gap-2">
+                  {additionalImageFiles.map((file, index) => (
+                    <div key={index} className="relative group">
+                      <div className="h-16 w-full bg-muted rounded-md flex items-center justify-center text-xs text-muted-foreground overflow-hidden">
+                        {file.name}
+                      </div>
+                      <button
+                        type="button"
+                        className="absolute top-0 right-0 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={() => {
+                          const newFiles = [...additionalImageFiles];
+                          newFiles.splice(index, 1);
+                          setAdditionalImageFiles(newFiles);
+                        }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
           
           <div className="grid grid-cols-2 gap-4">

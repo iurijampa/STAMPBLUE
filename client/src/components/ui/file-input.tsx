@@ -6,11 +6,12 @@ import { cn } from "@/lib/utils";
 interface FileInputProps {
   className?: string;
   value?: File | null;
-  onChange: (file: File | null) => void;
+  onChange: (file: File | File[] | null) => void;
   accept?: string;
   maxSize?: number;
   placeholder?: string;
   error?: string;
+  multiple?: boolean;
 }
 
 export function FileInput({
@@ -20,7 +21,8 @@ export function FileInput({
   accept,
   maxSize,
   placeholder = "Selecionar arquivo...",
-  error
+  error,
+  multiple = false
 }: FileInputProps) {
   const [dragActive, setDragActive] = useState(false);
   const [localError, setLocalError] = useState<string | undefined>(error);
@@ -36,9 +38,30 @@ export function FileInput({
     onChange(file);
   };
 
+  const handleFiles = (files: FileList) => {
+    if (!files.length) return;
+    
+    // Verificar tamanho de cada arquivo
+    const oversizedFiles = Array.from(files).filter(file => maxSize && file.size > maxSize);
+    if (oversizedFiles.length > 0) {
+      setLocalError(`Um ou mais arquivos excedem o tamanho máximo de ${(maxSize! / (1024 * 1024)).toFixed(1)}MB`);
+      return;
+    }
+    
+    setLocalError(undefined);
+    
+    if (multiple) {
+      // Modo múltiplo: retorna array de arquivos
+      onChange(Array.from(files));
+    } else {
+      // Modo único: retorna apenas o primeiro arquivo
+      onChange(files[0]);
+    }
+  };
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      handleFile(e.target.files[0]);
+    if (e.target.files && e.target.files.length > 0) {
+      handleFiles(e.target.files);
     }
   };
 
@@ -58,8 +81,8 @@ export function FileInput({
     e.stopPropagation();
     setDragActive(false);
     
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      handleFile(e.dataTransfer.files[0]);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      handleFiles(e.dataTransfer.files);
     }
   };
 
@@ -94,6 +117,7 @@ export function FileInput({
           className="hidden"
           onChange={handleChange}
           accept={accept}
+          multiple={multiple}
         />
         
         {value ? (
@@ -109,7 +133,7 @@ export function FileInput({
               {placeholder}
             </p>
             <p className="text-xs text-muted-foreground">
-              Arraste e solte ou clique para selecionar
+              {multiple ? 'Arraste e solte ou clique para selecionar múltiplos arquivos' : 'Arraste e solte ou clique para selecionar'}
             </p>
           </div>
         )}

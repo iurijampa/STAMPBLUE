@@ -33,7 +33,8 @@ export const activities = pgTable("activities", {
   id: serial("id").primaryKey(),
   title: text("title").notNull(),
   description: text("description").notNull(),
-  image: text("image").notNull(),
+  image: text("image").notNull(), // Mantemos a imagem principal para compatibilidade
+  additionalImages: text("additional_images").array(), // Array para armazenar múltiplas imagens
   quantity: integer("quantity").notNull(),
   clientName: text("client_name"),
   priority: text("priority").default("normal"),
@@ -50,6 +51,7 @@ export const insertActivitySchema = createInsertSchema(activities)
     title: true,
     description: true,
     image: true,
+    additionalImages: true,
     quantity: true,
     clientName: true,
     priority: true,
@@ -59,6 +61,7 @@ export const insertActivitySchema = createInsertSchema(activities)
   })
   .extend({
     deadline: z.string().nullable().transform(val => val ? new Date(val) : null),
+    additionalImages: z.array(z.string()).optional().default([]),
   });
 
 // Activity progress tracking

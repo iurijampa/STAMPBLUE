@@ -23,6 +23,7 @@ interface ViewActivityModalProps {
 export default function ViewActivityModal({ isOpen, onClose, activity }: ViewActivityModalProps) {
   const [imageZoom, setImageZoom] = useState(1);
   const [imageFullscreen, setImageFullscreen] = useState(false);
+  const [currentImage, setCurrentImage] = useState<string | null>(null);
   const [progressHistory, setProgressHistory] = useState<ActivityProgress[]>([]);
   const [loadingProgress, setLoadingProgress] = useState(false);
   const [currentUser, setCurrentUser] = useState<{ role: string } | null>(null);
@@ -56,6 +57,13 @@ export default function ViewActivityModal({ isOpen, onClose, activity }: ViewAct
   }, [isOpen]);
   
   // Buscar o histórico de progresso quando o modal é aberto (apenas para admin)
+  // Definir a imagem atual quando a atividade muda
+  useEffect(() => {
+    if (activity && activity.image) {
+      setCurrentImage(activity.image);
+    }
+  }, [activity]);
+
   useEffect(() => {
     async function fetchActivityProgress() {
       if (activity && isOpen && currentUser && currentUser.role === 'admin') {
@@ -162,7 +170,7 @@ export default function ViewActivityModal({ isOpen, onClose, activity }: ViewAct
             {/* Imagem com controles de zoom avançados */}
             <div className="flex flex-col space-y-3">
               <div className="relative overflow-hidden border rounded-md h-60 bg-neutral-100">
-                {activity.image ? (
+                {currentImage ? (
                   <>
                     <div className="h-full w-full">
                       <TransformWrapper
@@ -179,7 +187,7 @@ export default function ViewActivityModal({ isOpen, onClose, activity }: ViewAct
                               contentClass="flex items-center justify-center"
                             >
                               <img 
-                                src={activity.image} 
+                                src={currentImage} 
                                 alt={`Imagem para ${activity.title}`}
                                 className="max-h-60 max-w-full object-contain"
                               />
@@ -229,6 +237,41 @@ export default function ViewActivityModal({ isOpen, onClose, activity }: ViewAct
                   <span className="text-neutral-400 flex h-full items-center justify-center">Nenhuma imagem disponível</span>
                 )}
               </div>
+              
+              {/* Miniaturas de imagens adicionais */}
+              {activity.additionalImages && activity.additionalImages.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-medium mb-2">Imagens adicionais:</h4>
+                  <div className="grid grid-cols-5 gap-2">
+                    {/* Miniatura da imagem principal */}
+                    <div 
+                      className={`relative overflow-hidden h-14 rounded-md cursor-pointer border-2 ${currentImage === activity.image ? 'border-primary' : 'border-transparent'}`} 
+                      onClick={() => setCurrentImage(activity.image)}
+                    >
+                      <img 
+                        src={activity.image} 
+                        alt="Imagem principal" 
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                    
+                    {/* Miniaturas das imagens adicionais */}
+                    {activity.additionalImages.map((img, index) => (
+                      <div 
+                        key={index}
+                        className={`relative overflow-hidden h-14 rounded-md cursor-pointer border-2 ${currentImage === img ? 'border-primary' : 'border-transparent'}`}
+                        onClick={() => setCurrentImage(img)}
+                      >
+                        <img 
+                          src={img} 
+                          alt={`Imagem adicional ${index + 1}`} 
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               
               {/* Dicas de uso foram removidas para não atrapalhar visualização em dispositivos móveis */}
             </div>
@@ -358,7 +401,7 @@ export default function ViewActivityModal({ isOpen, onClose, activity }: ViewAct
       </Dialog>
       
       {/* Modal de visualização em tela cheia da imagem com zoom avançado */}
-      {imageFullscreen && activity.image && (
+      {imageFullscreen && currentImage && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-90">
           <div className="relative w-full h-full">
             <TransformWrapper
@@ -376,7 +419,7 @@ export default function ViewActivityModal({ isOpen, onClose, activity }: ViewAct
                     contentClass="flex items-center justify-center h-full"
                   >
                     <img 
-                      src={activity.image} 
+                      src={currentImage} 
                       alt={`Imagem para ${activity.title}`} 
                       className="max-h-[95vh] max-w-[95vw] object-contain"
                     />
