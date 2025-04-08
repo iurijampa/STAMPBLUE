@@ -852,6 +852,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       try {
         const data = JSON.parse(message.toString());
         
+        // Responder a ping com pong para manter a conexão ativa
+        if (data.type === 'ping') {
+          ws.send(JSON.stringify({ type: 'pong' }));
+          return;
+        }
+        
         // Registrar a conexão em um departamento específico
         if (data.type === 'register' && data.department) {
           // Verificar se o departamento é válido

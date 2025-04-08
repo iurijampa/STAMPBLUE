@@ -3,6 +3,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useToast } from './use-toast';
 import { queryClient } from '@/lib/queryClient';
 import { useSoundPlayer, SoundType } from '@/components/sound-player';
+import { useBrowserNotification } from './use-browser-notification';
+
+// Intervalo para heartbeat (ping/pong) para manter a conexão ativa - 30 segundos
+const HEARTBEAT_INTERVAL = 30000;
+// Intervalo para reconexão após falha - começa em 2 segundos e dobra até um máximo de 30 segundos
+const INITIAL_RECONNECT_DELAY = 2000;
+const MAX_RECONNECT_DELAY = 30000;
 
 export function useWebSocket() {
   const { user } = useAuth();
@@ -11,6 +18,73 @@ export function useWebSocket() {
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
   const { playSound } = useSoundPlayer();
+  const { isSupported, permission, requestPermission, notify } = useBrowserNotification();
+  
+  // Referências para controle de reconexão e ping
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const heartbeatIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const reconnectDelayRef = useRef(INITIAL_RECONNECT_DELAY);
+  const reconnectAttemptsRef = useRef(0);
+  const pendingPongRef = useRef(false);
+  
+  // Flag para controlar se o componente está montado
+  const isMountedRef = useRef(true);
+  
+  // Solicitar permissão para notificações do navegador quando o componente for montado
+  useEffect(() => {
+    if (isSupported && permission !== 'granted') {
+      const askForPermission = async () => {
+        await requestPermission();
+      };
+      askForPermission();
+    }
+    
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, [isSupported, permission, requestPermission]);
+  
+  // Atualizar dados quando o WebSocket não está disponível
+  const refreshDataPeriodically = useCallback(async () => {
+    if (!user) return;
+    
+    try {
+      // Atualizar atividades e estatísticas do departamento via polling quando o WebSocket não funciona
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['/api/department/activities', user.role] }),
+        queryClient.invalidateQueries({ queryKey: ['/api/department/stats', user.role] }),
+        queryClient.invalidateQueries({ queryKey: ['/api/activities'] })
+      ]);
+    } catch (err) {
+      console.error('Erro ao atualizar dados:', err);
+    }
+  }, [user]);
+  
+  // Enviar heartbeat para manter a conexão ativa
+  const sendHeartbeat = useCallback(() => {
+    if (socketRef.current?.readyState === WebSocket.OPEN) {
+      // Se ainda estamos esperando uma resposta do ping anterior, a conexão pode estar inativa
+      if (pendingPongRef.current) {
+        console.log('Não recebemos resposta do ping anterior, reconectando...');
+        if (socketRef.current) {
+          socketRef.current.close();
+        }
+        return;
+      }
+      
+      // Enviar ping e aguardar resposta
+      socketRef.current.send(JSON.stringify({ type: 'ping' }));
+      pendingPongRef.current = true;
+      
+      // Timeout para verificar se recebemos resposta do ping
+      setTimeout(() => {
+        if (pendingPongRef.current && socketRef.current) {
+          console.log('Timeout de ping/pong, reconectando...');
+          socketRef.current.close();
+        }
+      }, 5000);
+    }
+  }, []);
   
   // Função para enviar mensagens para o WebSocket
   const sendMessage = useCallback((data: any) => {
@@ -32,153 +106,329 @@ export function useWebSocket() {
     return false;
   }, [sendMessage]);
   
-  // Conectar ao WebSocket
-  useEffect(() => {
+  // Mostrar notificação na aba do navegador
+  const showBrowserNotification = useCallback((title: string, body: string, tag?: string) => {
+    // Só mostrar notificação se a página não estiver em foco e permissão estiver concedida
+    if (isSupported && permission === 'granted' && !document.hasFocus()) {
+      notify({
+        title,
+        body,
+        tag,
+        icon: '/logo-stamp-blue.png',
+        onClick: () => {
+          // Forçar uma atualização dos dados quando o usuário clica na notificação
+          refreshDataPeriodically();
+        }
+      });
+    }
+  }, [isSupported, permission, notify, refreshDataPeriodically]);
+  
+  // Limpar intervalos e timeouts para evitar vazamentos de memória
+  const clearTimers = useCallback(() => {
+    if (heartbeatIntervalRef.current) {
+      clearInterval(heartbeatIntervalRef.current);
+      heartbeatIntervalRef.current = null;
+    }
+    
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
+  }, []);
+  
+  // Função de conexão WebSocket com reconexão automática
+  const connect = useCallback(() => {
+    clearTimers();
+    
+    // Não tentar conectar se o usuário não está logado
     if (!user) return;
     
-    const connect = () => {
-      try {
-        // Definir o protocolo com base no protocolo do site
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${protocol}//${window.location.host}/ws`;
-        
-        // Criar nova conexão WebSocket
-        const socket = new WebSocket(wsUrl);
-        socketRef.current = socket;
-        
-        // Manipulador de eventos para quando a conexão for aberta
-        socket.onopen = () => {
-          console.log('WebSocket conectado com sucesso!');
-          setConnected(true);
-          setError(null);
-          
-          // Registrar-se com o departamento do usuário
-          registerWithDepartment(user.role);
-        };
-        
-        // Manipulador de eventos para mensagens recebidas
-        socket.onmessage = (event) => {
-          try {
-            const data = JSON.parse(event.data);
-            console.log('Mensagem WebSocket recebida:', data);
-            
-            // Processar diferentes tipos de mensagens
-            if (data.type === 'register_confirm') {
-              toast({
-                title: 'Conexão estabelecida',
-                description: `Atualizações em tempo real ativadas para ${
-                  data.department === 'admin' ? 'Administração' : data.department
-                }`,
-                variant: 'default',
-              });
-            } 
-            else if (data.type === 'new_activity') {
-              // Invalidar cache para atualizar lista de atividades
-              queryClient.invalidateQueries({ queryKey: ['/api/activities'] });
-              
-              // Reproduzir som de notificação bem chamativo
-              playSound('NEW_ACTIVITY', 1.0);
-              
-              // Notificar usuário sobre nova atividade
-              toast({
-                title: 'Novo Pedido Recebido',
-                description: `O pedido "${data.activity.title}" está disponível para seu setor.`,
-                variant: 'default',
-              });
-            } 
-            else if (data.type === 'activity_returned') {
-              // Invalidar cache para atualizar lista de atividades
-              queryClient.invalidateQueries({ queryKey: ['/api/activities'] });
-              
-              // Reproduzir som de alerta para pedidos retornados
-              playSound('RETURN_ALERT', 1.0);
-              
-              // Notificar usuário sobre pedido retornado
-              toast({
-                title: 'Pedido Retornado',
-                description: `O pedido "${data.activity.title}" foi retornado por ${data.returnedBy || 'alguém'} do setor ${data.from}.`,
-                variant: 'destructive',
-              });
-            } 
-            else if (data.type === 'activity_returned_update' || data.type === 'activity_completed') {
-              // Apenas invalidar cache para atualizar lista de atividades
-              queryClient.invalidateQueries({ queryKey: ['/api/activities'] });
-              
-              // Som sutil de atualização
-              playSound('UPDATE', 0.7);
-            } 
-            else if (data.type === 'activity_progress') {
-              // Invalidar cache para atualizar lista de atividades e progresso
-              queryClient.invalidateQueries({ queryKey: ['/api/activities'] });
-              queryClient.invalidateQueries({ queryKey: ['/api/activities/progress'] });
-              queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
-              
-              // Som de atualização
-              playSound('UPDATE', 0.8);
-              
-              // Notificar admins sobre o progresso de atividades
-              if (user.role === 'admin') {
-                if (data.isCompleted) {
-                  toast({
-                    title: 'Produção Concluída',
-                    description: `O pedido "${data.activity.title}" foi finalizado por ${data.completedBy} no setor ${data.department}.`,
-                    variant: 'default',
-                  });
-                } else {
-                  toast({
-                    title: 'Pedido Avançou',
-                    description: `Pedido "${data.activity.title}" passou de ${data.department} para ${data.nextDepartment}.`,
-                    variant: 'default',
-                  });
-                }
-              }
-            }
-          } catch (err) {
-            console.error('Erro ao processar mensagem WebSocket:', err);
-          }
-        };
-        
-        // Manipulador de eventos para erros
-        socket.onerror = (event) => {
-          console.error('Erro WebSocket:', event);
-          setError('Ocorreu um erro na conexão.');
-          setConnected(false);
-        };
-        
-        // Manipulador de eventos para fechamento da conexão
-        socket.onclose = (event) => {
-          console.log('WebSocket desconectado:', event);
-          setConnected(false);
-          
-          // Tentar reconectar após 5 segundos em caso de desconexão
-          if (user) {
-            setTimeout(() => {
-              connect();
-            }, 5000);
-          }
-        };
-      } catch (err) {
-        console.error('Erro ao configurar WebSocket:', err);
-        setError('Não foi possível estabelecer conexão.');
-        setConnected(false);
-      }
-    };
-    
-    connect();
-    
-    // Função de limpeza para fechar a conexão quando o componente for desmontado
-    return () => {
+    try {
+      // Fechar conexão anterior se existir
       if (socketRef.current) {
         socketRef.current.close();
       }
+      
+      // Definir o protocolo com base no protocolo do site
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}/ws`;
+      
+      // Criar nova conexão WebSocket com um timestamp para evitar cache
+      const socket = new WebSocket(`${wsUrl}?t=${Date.now()}`);
+      socketRef.current = socket;
+      
+      // Manipulador de eventos para quando a conexão for aberta
+      socket.onopen = () => {
+        if (!isMountedRef.current) return;
+        
+        console.log('WebSocket conectado com sucesso!');
+        setConnected(true);
+        setError(null);
+        
+        // Resetar o atraso de reconexão e contagem de tentativas
+        reconnectDelayRef.current = INITIAL_RECONNECT_DELAY;
+        reconnectAttemptsRef.current = 0;
+        
+        // Registrar-se com o departamento do usuário
+        registerWithDepartment(user.role);
+        
+        // Iniciar heartbeat
+        clearTimers();
+        heartbeatIntervalRef.current = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL);
+      };
+      
+      // Manipulador de eventos para mensagens recebidas
+      socket.onmessage = (event) => {
+        if (!isMountedRef.current) return;
+        
+        try {
+          const data = JSON.parse(event.data);
+          
+          // Resposta a heartbeat (ping)
+          if (data.type === 'pong') {
+            pendingPongRef.current = false;
+            return;
+          }
+          
+          console.log('Mensagem WebSocket recebida:', data);
+          
+          // Processar diferentes tipos de mensagens
+          if (data.type === 'register_confirm') {
+            toast({
+              title: 'Conexão estabelecida',
+              description: `Atualizações em tempo real ativadas para ${
+                data.department === 'admin' ? 'Administração' : data.department
+              }`,
+              variant: 'default',
+            });
+          } 
+          else if (data.type === 'new_activity') {
+            // Invalidar cache para atualizar lista de atividades
+            queryClient.invalidateQueries({ queryKey: ['/api/department/activities', user.role] });
+            queryClient.invalidateQueries({ queryKey: ['/api/activities'] });
+            
+            // Reproduzir som de notificação bem chamativo
+            playSound('NEW_ACTIVITY', 1.0);
+            
+            // Notificação na aba do navegador
+            showBrowserNotification(
+              'Novo Pedido Recebido', 
+              `O pedido "${data.activity.title}" está disponível para seu setor.`,
+              `new-activity-${data.activity.id}`
+            );
+            
+            // Notificar usuário sobre nova atividade
+            toast({
+              title: 'Novo Pedido Recebido',
+              description: `O pedido "${data.activity.title}" está disponível para seu setor.`,
+              variant: 'default',
+            });
+          } 
+          else if (data.type === 'activity_returned') {
+            // Invalidar cache para atualizar lista de atividades
+            queryClient.invalidateQueries({ queryKey: ['/api/department/activities', user.role] });
+            queryClient.invalidateQueries({ queryKey: ['/api/activities'] });
+            
+            // Reproduzir som de alerta para pedidos retornados
+            playSound('RETURN_ALERT', 1.0);
+            
+            // Notificação na aba do navegador
+            showBrowserNotification(
+              'Pedido Retornado', 
+              `O pedido "${data.activity.title}" foi retornado por ${data.returnedBy || 'alguém'} do setor ${data.from}.`,
+              `return-activity-${data.activity.id}`
+            );
+            
+            // Notificar usuário sobre pedido retornado
+            toast({
+              title: 'Pedido Retornado',
+              description: `O pedido "${data.activity.title}" foi retornado por ${data.returnedBy || 'alguém'} do setor ${data.from}.`,
+              variant: 'destructive',
+            });
+          } 
+          else if (data.type === 'activity_returned_update' || data.type === 'activity_completed') {
+            // Invalidar cache para atualizar lista de atividades
+            queryClient.invalidateQueries({ queryKey: ['/api/department/activities', user.role] });
+            queryClient.invalidateQueries({ queryKey: ['/api/activities'] });
+            queryClient.invalidateQueries({ queryKey: ['/api/department/stats', user.role] });
+            
+            // Som sutil de atualização
+            playSound('UPDATE', 0.7);
+          } 
+          else if (data.type === 'activity_progress') {
+            // Invalidar cache para atualizar lista de atividades e progresso
+            queryClient.invalidateQueries({ queryKey: ['/api/department/activities', user.role] });
+            queryClient.invalidateQueries({ queryKey: ['/api/activities'] });
+            queryClient.invalidateQueries({ queryKey: ['/api/activities/progress'] });
+            queryClient.invalidateQueries({ queryKey: ['/api/department/stats', user.role] });
+            queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
+            
+            // Som de atualização
+            playSound('UPDATE', 0.8);
+            
+            // Notificar admins sobre o progresso de atividades
+            if (user.role === 'admin') {
+              if (data.isCompleted) {
+                toast({
+                  title: 'Produção Concluída',
+                  description: `O pedido "${data.activity.title}" foi finalizado por ${data.completedBy} no setor ${data.department}.`,
+                  variant: 'default',
+                });
+                
+                showBrowserNotification(
+                  'Produção Concluída', 
+                  `O pedido "${data.activity.title}" foi finalizado por ${data.completedBy} no setor ${data.department}.`,
+                  `complete-activity-${data.activity.id}`
+                );
+              } else {
+                toast({
+                  title: 'Pedido Avançou',
+                  description: `Pedido "${data.activity.title}" passou de ${data.department} para ${data.nextDepartment}.`,
+                  variant: 'default',
+                });
+                
+                showBrowserNotification(
+                  'Pedido Avançou', 
+                  `Pedido "${data.activity.title}" passou de ${data.department} para ${data.nextDepartment}.`,
+                  `progress-activity-${data.activity.id}`
+                );
+              }
+            }
+          }
+        } catch (err) {
+          console.error('Erro ao processar mensagem WebSocket:', err);
+        }
+      };
+      
+      // Manipulador de eventos para erros
+      socket.onerror = (event) => {
+        if (!isMountedRef.current) return;
+        
+        console.error('Erro WebSocket:', event);
+        setError('Ocorreu um erro na conexão.');
+        setConnected(false);
+      };
+      
+      // Manipulador de eventos para fechamento da conexão
+      socket.onclose = (event) => {
+        if (!isMountedRef.current) return;
+        
+        console.log('WebSocket desconectado:', event);
+        setConnected(false);
+        
+        // Limpar heartbeat
+        clearTimers();
+        
+        // Iniciar atualização periódica para compensar a falta de WebSocket
+        refreshDataPeriodically();
+        
+        // Tentar reconectar com backoff exponencial
+        if (user) {
+          reconnectAttemptsRef.current += 1;
+          
+          // Calcular o próximo atraso (dobrar o atraso a cada tentativa)
+          const nextDelay = Math.min(
+            reconnectDelayRef.current * Math.pow(1.5, Math.min(reconnectAttemptsRef.current - 1, 5)),
+            MAX_RECONNECT_DELAY
+          );
+          reconnectDelayRef.current = nextDelay;
+          
+          console.log(`Tentando reconectar em ${nextDelay / 1000} segundos (tentativa ${reconnectAttemptsRef.current})...`);
+          
+          reconnectTimeoutRef.current = setTimeout(() => {
+            if (isMountedRef.current) {
+              connect();
+            }
+          }, nextDelay);
+        }
+      };
+    } catch (err) {
+      if (!isMountedRef.current) return;
+      
+      console.error('Erro ao configurar WebSocket:', err);
+      setError('Não foi possível estabelecer conexão.');
+      setConnected(false);
+      
+      // Tentar novamente após um atraso
+      reconnectTimeoutRef.current = setTimeout(() => {
+        if (isMountedRef.current) {
+          connect();
+        }
+      }, reconnectDelayRef.current);
+    }
+  }, [
+    user, 
+    registerWithDepartment, 
+    clearTimers, 
+    showBrowserNotification, 
+    refreshDataPeriodically, 
+    toast, 
+    playSound, 
+    sendHeartbeat
+  ]);
+  
+  // Conectar ao WebSocket quando o componente for montado ou o usuário mudar
+  useEffect(() => {
+    isMountedRef.current = true;
+    
+    if (user) {
+      connect();
+      
+      // Atualizar dados imediatamente, sem esperar pelo WebSocket
+      refreshDataPeriodically();
+      
+      // Configurar um intervalo para atualizar dados periodicamente, independente do WebSocket
+      const pollingInterval = setInterval(() => {
+        if (!connected) {
+          refreshDataPeriodically();
+        }
+      }, 30000); // Atualizar a cada 30 segundos se o WebSocket não estiver conectado
+      
+      // Função de limpeza
+      return () => {
+        isMountedRef.current = false;
+        clearTimers();
+        clearInterval(pollingInterval);
+        
+        if (socketRef.current) {
+          socketRef.current.close();
+          socketRef.current = null;
+        }
+      };
+    }
+    
+    return () => {
+      isMountedRef.current = false;
     };
-  }, [user, registerWithDepartment, toast, playSound]);
+  }, [user, connect, refreshDataPeriodically, clearTimers, connected]);
+  
+  // Adicionar listener para visibilidade da página
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        // Atualizar dados quando o usuário volta para a aba
+        refreshDataPeriodically();
+        
+        // Reconectar WebSocket se estiver desconectado
+        if (!connected && user) {
+          connect();
+        }
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [connected, connect, refreshDataPeriodically, user]);
   
   return {
     connected,
     error,
     sendMessage,
     registerWithDepartment,
-    playSound // Exportar a função de reprodução de som para uso direto
+    playSound, // Exportar a função de reprodução de som para uso direto
+    refreshData: refreshDataPeriodically // Exportar função para atualizar dados manualmente
   };
 }
