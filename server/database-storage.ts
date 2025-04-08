@@ -10,7 +10,7 @@ import {
   notifications
 } from "@shared/schema";
 import session from "express-session";
-import { db } from "./db";
+import { db, sql as postgresClient, cachedQuery, clearCacheByPattern } from "./db";
 import { eq, desc, sql } from "drizzle-orm";
 import connectPg from "connect-pg-simple";
 import { scrypt, randomBytes } from "crypto";
@@ -153,24 +153,36 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getActivitiesByDepartment(department: string): Promise<Activity[]> {
-    // Pegar todas as atividades com progresso pendente neste departamento
-    const progresses = await db
-      .select()
-      .from(activityProgress)
-      .where(
-        sql`${activityProgress.department} = ${department} AND ${activityProgress.status} = 'pending'`
-      );
-    
-    if (progresses.length === 0) return [];
-    
-    // Montar a lista de IDs de atividades
-    const activityIds = progresses.map(p => p.activityId);
-    
-    // Buscar as atividades correspondentes
-    return db
-      .select()
-      .from(activities)
-      .where(sql`${activities.id} IN (${activityIds.join(',')})`);
+    // Usar uma junção (JOIN) para otimizar a consulta
+    return await cachedQuery(`activities_by_dept_${department}`, async () => {
+      // Primeiro, obter IDs das atividades pendentes neste departamento
+      const progresses = await db
+        .select()
+        .from(activityProgress)
+        .where(
+          sql`${activityProgress.department} = ${department} AND ${activityProgress.status} = 'pending'`
+        );
+      
+      if (progresses.length === 0) return [];
+      
+      // Montar a lista de IDs de atividades
+      const activityIds = progresses.map(p => p.activityId);
+      
+      // Buscar detalhes completos das atividades
+      const result = await db
+        .select()
+        .from(activities)
+        .where(sql`${activities.id} IN (${activityIds.join(',')})`);
+      
+      // Ordenar por deadline (mais urgentes primeiro)
+      return result.sort((a, b) => {
+        // Se não tiver deadline, vai para o final
+        if (!a.deadline) return 1;
+        if (!b.deadline) return -1;
+        // Ordernar do mais antigo para o mais recente
+        return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
+      });
+    }, 5000); // Cache por 5 segundos
   }
 
   async updateActivity(id: number, activityData: InsertActivity): Promise<Activity> {
@@ -196,6 +208,15 @@ export class DatabaseStorage implements IStorage {
       .where(eq(activities.id, id))
       .returning();
     
+    // Limpar caches relacionados à atividade
+    clearCacheByPattern(`activity_`);
+    
+    // Limpar cache de todos os departamentos, já que esta atividade 
+    // pode estar em qualquer estágio do fluxo
+    for (const dept of DEPARTMENTS) {
+      clearCacheByPattern(`activities_by_dept_${dept}`);
+    }
+    
     return updatedActivity;
   }
 
@@ -210,25 +231,57 @@ export class DatabaseStorage implements IStorage {
       throw new Error("Atividade não encontrada");
     }
     
+    // Limpar caches relacionados à atividade
+    clearCacheByPattern(`activity_`);
+    
+    // Limpar cache de todos os departamentos, já que esta atividade 
+    // pode ter seu status alterado
+    for (const dept of DEPARTMENTS) {
+      clearCacheByPattern(`activities_by_dept_${dept}`);
+    }
+    
     return updatedActivity;
   }
 
   async deleteActivity(id: number): Promise<void> {
-    // Primeiro, excluir registros relacionados em outras tabelas
+    // Primeiro, obter dados de notificações para limpar caches relacionados a usuários
+    const affectedNotifications = await db.select().from(notifications).where(eq(notifications.activityId, id));
+    const userIds = new Set(affectedNotifications.map(n => n.userId));
+    
+    // Excluir registros relacionados em outras tabelas
     await db.delete(activityProgress).where(eq(activityProgress.activityId, id));
     await db.delete(notifications).where(eq(notifications.activityId, id));
     
-    // Por fim, excluir a atividade
+    // Excluir a atividade
     await db.delete(activities).where(eq(activities.id, id));
+    
+    // Limpar caches relacionados à atividade
+    clearCacheByPattern(`activity_`);
+    
+    // Limpar cache de todos os departamentos
+    for (const dept of DEPARTMENTS) {
+      clearCacheByPattern(`activities_by_dept_${dept}`);
+    }
+    
+    // Limpar cache de notificações para usuários afetados
+    for (const userId of userIds) {
+      clearCacheByPattern(`user_notifications_${userId}`);
+    }
   }
 
   async getActivityStats(): Promise<{ total: number; inProgress: number; completed: number; }> {
-    const allActivities = await this.getAllActivities();
-    return {
-      total: allActivities.length,
-      inProgress: allActivities.filter(a => a.status === "in_progress").length,
-      completed: allActivities.filter(a => a.status === "completed").length
-    };
+    // Usar cache para estatísticas com TTL curto (5 segundos)
+    return cachedQuery('activity_stats', async () => {
+      // Obter todas as atividades
+      const activityList = await db.select().from(activities);
+      
+      // Calcular estatísticas
+      return {
+        total: activityList.length,
+        inProgress: activityList.filter(a => a.status === 'in_progress').length,
+        completed: activityList.filter(a => a.status === 'completed').length
+      };
+    }, 5000);
   }
 
   // ===== MÉTODOS DE PROGRESSO DA ATIVIDADE =====
@@ -244,6 +297,9 @@ export class DatabaseStorage implements IStorage {
         returnedAt: progressData.returnedAt || null
       })
       .returning();
+    
+    // Limpar cache relacionado ao departamento desta atividade
+    clearCacheByPattern(`activities_by_dept_${progressData.department}`);
     
     return progress;
   }
@@ -294,6 +350,20 @@ export class DatabaseStorage implements IStorage {
         sql`${activityProgress.activityId} = ${activityId} AND ${activityProgress.department} = ${department}`
       )
       .returning();
+    
+    // Limpar o cache relacionado a esta atividade e departamento
+    // para que as mudanças sejam refletidas imediatamente
+    clearCacheByPattern(`activities_by_dept_${department}`);
+    
+    // Limpar qualquer estatística em cache
+    clearCacheByPattern('activity_stats');
+    
+    // Se o próximo departamento na sequência existir, limpar seu cache também
+    const deptIndex = DEPARTMENTS.indexOf(department as any);
+    if (deptIndex >= 0 && deptIndex < DEPARTMENTS.length - 1) {
+      const nextDept = DEPARTMENTS[deptIndex + 1];
+      clearCacheByPattern(`activities_by_dept_${nextDept}`);
+    }
     
     return updatedProgress;
   }
@@ -357,6 +427,11 @@ export class DatabaseStorage implements IStorage {
       .where(eq(activityProgress.id, previousProgress.id))
       .returning();
     
+    // Limpar o cache dos departamentos afetados
+    clearCacheByPattern(`activities_by_dept_${currentDepartment}`);
+    clearCacheByPattern(`activities_by_dept_${previousProgress.department}`);
+    clearCacheByPattern('activity_stats');
+    
     return {
       previousProgress: updatedPreviousProgress,
       currentProgress: updatedCurrentProgress
@@ -366,28 +441,44 @@ export class DatabaseStorage implements IStorage {
   async getCompletedActivitiesByDepartment(
     department: string
   ): Promise<{ activity: Activity; progress: ActivityProgress; }[]> {
-    // Obter todos os progressos concluídos para este departamento
-    const completedProgress = await db
-      .select()
-      .from(activityProgress)
-      .where(
-        sql`${activityProgress.department} = ${department} AND ${activityProgress.status} = 'completed'`
-      );
-    
-    if (completedProgress.length === 0) return [];
-    
-    // Criar um conjunto de resultados
-    const result: { activity: Activity; progress: ActivityProgress; }[] = [];
-    
-    // Para cada progresso, buscar a atividade correspondente
-    for (const progress of completedProgress) {
-      const activity = await this.getActivity(progress.activityId);
-      if (activity) {
-        result.push({ activity, progress });
+    // Cache para atividades completadas por departamento (10 segundos)
+    return cachedQuery(`completed_activities_dept_${department}`, async () => {
+      // Obter todos os progressos concluídos para este departamento
+      const completedProgress = await db
+        .select()
+        .from(activityProgress)
+        .where(
+          sql`${activityProgress.department} = ${department} AND ${activityProgress.status} = 'completed'`
+        );
+      
+      if (completedProgress.length === 0) return [];
+      
+      // Obter todos os IDs de atividades necessários
+      const activityIds = completedProgress.map(progress => progress.activityId);
+      
+      // Buscar todas as atividades de uma só vez (otimização)
+      const activitiesMap = new Map<number, Activity>();
+      const activityList = await db
+        .select()
+        .from(activities)
+        .where(sql`${activities.id} IN (${activityIds.join(',')})`);
+      
+      // Criar um mapa para lookup rápido por ID
+      activityList.forEach(activity => {
+        activitiesMap.set(activity.id, activity);
+      });
+      
+      // Montar o resultado final usando o mapa
+      const result: { activity: Activity; progress: ActivityProgress; }[] = [];
+      for (const progress of completedProgress) {
+        const activity = activitiesMap.get(progress.activityId);
+        if (activity) {
+          result.push({ activity, progress });
+        }
       }
-    }
-    
-    return result;
+      
+      return result;
+    }, 10000); // Cache por 10 segundos
   }
 
   // ===== MÉTODOS DE NOTIFICAÇÃO =====
@@ -400,6 +491,9 @@ export class DatabaseStorage implements IStorage {
         createdAt: new Date()
       })
       .returning();
+    
+    // Limpar cache de notificações para este usuário
+    clearCacheByPattern(`user_notifications_${notificationData.userId}`);
     
     return notification;
   }
@@ -414,11 +508,16 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getNotificationsByUser(userId: number): Promise<Notification[]> {
-    return db
-      .select()
-      .from(notifications)
-      .where(eq(notifications.userId, userId))
-      .orderBy(desc(notifications.createdAt)); // Mais recentes primeiro
+    // Cache notificações por um período curto (2 segundos)
+    return cachedQuery(`user_notifications_${userId}`, async () => {
+      const results = await db
+        .select()
+        .from(notifications)
+        .where(eq(notifications.userId, userId))
+        .orderBy(desc(notifications.createdAt)); // Mais recentes primeiro
+      
+      return results;
+    }, 2000); // Cache por apenas 2 segundos para garantir notificações atualizadas
   }
 
   async markNotificationAsRead(id: number): Promise<Notification> {
@@ -431,6 +530,9 @@ export class DatabaseStorage implements IStorage {
     if (!updatedNotification) {
       throw new Error("Notificação não encontrada");
     }
+    
+    // Limpar cache de notificações para este usuário
+    clearCacheByPattern(`user_notifications_${updatedNotification.userId}`);
     
     return updatedNotification;
   }

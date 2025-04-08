@@ -1,0 +1,50 @@
+[
+  {
+    "id": 1,
+    "username": "admin",
+    "password": "308f7c9e5a689b319a92f3b3b16459e2258f2bcd5bda8a76558bef08368c9978659bc4f6c42f5020a88a1defcbf87630e97892b1fcebba1995d2d64da186d169.e6fb91889da134f77368bb82aca0d945",
+    "name": "Administrador",
+    "role": "admin",
+    "department": "admin"
+  },
+  {
+    "id": 2,
+    "username": "gabarito",
+    "password": "7ac145e400ca9d85720efd78edcb4dd6921c64b67573933e300cf9f621696ce3fef79612282ae6ae003129a0463445e173064c531b599774fd6dbcdaf510d830.1d4b70beb94c2a7297db6ff68f6889ac",
+    "name": "Gabarito",
+    "role": "gabarito",
+    "department": "gabarito"
+  },
+  {
+    "id": 3,
+    "username": "costura",
+    "password": "7ac145e400ca9d85720efd78edcb4dd6921c64b67573933e300cf9f621696ce3fef79612282ae6ae003129a0463445e173064c531b599774fd6dbcdaf510d830.1d4b70beb94c2a7297db6ff68f6889ac",
+    "name": "Costura",
+    "role": "costura",
+    "department": "costura"
+  },
+  {
+    "id": 4,
+    "username": "impressao",
+    "password": "7ac145e400ca9d85720efd78edcb4dd6921c64b67573933e300cf9f621696ce3fef79612282ae6ae003129a0463445e173064c531b599774fd6dbcdaf510d830.1d4b70beb94c2a7297db6ff68f6889ac",
+    "name": "Impressao",
+    "role": "impressao",
+    "department": "impressao"
+  },
+  {
+    "id": 6,
+    "username": "batida",
+    "password": "7ac145e400ca9d85720efd78edcb4dd6921c64b67573933e300cf9f621696ce3fef79612282ae6ae003129a0463445e173064c531b599774fd6dbcdaf510d830.1d4b70beb94c2a7297db6ff68f6889ac",
+    "name": "Batida",
+    "role": "batida",
+    "department": "batida"
+  },
+  {
+    "id": 5,
+    "username": "embalagem",
+    "password": "7ac145e400ca9d85720efd78edcb4dd6921c64b67573933e300cf9f621696ce3fef79612282ae6ae003129a0463445e173064c531b599774fd6dbcdaf510d830.1d4b70beb94c2a7297db6ff68f6889ac",
+    "name": "Embalagem",
+    "role": "embalagem",
+    "department": "embalagem"
+  }
+]
