@@ -133,7 +133,7 @@ export default function ViewActivityModal({ isOpen, onClose, activity }: ViewAct
     resetZoom();
   };
   
-  // Função para gerar o PDF
+  // Função simplificada para gerar o PDF
   const handlePrintPDF = async () => {
     if (!activity) return;
     
@@ -183,7 +183,10 @@ export default function ViewActivityModal({ isOpen, onClose, activity }: ViewAct
       pdf.setFillColor(240, 240, 240);
       pdf.rect(20, currentY - 5, pageWidth - 40, 10, 'F');
       pdf.setFontSize(11);
-      pdf.text(`Status atual: ${translateStatus(activity.status)}`, 20, currentY);
+      let statusText = 'Pendente';
+      if (activity.status === 'in_progress') statusText = 'Em andamento';
+      if (activity.status === 'completed') statusText = 'Concluído';
+      pdf.text(`Status atual: ${statusText}`, 20, currentY);
       
       // Adicionar imagem principal
       if (activity.image) {
@@ -252,52 +255,6 @@ export default function ViewActivityModal({ isOpen, onClose, activity }: ViewAct
         }
       }
       
-      // Adicionar informações de departamento, se houver progressos
-      if (progressHistory.length > 0) {
-        currentY += 10;
-        pdf.text('Histórico de progresso:', 20, currentY);
-        currentY += 8;
-        
-        // Adicionar tabela com cabeçalho
-        pdf.setFillColor(220, 220, 220);
-        pdf.rect(20, currentY - 5, pageWidth - 40, 10, 'F');
-        pdf.text('Departamento', 25, currentY);
-        pdf.text('Responsável', 80, currentY);
-        pdf.text('Data', pageWidth - 40, currentY, { align: 'right' });
-        currentY += 8;
-        
-        // Adicionar linhas da tabela
-        const completedProgressItems = progressHistory
-          .filter(p => p.completedAt !== null)
-          .sort((a, b) => {
-            if (!a.completedAt || !b.completedAt) return 0;
-            return new Date(a.completedAt).getTime() - new Date(b.completedAt).getTime();
-          });
-          
-        completedProgressItems.forEach((progress, index) => {
-          const bgColor = index % 2 === 0 ? 245 : 255;
-          pdf.setFillColor(bgColor, bgColor, bgColor);
-          pdf.rect(20, currentY - 5, pageWidth - 40, 10, 'F');
-          
-          const deptName = progress.department.charAt(0).toUpperCase() + progress.department.slice(1);
-          pdf.text(deptName, 25, currentY);
-          pdf.text(progress.completedBy || 'Não informado', 80, currentY);
-          
-          const dateText = progress.completedAt ? formatDate(progress.completedAt) : '-';
-          pdf.text(dateText, pageWidth - 40, currentY, { align: 'right' });
-          
-          currentY += 10;
-          
-          // Adicionar notas se houver
-          if (progress.notes) {
-            pdf.setFontSize(9);
-            pdf.text(`Obs: ${progress.notes}`, 30, currentY);
-            pdf.setFontSize(11);
-            currentY += 8;
-          }
-        });
-      }
-      
       // Informações de retorno, se o pedido foi retornado
       if ((activity as any).wasReturned) {
         currentY += 10;
@@ -328,6 +285,7 @@ export default function ViewActivityModal({ isOpen, onClose, activity }: ViewAct
       
     } catch (error) {
       console.error('Erro ao gerar PDF:', error);
+      alert('Ocorreu um erro ao gerar o PDF. Tente novamente ou entre em contato com o suporte.');
     } finally {
       setIsPrinting(false);
     }
