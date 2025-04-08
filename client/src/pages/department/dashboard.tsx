@@ -161,14 +161,10 @@ export default function DepartmentDashboard() {
     return text.charAt(0).toUpperCase() + text.slice(1);
   };
 
-  // Função para atualizar manualmente todos os dados
+  // Função para atualizar manualmente a página (F5)
   const handleRefresh = () => {
-    refetchActivities();
-    refetchStats();
-    toast({
-      title: "Dados atualizados",
-      description: "Os dados foram atualizados com sucesso",
-    });
+    // Recarregar a página completamente (como o F5)
+    window.location.reload();
   };
 
   return (
