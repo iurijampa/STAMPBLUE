@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Activity, ActivityProgress } from "@shared/schema";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ZoomIn, ZoomOut, X, Maximize2, Loader2 } from "lucide-react";
+import { ZoomIn, ZoomOut, X, Maximize2, Loader2, RotateCw, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
 import { 
@@ -12,6 +12,7 @@ import {
   AccordionItem,
   AccordionTrigger 
 } from "@/components/ui/accordion";
+import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 
 interface ViewActivityModalProps {
   isOpen: boolean;
@@ -138,20 +139,62 @@ export default function ViewActivityModal({ isOpen, onClose, activity }: ViewAct
               </div>
             </div>
             
-            {/* Imagem com controles de zoom */}
+            {/* Imagem com controles de zoom avançados */}
             <div className="flex flex-col space-y-3">
-              <div className="relative overflow-hidden border rounded-md h-60 flex items-center justify-center bg-neutral-100">
+              <div className="relative overflow-hidden border rounded-md h-60 bg-neutral-100">
                 {activity.image ? (
                   <>
-                    <div className="overflow-auto h-full w-full flex items-center justify-center">
-                      <img 
-                        src={activity.image} 
-                        alt={`Imagem para ${activity.title}`} 
-                        className="transition-transform duration-200"
-                        style={{ transform: `scale(${imageZoom})` }} 
-                      />
+                    <div className="h-full w-full">
+                      <TransformWrapper
+                        initialScale={1}
+                        minScale={0.5}
+                        maxScale={5}
+                        centerOnInit
+                        wheel={{ step: 0.05 }}
+                      >
+                        {({ zoomIn, zoomOut, resetTransform }) => (
+                          <>
+                            <TransformComponent
+                              wrapperClass="h-full w-full"
+                              contentClass="flex items-center justify-center"
+                            >
+                              <img 
+                                src={activity.image} 
+                                alt={`Imagem para ${activity.title}`}
+                                className="max-h-60 max-w-full object-contain"
+                              />
+                            </TransformComponent>
+                            <div className="absolute bottom-2 left-2 flex space-x-1 z-10">
+                              <Button 
+                                size="sm" 
+                                variant="secondary" 
+                                className="h-7 w-7 p-0 rounded-full opacity-80 hover:opacity-100"
+                                onClick={() => zoomOut()}
+                              >
+                                <ZoomOut className="h-3 w-3" />
+                              </Button>
+                              <Button 
+                                size="sm" 
+                                variant="secondary" 
+                                className="h-7 w-7 p-0 rounded-full opacity-80 hover:opacity-100"
+                                onClick={() => resetTransform()}
+                              >
+                                <RefreshCw className="h-3 w-3" />
+                              </Button>
+                              <Button 
+                                size="sm" 
+                                variant="secondary" 
+                                className="h-7 w-7 p-0 rounded-full opacity-80 hover:opacity-100"
+                                onClick={() => zoomIn()}
+                              >
+                                <ZoomIn className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </>
+                        )}
+                      </TransformWrapper>
                     </div>
-                    <div className="absolute top-2 right-2 flex space-x-1">
+                    <div className="absolute top-2 right-2 flex space-x-1 z-10">
                       <Button 
                         size="sm" 
                         variant="secondary" 
@@ -163,39 +206,13 @@ export default function ViewActivityModal({ isOpen, onClose, activity }: ViewAct
                     </div>
                   </>
                 ) : (
-                  <span className="text-neutral-400">Nenhuma imagem disponível</span>
+                  <span className="text-neutral-400 flex h-full items-center justify-center">Nenhuma imagem disponível</span>
                 )}
               </div>
               
               {activity.image && (
-                <div className="flex items-center justify-center space-x-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={zoomOut}
-                    disabled={imageZoom <= 0.5}
-                  >
-                    <ZoomOut className="h-4 w-4 mr-1" />
-                    <span>Reduzir</span>
-                  </Button>
-                  
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={resetZoom}
-                  >
-                    <span>100%</span>
-                  </Button>
-                  
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={zoomIn}
-                    disabled={imageZoom >= 3}
-                  >
-                    <ZoomIn className="h-4 w-4 mr-1" />
-                    <span>Ampliar</span>
-                  </Button>
+                <div className="text-center text-sm text-neutral-500">
+                  <p>Use o mouse para arrastar a imagem. Role a roda do mouse ou use os botões para aplicar zoom.</p>
                 </div>
               )}
             </div>
@@ -300,10 +317,11 @@ export default function ViewActivityModal({ isOpen, onClose, activity }: ViewAct
                                 <span className="font-medium">Próximo departamento:</span>{' '}
                                 {activity.status === 'completed' 
                                   ? 'Nenhum (finalizado)' 
-                                  : progressHistory.find(p => p.completedAt === null)?.department
-                                    ? (progressHistory.find(p => p.completedAt === null)?.department.charAt(0).toUpperCase() + 
-                                       progressHistory.find(p => p.completedAt === null)?.department.slice(1))
-                                    : 'Indefinido'
+                                  : (() => {
+                                      const nextDept = progressHistory.find(p => p.completedAt === null)?.department;
+                                      if (!nextDept) return 'Indefinido';
+                                      return nextDept.charAt(0).toUpperCase() + nextDept.slice(1);
+                                    })()
                                 }
                               </p>
                             ) : null}
@@ -323,55 +341,86 @@ export default function ViewActivityModal({ isOpen, onClose, activity }: ViewAct
         </DialogContent>
       </Dialog>
       
-      {/* Modal de visualização em tela cheia da imagem */}
+      {/* Modal de visualização em tela cheia da imagem com zoom avançado */}
       {imageFullscreen && activity.image && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-90">
-          <div className="relative w-full h-full overflow-auto flex items-center justify-center">
-            <img 
-              src={activity.image} 
-              alt={`Imagem para ${activity.title}`} 
-              className="max-h-full max-w-full transition-transform duration-200"
-              style={{ transform: `scale(${imageZoom})` }} 
-            />
+          <div className="relative w-full h-full">
+            <TransformWrapper
+              initialScale={1}
+              minScale={0.1}
+              maxScale={8}
+              centerOnInit
+              limitToBounds={false}
+              wheel={{ step: 0.1 }}
+            >
+              {({ zoomIn, zoomOut, resetTransform, centerView }) => (
+                <>
+                  <TransformComponent
+                    wrapperClass="w-full h-full"
+                    contentClass="flex items-center justify-center h-full"
+                  >
+                    <img 
+                      src={activity.image} 
+                      alt={`Imagem para ${activity.title}`} 
+                      className="max-h-[95vh] max-w-[95vw] object-contain"
+                    />
+                  </TransformComponent>
+                  
+                  {/* Controles de zoom posicionados no canto inferior */}
+                  <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 flex space-x-3 z-50">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => zoomOut()}
+                      className="bg-black bg-opacity-50 text-white border-neutral-600 hover:bg-black hover:bg-opacity-70"
+                    >
+                      <ZoomOut className="h-4 w-4 mr-1" />
+                      <span>Reduzir</span>
+                    </Button>
+                    
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => {
+                        resetTransform();
+                        centerView();
+                      }}
+                      className="bg-black bg-opacity-50 text-white border-neutral-600 hover:bg-black hover:bg-opacity-70"
+                    >
+                      <RefreshCw className="h-4 w-4 mr-1" />
+                      <span>Centralizar</span>
+                    </Button>
+                    
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => zoomIn()}
+                      className="bg-black bg-opacity-50 text-white border-neutral-600 hover:bg-black hover:bg-opacity-70"
+                    >
+                      <ZoomIn className="h-4 w-4 mr-1" />
+                      <span>Ampliar</span>
+                    </Button>
+                  </div>
+                </>
+              )}
+            </TransformWrapper>
             
-            <div className="absolute top-4 right-4 flex space-x-2">
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={zoomOut}
-                disabled={imageZoom <= 0.5}
-                className="bg-black bg-opacity-50 text-white border-neutral-600"
-              >
-                <ZoomOut className="h-4 w-4" />
-              </Button>
-              
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={resetZoom}
-                className="bg-black bg-opacity-50 text-white border-neutral-600"
-              >
-                <span>100%</span>
-              </Button>
-              
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={zoomIn}
-                disabled={imageZoom >= 3}
-                className="bg-black bg-opacity-50 text-white border-neutral-600"
-              >
-                <ZoomIn className="h-4 w-4" />
-              </Button>
-              
+            {/* Botão para fechar o modo de tela cheia */}
+            <div className="absolute top-4 right-4 z-50">
               <Button 
                 variant="outline" 
                 size="sm" 
                 onClick={toggleFullscreen}
-                className="bg-black bg-opacity-50 text-white border-neutral-600"
+                className="bg-black bg-opacity-50 text-white border-neutral-600 hover:bg-black hover:bg-opacity-70"
               >
-                <X className="h-4 w-4" />
+                <X className="h-5 w-5 mr-1" />
+                <span>Fechar</span>
               </Button>
+            </div>
+            
+            {/* Instruções de uso */}
+            <div className="absolute top-4 left-4 z-50 bg-black bg-opacity-50 text-white p-2 rounded-md text-sm">
+              <p>Arraste para mover • Role o mouse para zoom • Duplo clique para centralizar</p>
             </div>
           </div>
         </div>
