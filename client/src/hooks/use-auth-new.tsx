@@ -1,7 +1,11 @@
-import React from 'react';
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { User as SelectUser, InsertUser } from "@shared/schema";
-import { getQueryFn, apiRequest } from "../lib/queryClient";
+import { createContext, ReactNode, useContext } from "react";
+import {
+  useQuery,
+  useMutation,
+  UseMutationResult,
+  useQueryClient
+} from "@tanstack/react-query";
+import { User, InsertUser } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 
 // Tipo para os dados de login
@@ -10,26 +14,30 @@ type LoginData = {
   password: string;
 };
 
-// Criando o contexto de autenticação
-const AuthContext = React.createContext<ReturnType<typeof useProvideAuth> | null>(null);
-
-// Provider component
-export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const auth = useProvideAuth();
-  return <AuthContext.Provider value={auth}>{children}</AuthContext.Provider>;
+// Interface para o contexto de autenticação
+interface AuthContextType {
+  user: User | null;
+  isLoading: boolean;
+  error: Error | null;
+  login: (data: LoginData) => Promise<User>;
+  register: (data: InsertUser) => Promise<User>;
+  logout: () => Promise<void>;
 }
 
-// Hook para usar o contexto de autenticação
+// Criando o contexto
+const AuthContext = createContext<AuthContextType | null>(null);
+
+// Hook para usar o contexto
 export function useAuth() {
-  const context = React.useContext(AuthContext);
-  if (context === null) {
+  const context = useContext(AuthContext);
+  if (!context) {
     throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
 }
 
-// Hook que implementa a lógica de autenticação
-function useProvideAuth() {
+// Provider component
+export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   
@@ -38,7 +46,7 @@ function useProvideAuth() {
     data: user,
     isLoading,
     error 
-  } = useQuery<SelectUser | null, Error>({
+  } = useQuery<User | null, Error>({
     queryKey: ['/api/user'],
     queryFn: async () => {
       try {
@@ -64,8 +72,8 @@ function useProvideAuth() {
     retry: false
   });
   
-  // Login mutation
-  const login = async (data: LoginData) => {
+  // Login
+  const login = async (data: LoginData): Promise<User> => {
     try {
       const response = await fetch('/api/login', {
         method: 'POST',
@@ -85,7 +93,7 @@ function useProvideAuth() {
       
       toast({
         title: "Login realizado com sucesso",
-        description: `Bem-vindo, ${userData.name}!`,
+        description: `Bem-vindo, ${userData.name || userData.username}!`,
       });
       
       return userData;
@@ -99,8 +107,8 @@ function useProvideAuth() {
     }
   };
   
-  // Registro mutation
-  const register = async (data: InsertUser) => {
+  // Registro
+  const register = async (data: InsertUser): Promise<User> => {
     try {
       const response = await fetch('/api/register', {
         method: 'POST',
@@ -112,7 +120,8 @@ function useProvideAuth() {
       });
       
       if (!response.ok) {
-        throw new Error('Falha no registro. Por favor, tente novamente.');
+        const text = await response.text();
+        throw new Error(text || 'Falha no registro. Por favor, tente novamente.');
       }
       
       const userData = await response.json();
@@ -120,7 +129,7 @@ function useProvideAuth() {
       
       toast({
         title: "Registro realizado com sucesso",
-        description: `Bem-vindo, ${userData.name}!`,
+        description: `Bem-vindo, ${userData.name || userData.username}!`,
       });
       
       return userData;
@@ -134,8 +143,8 @@ function useProvideAuth() {
     }
   };
   
-  // Logout mutation
-  const logout = async () => {
+  // Logout
+  const logout = async (): Promise<void> => {
     try {
       const response = await fetch('/api/logout', {
         method: 'POST',
@@ -162,13 +171,19 @@ function useProvideAuth() {
     }
   };
   
-  // Retornar os valores do hook
-  return {
-    user,
+  // Valor do contexto
+  const contextValue: AuthContextType = {
+    user: user || null,
     isLoading,
     error,
     login,
     register,
     logout
   };
+
+  return (
+    <AuthContext.Provider value={contextValue}>
+      {children}
+    </AuthContext.Provider>
+  );
 }
