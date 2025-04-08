@@ -1,10 +1,17 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Activity } from "@shared/schema";
+import { Activity, ActivityProgress } from "@shared/schema";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ZoomIn, ZoomOut, X, Maximize2 } from "lucide-react";
+import { ZoomIn, ZoomOut, X, Maximize2, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Separator } from "@/components/ui/separator";
+import { 
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger 
+} from "@/components/ui/accordion";
 
 interface ViewActivityModalProps {
   isOpen: boolean;
@@ -15,6 +22,35 @@ interface ViewActivityModalProps {
 export default function ViewActivityModal({ isOpen, onClose, activity }: ViewActivityModalProps) {
   const [imageZoom, setImageZoom] = useState(1);
   const [imageFullscreen, setImageFullscreen] = useState(false);
+  const [progressHistory, setProgressHistory] = useState<ActivityProgress[]>([]);
+  const [loadingProgress, setLoadingProgress] = useState(false);
+  
+  // Buscar o histórico de progresso quando o modal é aberto
+  useEffect(() => {
+    async function fetchActivityProgress() {
+      if (activity && isOpen) {
+        try {
+          setLoadingProgress(true);
+          const response = await fetch(`/api/activities/${activity.id}/progress`, {
+            credentials: 'include'
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            setProgressHistory(Array.isArray(data) ? data : []);
+          } else {
+            console.error('Erro ao buscar histórico:', response.status);
+          }
+        } catch (error) {
+          console.error('Erro ao buscar histórico:', error);
+        } finally {
+          setLoadingProgress(false);
+        }
+      }
+    }
+    
+    fetchActivityProgress();
+  }, [activity, isOpen]);
   
   if (!activity) return null;
   
@@ -139,6 +175,118 @@ export default function ViewActivityModal({ isOpen, onClose, activity }: ViewAct
             <div>
               <h4 className="font-medium text-base mb-2">Descrição:</h4>
               <p className="text-neutral-700 whitespace-pre-line">{activity.description}</p>
+            </div>
+            
+            {/* Histórico de progresso */}
+            <div>
+              <h4 className="font-medium text-base mb-2">Histórico de Progresso:</h4>
+              
+              {loadingProgress ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                  <span className="ml-2 text-neutral-600">Carregando histórico...</span>
+                </div>
+              ) : progressHistory.length > 0 ? (
+                <div className="border rounded-md overflow-hidden">
+                  <Accordion type="single" collapsible className="w-full">
+                    {/* Entrada de criação (inicial) */}
+                    <AccordionItem value="criacao" className="border-b">
+                      <AccordionTrigger className="hover:bg-neutral-50 px-4 py-2">
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="bg-purple-500 text-white">
+                            Criação
+                          </Badge>
+                          <span className="font-medium">Pedido criado</span>
+                          <span className="text-xs text-neutral-500 ml-auto">
+                            {formatDate(activity.createdAt)}
+                          </span>
+                        </div>
+                      </AccordionTrigger>
+                      <AccordionContent className="px-4 py-2 bg-neutral-50">
+                        <div className="space-y-2">
+                          <p><span className="font-medium">Criado por:</span> Admin</p>
+                          {activity.notes && (
+                            <p><span className="font-medium">Observações:</span> {activity.notes}</p>
+                          )}
+                        </div>
+                      </AccordionContent>
+                    </AccordionItem>
+                    
+                    {/* Progresso por departamentos */}
+                    {progressHistory
+                      .filter(p => p.completedAt !== null)
+                      .sort((a, b) => {
+                        if (!a.completedAt || !b.completedAt) return 0;
+                        return new Date(a.completedAt).getTime() - new Date(b.completedAt).getTime();
+                      })
+                      .map((progress, index) => (
+                        <AccordionItem key={progress.id} value={String(progress.id)} className="border-b">
+                          <AccordionTrigger className="hover:bg-neutral-50 px-4 py-2">
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" className={`bg-green-500 text-white`}>
+                                {progress.department.charAt(0).toUpperCase() + progress.department.slice(1)}
+                              </Badge>
+                              <span className="font-medium">Concluído</span>
+                              <span className="text-xs text-neutral-500 ml-auto">
+                                {progress.completedAt ? formatDate(progress.completedAt) : '-'}
+                              </span>
+                            </div>
+                          </AccordionTrigger>
+                          <AccordionContent className="px-4 py-2 bg-neutral-50">
+                            <div className="space-y-2">
+                              <p><span className="font-medium">Departamento:</span> {progress.department.charAt(0).toUpperCase() + progress.department.slice(1)}</p>
+                              <p><span className="font-medium">Concluído por:</span> {progress.completedBy || 'Não informado'}</p>
+                              {progress.notes && (
+                                <p><span className="font-medium">Observações:</span> {progress.notes}</p>
+                              )}
+                            </div>
+                          </AccordionContent>
+                        </AccordionItem>
+                      ))
+                    }
+                    
+                    {/* Status atual */}
+                    <AccordionItem value="current" className="border-b">
+                      <AccordionTrigger className="hover:bg-neutral-50 px-4 py-2">
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className={`${getStatusColor(activity.status)} text-white`}>
+                            Status Atual
+                          </Badge>
+                          <span className="font-medium">{translateStatus(activity.status)}</span>
+                        </div>
+                      </AccordionTrigger>
+                      <AccordionContent className="px-4 py-2 bg-neutral-50">
+                        <div className="space-y-2">
+                          <p>
+                            <span className="font-medium">Situação:</span> {activity.status === 'completed' 
+                              ? 'Pedido finalizado' 
+                              : activity.status === 'in_progress' 
+                                ? 'Em andamento' 
+                                : 'Aguardando processamento'
+                            }
+                          </p>
+                          {progressHistory.length > 0 ? (
+                            <p>
+                              <span className="font-medium">Próximo departamento:</span>{' '}
+                              {activity.status === 'completed' 
+                                ? 'Nenhum (finalizado)' 
+                                : progressHistory.find(p => p.completedAt === null)?.department
+                                  ? (progressHistory.find(p => p.completedAt === null)?.department.charAt(0).toUpperCase() + 
+                                     progressHistory.find(p => p.completedAt === null)?.department.slice(1))
+                                  : 'Indefinido'
+                              }
+                            </p>
+                          ) : null}
+                        </div>
+                      </AccordionContent>
+                    </AccordionItem>
+                  </Accordion>
+                </div>
+              ) : (
+                <div className="text-center py-4 border rounded-md bg-neutral-50">
+                  <p className="text-neutral-500">Nenhum histórico de progresso disponível.</p>
+                </div>
+              )}
             </div>
           </div>
         </DialogContent>
