@@ -1,6 +1,7 @@
 import { useAuth } from "@/hooks/use-auth";
 import { Loader2 } from "lucide-react";
-import { Redirect, Route } from "wouter";
+import { useEffect } from "react";
+import { Redirect, Route, useLocation } from "wouter";
 
 // Componente para encapsular a lógica de roteamento protegido
 export function ProtectedRoute({
@@ -24,6 +25,7 @@ function ProtectedComponent({
   Component: () => React.JSX.Element;
 }) {
   const { user, isLoading } = useAuth();
+  const [location, navigate] = useLocation();
 
   if (isLoading) {
     return (
@@ -36,6 +38,13 @@ function ProtectedComponent({
   if (!user) {
     return <Redirect to="/auth" />;
   }
+
+  // Redirecionar usuários não-admin para o dashboard de seu departamento
+  useEffect(() => {
+    if (user && user.role !== 'admin' && location === '/') {
+      navigate(`/department/${user.role}/dashboard`);
+    }
+  }, [user, navigate, location]);
 
   return <Component />;
 }

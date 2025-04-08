@@ -83,6 +83,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(userData);
       queryClient.setQueryData(['/api/user'], userData);
       
+      // Pré-carregar dados com base no papel do usuário
+      if (userData.role !== 'admin') {
+        try {
+          // Carregar dados do departamento para evitar tela vazia após o login
+          const [activitiesResponse, statsResponse] = await Promise.all([
+            fetch(`/api/activities/department/${userData.role}`, { credentials: 'include' }),
+            fetch(`/api/department/${userData.role}/stats`, { credentials: 'include' })
+          ]);
+          
+          if (activitiesResponse.ok) {
+            const activitiesData = await activitiesResponse.json();
+            queryClient.setQueryData(['/api/department/activities', userData.role], activitiesData);
+          }
+          
+          if (statsResponse.ok) {
+            const statsData = await statsResponse.json();
+            queryClient.setQueryData(['/api/department/stats', userData.role], statsData);
+          }
+        } catch (e) {
+          console.error("Erro ao pré-carregar dados do departamento:", e);
+        }
+      }
+      
       toast({
         title: "Login realizado com sucesso",
         description: `Bem-vindo, ${userData.name || userData.username}!`,
