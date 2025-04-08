@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { useEffect, useState } from "react";
-import { Activity, User, Notification } from "@shared/schema";
+import { Activity, User, Notification, DEPARTMENTS } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { 
@@ -192,7 +192,7 @@ export default function AdminDashboard() {
     // Por enquanto, apenas mostra uma notificação
     toast({
       title: `Detalhes de ${activity.title}`,
-      description: `Status: ${activity.status}, Cliente: ${activity.clientName}, Quantidade: ${activity.quantity}`,
+      description: `Status: ${activity.status}, Cliente: ${activity.clientName || 'Não especificado'}`,
     });
   };
 
@@ -294,8 +294,7 @@ export default function AdminDashboard() {
                       <tr className="bg-muted">
                         <th className="px-4 py-3 text-left font-medium">Título</th>
                         <th className="px-4 py-3 text-left font-medium">Cliente</th>
-                        <th className="px-4 py-3 text-left font-medium">Qtd.</th>
-                        <th className="px-4 py-3 text-left font-medium">Status</th>
+                        <th className="px-4 py-3 text-left font-medium">Setor Atual</th>
                         <th className="px-4 py-3 text-left font-medium">Entrega</th>
                         <th className="px-4 py-3 text-left font-medium">Criado em</th>
                         <th className="px-4 py-3 text-right font-medium">Ações</th>
@@ -306,15 +305,15 @@ export default function AdminDashboard() {
                         <tr key={activity.id} className="hover:bg-muted/50">
                           <td className="px-4 py-3 truncate max-w-[150px]">{activity.title}</td>
                           <td className="px-4 py-3 truncate max-w-[100px]">{activity.clientName || "—"}</td>
-                          <td className="px-4 py-3">{activity.quantity}</td>
                           <td className="px-4 py-3">
                             <span className={`px-2 py-1 rounded-full text-xs font-medium 
-                              ${activity.status === 'pending' ? 'bg-amber-100 text-amber-800' : 
-                              activity.status === 'in_progress' ? 'bg-blue-100 text-blue-800' : 
-                              'bg-green-100 text-green-800'}`}>
-                              {activity.status === 'pending' ? 'Pendente' : 
-                               activity.status === 'in_progress' ? 'Em Progresso' : 
-                               'Concluído'}
+                              ${activity.status === 'completed' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'}`}>
+                              {activity.status === 'completed' ? 
+                                'Concluído' : 
+                                // Simplificamos para apenas mostrar "Em Progresso" por enquanto
+                                // Em uma atualização futura, podemos implementar a lógica para mostrar o departamento exato
+                                'Em Progresso'
+                              }
                             </span>
                           </td>
                           <td className="px-4 py-3">
