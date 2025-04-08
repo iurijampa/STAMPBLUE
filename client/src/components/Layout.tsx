@@ -290,8 +290,9 @@ export default function Layout({ children, title }: LayoutProps) {
         </header>
         
         {/* Main Content Area */}
-        <main className="flex-1 overflow-auto p-4 pb-16 lg:p-6 scrollbar-thin bg-neutral-100">
+        <main className="flex-1 overflow-auto p-4 pb-6 lg:p-6 scrollbar-thin bg-neutral-100">
           {children}
+          <FooterCredits />
         </main>
       </div>
     </div>

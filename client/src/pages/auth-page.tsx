@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
+import { Logo, FooterCredits } from "@/components/ui/logo";
 
 export default function AuthPage() {
   const [username, setUsername] = useState("admin");
@@ -142,13 +143,16 @@ export default function AuthPage() {
       
       {/* Form Section - Tela inteira em mobile */}
       <div className="w-full md:w-1/2 bg-background flex flex-1 justify-center items-center min-h-screen py-8">
-        <div className="w-full max-w-md px-4 py-6">
-          <div className="text-center mb-6 md:mb-8">
+        <div className="w-full max-w-md px-4 py-6 flex flex-col h-full">
+          <div className="text-center mb-6 md:mb-8 flex flex-col items-center">
+            <div className="mb-4">
+              <Logo size="xl" className="text-primary-600" />
+            </div>
             <h2 className="text-2xl md:text-3xl font-bold">Acesso ao Sistema</h2>
             <p className="text-muted-foreground mt-2">Faça login para acessar o painel</p>
           </div>
 
-          <Card className="w-full">
+          <Card className="w-full mb-auto">
             <CardHeader>
               <CardTitle>Login</CardTitle>
               <CardDescription>
@@ -186,6 +190,8 @@ export default function AuthPage() {
               </form>
             </CardContent>
           </Card>
+          
+          <FooterCredits />
         </div>
       </div>
     </div>
