@@ -352,8 +352,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Notificação não encontrada" });
       }
       
-      // Users can only mark their own notifications as read
-      if (notification.userId !== req.user.id) {
+      // Verifica se a notificação pertence ao usuário atual ou se é um admin
+      if (notification.userId !== req.user.id && req.user.role !== 'admin') {
         return res.status(403).json({ message: "Acesso negado" });
       }
       
