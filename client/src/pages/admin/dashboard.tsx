@@ -2,9 +2,9 @@ import { Button } from "@/components/ui/button";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { useEffect, useState } from "react";
-import { Activity, User } from "@shared/schema";
+import { Activity, User, Notification } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { 
   Loader2, 
   CircleX, 
@@ -13,11 +13,14 @@ import {
   Users, 
   Edit, 
   Trash2, 
-  Eye 
+  Eye,
+  Bell,
+  BellRing
 } from "lucide-react";
 import CreateActivityModal from "@/components/create-activity-modal";
 import EditActivityModal from "@/components/edit-activity-modal";
 import DeleteActivityDialog from "@/components/delete-activity-dialog";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function AdminDashboard() {
   const [user, setUser] = useState<User | null>(null);
@@ -67,6 +70,44 @@ export default function AdminDashboard() {
       return response.json();
     },
     enabled: !isLoading && !!user,
+  });
+  
+  // Buscar notificações
+  const {
+    data: notifications,
+    isLoading: notificationsLoading,
+    refetch: refetchNotifications
+  } = useQuery<Notification[]>({
+    queryKey: ['/api/notifications'],
+    queryFn: async () => {
+      const response = await apiRequest("GET", "/api/notifications");
+      if (!response.ok) {
+        throw new Error("Falha ao carregar notificações");
+      }
+      return response.json();
+    },
+    enabled: !isLoading && !!user,
+  });
+  
+  // Marcar notificação como lida
+  const markAsReadMutation = useMutation({
+    mutationFn: async (notificationId: number) => {
+      const response = await apiRequest("POST", `/api/notifications/${notificationId}/read`);
+      if (!response.ok) {
+        throw new Error("Falha ao marcar notificação como lida");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      refetchNotifications();
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Erro",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
   });
 
   // Verificar autenticação
@@ -129,6 +170,11 @@ export default function AdminDashboard() {
   const refreshData = () => {
     refetchActivities();
     refetchStats();
+    refetchNotifications();
+  };
+  
+  const handleMarkAsRead = (notificationId: number) => {
+    markAsReadMutation.mutate(notificationId);
   };
 
   const handleEditActivity = (activity: Activity) => {
@@ -318,6 +364,56 @@ export default function AdminDashboard() {
                     </tbody>
                   </table>
                 </div>
+              </div>
+            )}
+          </div>
+
+          {/* Notificações de atividades realizadas */}
+          <div className="bg-white rounded-lg p-4 md:p-6 border border-border mt-6">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold flex items-center">
+                <BellRing className="mr-2 h-5 w-5 text-primary" />
+                Notificações de Atividades
+              </h2>
+            </div>
+            
+            {notificationsLoading ? (
+              <div className="flex justify-center py-6">
+                <Loader2 className="h-6 w-6 animate-spin" />
+              </div>
+            ) : !notifications || notifications.length === 0 ? (
+              <div className="text-center py-8 border-2 border-dashed rounded-lg">
+                <Bell className="h-10 w-10 mx-auto text-muted-foreground mb-2" />
+                <h3 className="text-lg font-medium text-muted-foreground">Nenhuma notificação</h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  As atividades concluídas pelos setores aparecerão aqui
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-4">
+                {notifications.map((notification) => (
+                  <Card key={notification.id} className={`overflow-hidden ${!notification.read ? 'border-l-4 border-l-primary' : ''}`}>
+                    <CardHeader className="pb-2">
+                      <div className="flex justify-between items-start">
+                        <CardTitle className="text-base">{notification.message}</CardTitle>
+                        {!notification.read && (
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-7 w-7 p-0 text-green-600 hover:text-green-700 hover:bg-green-100"
+                            onClick={() => handleMarkAsRead(notification.id)}
+                          >
+                            <CheckCircle2 className="h-4 w-4" />
+                            <span className="sr-only">Marcar como lido</span>
+                          </Button>
+                        )}
+                      </div>
+                      <CardDescription>
+                        {new Date(notification.createdAt).toLocaleString('pt-BR')}
+                      </CardDescription>
+                    </CardHeader>
+                  </Card>
+                ))}
               </div>
             )}
           </div>
