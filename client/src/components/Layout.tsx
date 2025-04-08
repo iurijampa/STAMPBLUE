@@ -18,6 +18,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { Logo, FooterCredits } from "@/components/ui/logo";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -90,11 +91,8 @@ export default function Layout({ children, title }: LayoutProps) {
       {/* Sidebar for desktop */}
       <aside className="bg-neutral-800 text-white w-64 flex-shrink-0 hidden md:block">
         <div className="p-4 h-full flex flex-col">
-          <div className="flex items-center space-x-2 mb-8 mt-2">
-            <div className="bg-primary-500 rounded-md p-1.5">
-              <i className="ri-shirt-line text-xl"></i>
-            </div>
-            <h1 className="text-xl font-semibold">Gestão de Produção</h1>
+          <div className="mb-8 mt-2">
+            <Logo size="lg" className="text-white" />
           </div>
           
           {/* User Info */}
@@ -155,11 +153,8 @@ export default function Layout({ children, title }: LayoutProps) {
               </SheetTrigger>
               <SheetContent side="left" className="bg-neutral-800 text-white border-neutral-700 p-0">
                 <div className="p-4 h-full flex flex-col">
-                  <div className="flex items-center space-x-2 mb-8 mt-2">
-                    <div className="bg-primary-500 rounded-md p-1.5">
-                      <i className="ri-shirt-line text-xl"></i>
-                    </div>
-                    <h1 className="text-xl font-semibold">Gestão de Produção</h1>
+                  <div className="mb-8 mt-2">
+                    <Logo size="lg" className="text-white" />
                   </div>
                   
                   {/* User Info */}
