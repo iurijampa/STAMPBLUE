@@ -2,6 +2,7 @@ import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth } from "./auth";
+import { WebSocketServer, WebSocket } from "ws";
 import { 
   insertActivitySchema, 
   insertActivityProgressSchema,
@@ -208,6 +209,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
+      // Enviar notificação websocket para o departamento gabarito
+      if ((global as any).wsNotifications) {
+        (global as any).wsNotifications.notifyDepartment('gabarito', {
+          type: 'new_activity',
+          activity
+        });
+        
+        // Notificar também administradores
+        (global as any).wsNotifications.notifyDepartment('admin', {
+          type: 'new_activity',
+          activity
+        });
+      }
+      
       res.status(201).json(activity);
     } catch (error) {
       if (error instanceof Error) {
@@ -336,6 +351,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
+      // Enviar notificação via WebSocket
+      if ((global as any).wsNotifications) {
+        // Notificar o departamento anterior (que recebeu o pedido de volta)
+        (global as any).wsNotifications.notifyDepartment(previousDepartment, {
+          type: 'activity_returned',
+          activity,
+          from: department,
+          returnedBy: req.body.returnedBy,
+          notes: req.body.notes
+        });
+        
+        // Notificar o departamento atual (que enviou o pedido de volta)
+        (global as any).wsNotifications.notifyDepartment(department, {
+          type: 'activity_returned_update',
+          activityId: activity.id
+        });
+        
+        // Notificar administradores
+        (global as any).wsNotifications.notifyDepartment('admin', {
+          type: 'activity_returned',
+          activity,
+          from: department,
+          to: previousDepartment,
+          returnedBy: req.body.returnedBy,
+          notes: req.body.notes
+        });
+      }
+      
       res.json(result);
     } catch (error) {
       console.error("Erro ao retornar atividade:", error);
@@ -435,6 +478,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
             message: `Setor ${department} finalizou o pedido "${activity.title}" (Produção concluída) - Finalizado por: ${req.body.completedBy}${req.body.notes ? ` - Obs: ${req.body.notes}` : ''}`
           });
         }
+      }
+      
+      // Enviar notificação via WebSocket
+      if ((global as any).wsNotifications) {
+        // Notificar o departamento atual que completou o pedido
+        (global as any).wsNotifications.notifyDepartment(department, {
+          type: 'activity_completed',
+          activityId: activity.id
+        });
+        
+        // Se existe próximo departamento, notificar
+        if (departmentIndex < DEPARTMENTS.length - 1) {
+          const nextDepartment = DEPARTMENTS[departmentIndex + 1];
+          
+          // Notificar o próximo departamento
+          (global as any).wsNotifications.notifyDepartment(nextDepartment, {
+            type: 'new_activity',
+            activity
+          });
+        }
+        
+        // Notificar administradores
+        (global as any).wsNotifications.notifyDepartment('admin', {
+          type: 'activity_progress',
+          activity,
+          completedBy: req.body.completedBy,
+          department,
+          nextDepartment: departmentIndex < DEPARTMENTS.length - 1 ? DEPARTMENTS[departmentIndex + 1] : null,
+          isCompleted: departmentIndex >= DEPARTMENTS.length - 1
+        });
       }
       
       res.json(completedProgress);
@@ -663,5 +736,89 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Create HTTP server
   const httpServer = createServer(app);
+  
+  // WebSocket server para atualizações em tempo real
+  const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
+  
+  // Armazenar conexões WebSocket por departamento
+  const connections: Record<string, WebSocket[]> = {
+    'admin': [],
+    'gabarito': [],
+    'impressao': [],
+    'batida': [],
+    'costura': [],
+    'embalagem': []
+  };
+  
+  // Função para enviar atualizações para um departamento específico
+  function notifyDepartment(department: string, data: any) {
+    // Enviar para todas as conexões do departamento
+    if (connections[department]) {
+      connections[department].forEach(ws => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify(data));
+        }
+      });
+    }
+  }
+  
+  // Função para enviar atualizações para todos
+  function notifyAll(data: any) {
+    Object.values(connections).flat().forEach(ws => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify(data));
+      }
+    });
+  }
+  
+  // Exportar as funções de notificação para uso em outras partes do código
+  (global as any).wsNotifications = {
+    notifyDepartment,
+    notifyAll
+  };
+  
+  wss.on('connection', (ws, req) => {
+    console.log('[websocket] Nova conexão estabelecida');
+    
+    // Adicionar manipuladores de mensagens recebidas do cliente
+    ws.on('message', (message) => {
+      try {
+        const data = JSON.parse(message.toString());
+        
+        // Registrar a conexão em um departamento específico
+        if (data.type === 'register' && data.department) {
+          // Verificar se o departamento é válido
+          if (connections[data.department]) {
+            // Remover esta conexão de qualquer outro departamento
+            Object.keys(connections).forEach(dept => {
+              connections[dept] = connections[dept].filter(conn => conn !== ws);
+            });
+            
+            // Adicionar a conexão ao departamento correto
+            connections[data.department].push(ws);
+            console.log(`[websocket] Cliente registrado no departamento: ${data.department}`);
+            
+            // Enviar confirmação para o cliente
+            ws.send(JSON.stringify({ 
+              type: 'register_confirm', 
+              department: data.department,
+              message: `Conectado ao departamento ${data.department}` 
+            }));
+          }
+        }
+      } catch (error) {
+        console.error('[websocket] Erro ao processar mensagem:', error);
+      }
+    });
+    
+    // Limpar conexões quando cliente desconectar
+    ws.on('close', () => {
+      console.log('[websocket] Cliente desconectado');
+      Object.keys(connections).forEach(dept => {
+        connections[dept] = connections[dept].filter(conn => conn !== ws);
+      });
+    });
+  });
+  
   return httpServer;
 }

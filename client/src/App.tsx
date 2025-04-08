@@ -11,6 +11,7 @@ import AdminUsers from "@/pages/admin/users";
 import DepartmentDashboard from "@/pages/department/dashboard";
 import { AuthProvider } from "@/hooks/use-auth";
 import { useAuth } from "@/hooks/use-auth";
+import { WebSocketProvider } from "@/hooks/websocket-provider";
 
 // Componente para redirecionar com base no papel do usuário
 function DashboardRedirect() {
@@ -80,16 +81,18 @@ function DashboardRedirect() {
 function App() {
   return (
     <AuthProvider>
-      <Switch>
-        <Route path="/" component={DashboardRedirect} />
-        <Route path="/auth" component={AuthPage} />
-        <Route path="/test" component={TestPage} />
-        <Route path="/admin/dashboard" component={AdminDashboard} />
-        <Route path="/admin/users" component={AdminUsers} />
-        <Route path="/department/:department/dashboard" component={DepartmentDashboard} />
-        <Route component={NotFound} />
-      </Switch>
-      <Toaster />
+      <WebSocketProvider>
+        <Switch>
+          <Route path="/" component={DashboardRedirect} />
+          <Route path="/auth" component={AuthPage} />
+          <Route path="/test" component={TestPage} />
+          <Route path="/admin/dashboard" component={AdminDashboard} />
+          <Route path="/admin/users" component={AdminUsers} />
+          <Route path="/department/:department/dashboard" component={DepartmentDashboard} />
+          <Route component={NotFound} />
+        </Switch>
+        <Toaster />
+      </WebSocketProvider>
     </AuthProvider>
   );
 }
