@@ -21,18 +21,33 @@ async function hashPassword(password: string) {
   return `${buf.toString("hex")}.${salt}`;
 }
 
-async function comparePasswords(supplied: string, stored: string) {
-  // Verifica se a senha está no formato esperado (hash.salt)
-  if (!stored.includes(".")) {
-    // Comparação direta para senhas em formato antigo/fixo
-    return supplied === "admin123"; // Senha padrão para todos os usuários
+async function comparePasswords(supplied: string, stored: string): Promise<boolean> {
+  try {
+    // Inicialmente, permitir um bypass temporário para facilitar testes com credenciais admin/admin123
+    if (supplied === "admin123" && stored === "admin123") {
+      console.log("Login via bypass temporário");
+      return true;
+    }
+
+    // Para senhas armazenadas em formato simples (não hash)
+    if (!stored.includes(".")) {
+      console.log("Comparação direta de senhas");
+      return supplied === stored;
+    }
+    
+    // Para senhas no formato hash.salt
+    const [hashedPart, salt] = stored.split(".");
+    
+    // Gerar o hash da senha fornecida com o salt armazenado
+    const suppliedHashBuf = await scryptAsync(supplied, salt, 64) as Buffer;
+    const suppliedHash = suppliedHashBuf.toString("hex");
+    
+    // Comparar os hashes diretamente como strings para evitar problemas com buffers
+    return hashedPart === suppliedHash;
+  } catch (error) {
+    console.error("Erro ao comparar senhas:", error);
+    return false;
   }
-  
-  // Comparação segura para senhas no formato correto
-  const [hashed, salt] = stored.split(".");
-  const hashedBuf = Buffer.from(hashed, "hex");
-  const suppliedBuf = (await scryptAsync(supplied, salt, 64)) as Buffer;
-  return timingSafeEqual(hashedBuf, suppliedBuf);
 }
 
 export function setupAuth(app: Express) {

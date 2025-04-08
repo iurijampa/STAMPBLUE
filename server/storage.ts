@@ -81,7 +81,7 @@ export class MemStorage implements IStorage {
     // Create a default admin user
     this.createUser({
       username: "admin",
-      password: "21232f297a57a5a743894a0e4a801fc3.d41d8cd98f00b204e9800998ecf8427e", // "admin"
+      password: "admin123", // Senha simples para facilitar testes
       name: "Administrador",
       role: "admin"
     });
@@ -91,7 +91,7 @@ export class MemStorage implements IStorage {
     departments.forEach(dept => {
       this.createUser({
         username: dept,
-        password: "21232f297a57a5a743894a0e4a801fc3.d41d8cd98f00b204e9800998ecf8427e", // "admin"
+        password: "senha123", // Senha simples para facilitar testes
         name: `Usuário ${dept}`,
         role: dept as any
       });
