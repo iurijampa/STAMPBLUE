@@ -26,6 +26,7 @@ import {
 import CreateActivityModal from "@/components/create-activity-modal";
 import EditActivityModal from "@/components/edit-activity-modal";
 import DeleteActivityDialog from "@/components/delete-activity-dialog";
+import ViewActivityModal from "@/components/view-activity-modal";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function AdminDashboard() {
@@ -36,6 +37,7 @@ export default function AdminDashboard() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null);
 
   // Query para buscar todas as atividades
@@ -210,12 +212,8 @@ export default function AdminDashboard() {
   };
 
   const handleViewActivity = (activity: Activity) => {
-    // No futuro, podemos expandir esta funcionalidade para mostrar mais detalhes
-    // Por enquanto, apenas mostra uma notificação
-    toast({
-      title: `Detalhes de ${activity.title}`,
-      description: `Status: ${activity.status}, Cliente: ${activity.clientName || 'Não especificado'}`,
-    });
+    setSelectedActivity(activity);
+    setIsViewModalOpen(true);
   };
 
   if (isLoading) {
@@ -480,6 +478,15 @@ export default function AdminDashboard() {
         onSuccess={refreshData}
         activityId={selectedActivity?.id || null}
         activityTitle={selectedActivity?.title || ""}
+      />
+
+      <ViewActivityModal 
+        isOpen={isViewModalOpen}
+        onClose={() => {
+          setIsViewModalOpen(false);
+          setSelectedActivity(null);
+        }}
+        activity={selectedActivity}
       />
     </div>
   );
