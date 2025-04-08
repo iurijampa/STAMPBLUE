@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { activities, activityProgress } from "@shared/schema"; 
+import { activities, activityProgress, DEPARTMENTS } from "@shared/schema"; 
 import { and, eq } from "drizzle-orm";
 
 // Função de emergência para buscar atividades pendentes por departamento
@@ -59,5 +59,114 @@ export async function buscarAtividadesPorDepartamentoEmergencia(department: stri
     console.error(`[EMERGENCIA] Erro crítico ao buscar atividades para ${department}:`, erro);
     // Retornar array vazio em caso de erro para não quebrar a aplicação
     return [];
+  }
+}
+
+// Função emergencial para criar registro de progresso para o próximo departamento
+export async function criarProgressoProximoDepartamentoEmergencia(
+  activityId: number, 
+  departmentAtual: string
+) {
+  try {
+    console.log(`[EMERGENCIA] Criando progresso para o próximo departamento após ${departmentAtual}`);
+    
+    // Encontrar o índice do departamento atual
+    const departmentIndex = DEPARTMENTS.indexOf(departmentAtual as any);
+    
+    // Verificar se existe um próximo departamento
+    if (departmentIndex < 0 || departmentIndex >= DEPARTMENTS.length - 1) {
+      console.log("[EMERGENCIA] Não há próximo departamento, este é o último");
+      return null;
+    }
+    
+    // Obter o próximo departamento
+    const proximoDepartamento = DEPARTMENTS[departmentIndex + 1];
+    console.log(`[EMERGENCIA] Próximo departamento: ${proximoDepartamento}`);
+    
+    // Verificar se já existe um registro de progresso para este departamento
+    const progressoExistente = await db
+      .select()
+      .from(activityProgress)
+      .where(
+        and(
+          eq(activityProgress.activityId, activityId),
+          eq(activityProgress.department, proximoDepartamento as any)
+        )
+      );
+    
+    if (progressoExistente.length > 0) {
+      console.log(`[EMERGENCIA] Já existe um registro de progresso para ${proximoDepartamento}`);
+      return progressoExistente[0];
+    }
+    
+    // Criar novo registro de progresso
+    const [novoProgresso] = await db
+      .insert(activityProgress)
+      .values({
+        activityId,
+        department: proximoDepartamento as any,
+        status: "pending",
+        completedBy: null,
+        completedAt: null,
+        notes: null,
+        returnedBy: null,
+        returnedAt: null
+      })
+      .returning();
+    
+    console.log(`[EMERGENCIA] Criado novo progresso para ${proximoDepartamento} com sucesso!`);
+    return novoProgresso;
+  } catch (erro) {
+    console.error(`[EMERGENCIA] Erro ao criar progresso para o próximo departamento:`, erro);
+    throw erro;
+  }
+}
+
+// Função para completar um progresso de atividade em departamento (modo emergencial)
+export async function completarProgressoAtividadeEmergencia(
+  activityId: number,
+  department: string,
+  completedBy: string,
+  notes?: string
+) {
+  try {
+    console.log(`[EMERGENCIA] Marcando atividade ${activityId} como concluída no departamento ${department}`);
+    
+    // Buscar o progresso atual
+    const progressoAtual = await db
+      .select()
+      .from(activityProgress)
+      .where(
+        and(
+          eq(activityProgress.activityId, activityId),
+          eq(activityProgress.department, department as any)
+        )
+      );
+    
+    if (progressoAtual.length === 0) {
+      throw new Error(`Progresso não encontrado para atividade ${activityId} no departamento ${department}`);
+    }
+    
+    // Atualizar o progresso para concluído
+    const [progressoAtualizado] = await db
+      .update(activityProgress)
+      .set({
+        status: "completed",
+        completedBy,
+        completedAt: new Date(),
+        notes: notes || null
+      })
+      .where(eq(activityProgress.id, progressoAtual[0].id))
+      .returning();
+    
+    console.log(`[EMERGENCIA] Atividade ${activityId} marcada como concluída com sucesso no departamento ${department}`);
+    
+    // Criar progresso para o próximo departamento
+    await criarProgressoProximoDepartamentoEmergencia(activityId, department);
+    
+    return progressoAtualizado;
+  } catch (erro) {
+    console.error(`[EMERGENCIA] Erro ao completar atividade:`, erro);
+    throw erro;
   }
 }

@@ -13,10 +13,14 @@ import {
 import { fromZodError } from "zod-validation-error";
 import fs from 'fs';
 import path from 'path';
-import { createBackup } from "./backup";
 import { db } from "./db";
+import { createBackup } from "./backup";
 import { and, eq, sql } from "drizzle-orm";
-import { buscarAtividadesPorDepartamentoEmergencia } from "./solucao-emergencial";
+import { 
+  buscarAtividadesPorDepartamentoEmergencia, 
+  criarProgressoProximoDepartamentoEmergencia, 
+  completarProgressoAtividadeEmergencia 
+} from "./solucao-emergencial";
 
 // Middleware to check if the user is authenticated
 function isAuthenticated(req: Request, res: Response, next: Function) {
@@ -48,14 +52,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } else if (req.user) {
         const department = req.user.role;
         console.log(`[DEBUG] Usuario ${req.user.username} (${department}) solicitando atividades`);
-        // Usar também a solução emergencial para o gabarito
-        let activities = [];
-        if (department === 'gabarito') {
-          console.log(`[EMERGENCIA] Usando método direto para buscar atividades do departamento gabarito`);
-          activities = await buscarAtividadesPorDepartamentoEmergencia(department);
-        } else {
-          activities = await storage.getActivitiesByDepartment(department);
-        }
+        // Usar a solução emergencial para TODOS os departamentos
+        console.log(`[EMERGENCIA] Usando método direto para buscar atividades do departamento ${department}`);
+        const activities = await buscarAtividadesPorDepartamentoEmergencia(department);
         return res.json(activities);
       } else {
         return res.status(401).json({ message: "Usuário não autenticado" });
@@ -104,17 +103,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       console.log(`[DEBUG] Chamando getActivitiesByDepartment('${department}')`);
-      // SOLUÇÃO EMERGENCIAL: Usar método direto e seguro para o departamento gabarito
-      // e manter o método normal para outros departamentos
-      let activities = [];
-      
-      if (department === 'gabarito') {
-        console.log(`[EMERGENCIA] Usando método direto para buscar atividades do departamento gabarito`);
-        activities = await buscarAtividadesPorDepartamentoEmergencia(department);
-      } else {
-        // Para outros departamentos, continuar usando o método normal
-        activities = await storage.getActivitiesByDepartment(department);
-      }
+      // SOLUÇÃO EMERGENCIAL: Usar método direto e seguro para TODOS os departamentos
+      console.log(`[EMERGENCIA] Usando método direto para buscar atividades do departamento ${department}`);
+      const activities = await buscarAtividadesPorDepartamentoEmergencia(department);
       
       console.log(`[DEBUG] Encontradas ${activities.length} atividades para o departamento: ${department}`);
       if (activities.length > 0) {
@@ -462,102 +453,100 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Nome do funcionário é obrigatório" });
       }
       
-      // Update progress
-      const completedProgress = await storage.completeActivityProgress(
-        activityId, 
-        department, 
-        req.body.completedBy,
-        req.body.notes
-      );
-      
-      // Find the next department in the workflow
-      const departmentIndex = DEPARTMENTS.indexOf(department as any);
-      if (departmentIndex < DEPARTMENTS.length - 1) {
-        const nextDepartment = DEPARTMENTS[departmentIndex + 1];
+      // Update progress - USANDO MÉTODO EMERGENCIAL para todos os departamentos
+      console.log(`[EMERGENCIA] Usando método direto para completar atividade ${activityId} no departamento ${department}`);
+      try {
+        const completedProgress = await completarProgressoAtividadeEmergencia(
+          activityId, 
+          department, 
+          req.body.completedBy,
+          req.body.notes
+        );
+        console.log(`[EMERGENCIA] Atividade ${activityId} concluída com sucesso no departamento ${department}`);
         
-        // Create progress entry for the next department
-        await storage.createActivityProgress({
-          activityId,
-          department: nextDepartment,
-          status: "pending",
-          completedBy: null,
-          completedAt: null,
-          notes: null,
-          returnedBy: null,
-          returnedAt: null
-        });
-        
-        // Notify users in the next department with origin information
-        const nextDeptUsers = await storage.getUsersByRole(nextDepartment);
-        for (const user of nextDeptUsers) {
-          await storage.createNotification({
-            userId: user.id,
-            activityId,
-            message: `Novo pedido de ${department} para ${nextDepartment}: ${activity.title}`
-          });
-        }
-      } else {
-        // This was the last department, mark the activity as completed
-        await storage.updateActivityStatus(activityId, "completed");
-      }
-      
-      // Notify admin users about the transition between departments
-      const adminUsers = await storage.getUsersByRole("admin");
-      
-      if (departmentIndex < DEPARTMENTS.length - 1) {
-        // If there's a next department, show the flow
-        const nextDepartment = DEPARTMENTS[departmentIndex + 1];
-        for (const user of adminUsers) {
-          await storage.createNotification({
-            userId: user.id,
-            activityId,
-            message: `Pedido "${activity.title}" passou de ${department} para ${nextDepartment} - Finalizado por: ${req.body.completedBy}${req.body.notes ? ` - Obs: ${req.body.notes}` : ''}`
-          });
-        }
-      } else {
-        // If this was the last department, show completion notification
-        for (const user of adminUsers) {
-          await storage.createNotification({
-            userId: user.id,
-            activityId,
-            message: `Setor ${department} finalizou o pedido "${activity.title}" (Produção concluída) - Finalizado por: ${req.body.completedBy}${req.body.notes ? ` - Obs: ${req.body.notes}` : ''}`
-          });
-        }
-      }
-      
-      // Enviar notificação via WebSocket
-      if ((global as any).wsNotifications) {
-        // Notificar o departamento atual que completou o pedido
-        (global as any).wsNotifications.notifyDepartment(department, {
-          type: 'activity_completed',
-          activityId: activity.id
-        });
-        
-        // Se existe próximo departamento, notificar
+        // Não precisamos mais criar manualmente o próximo progresso pois a função emergencial já faz isso
+        // Apenas obtemos o índice do departamento para notificações
+        const departmentIndex = DEPARTMENTS.indexOf(department as any);
         if (departmentIndex < DEPARTMENTS.length - 1) {
           const nextDepartment = DEPARTMENTS[departmentIndex + 1];
+        
+          // Notify users in the next department with origin information
+          const nextDeptUsers = await storage.getUsersByRole(nextDepartment);
+          for (const user of nextDeptUsers) {
+            await storage.createNotification({
+              userId: user.id,
+              activityId,
+              message: `Novo pedido de ${department} para ${nextDepartment}: ${activity.title}`
+            });
+          }
+        } else {
+          // This was the last department, mark the activity as completed
+          await storage.updateActivityStatus(activityId, "completed");
+        }
+        
+        // Notify admin users about the transition between departments
+        const adminUsers = await storage.getUsersByRole("admin");
+        
+        if (departmentIndex < DEPARTMENTS.length - 1) {
+          // If there's a next department, show the flow
+          const nextDepartment = DEPARTMENTS[departmentIndex + 1];
+          for (const user of adminUsers) {
+            await storage.createNotification({
+              userId: user.id,
+              activityId,
+              message: `Pedido "${activity.title}" passou de ${department} para ${nextDepartment} - Finalizado por: ${req.body.completedBy}${req.body.notes ? ` - Obs: ${req.body.notes}` : ''}`
+            });
+          }
+        } else {
+          // If this was the last department, show completion notification
+          for (const user of adminUsers) {
+            await storage.createNotification({
+              userId: user.id,
+              activityId,
+              message: `Setor ${department} finalizou o pedido "${activity.title}" (Produção concluída) - Finalizado por: ${req.body.completedBy}${req.body.notes ? ` - Obs: ${req.body.notes}` : ''}`
+            });
+          }
+        }
+        
+        // Enviar notificação via WebSocket
+        if ((global as any).wsNotifications) {
+          // Notificar o departamento atual que completou o pedido
+          (global as any).wsNotifications.notifyDepartment(department, {
+            type: 'activity_completed',
+            activityId: activity.id
+          });
           
-          // Notificar o próximo departamento
-          (global as any).wsNotifications.notifyDepartment(nextDepartment, {
-            type: 'new_activity',
-            activity
+          // Se existe próximo departamento, notificar
+          if (departmentIndex < DEPARTMENTS.length - 1) {
+            const nextDepartment = DEPARTMENTS[departmentIndex + 1];
+            
+            // Notificar o próximo departamento
+            (global as any).wsNotifications.notifyDepartment(nextDepartment, {
+              type: 'new_activity',
+              activity
+            });
+          }
+          
+          // Notificar administradores
+          (global as any).wsNotifications.notifyDepartment('admin', {
+            type: 'activity_progress',
+            activity,
+            completedBy: req.body.completedBy,
+            department,
+            nextDepartment: departmentIndex < DEPARTMENTS.length - 1 ? DEPARTMENTS[departmentIndex + 1] : null,
+            isCompleted: departmentIndex >= DEPARTMENTS.length - 1
           });
         }
         
-        // Notificar administradores
-        (global as any).wsNotifications.notifyDepartment('admin', {
-          type: 'activity_progress',
-          activity,
-          completedBy: req.body.completedBy,
-          department,
-          nextDepartment: departmentIndex < DEPARTMENTS.length - 1 ? DEPARTMENTS[departmentIndex + 1] : null,
-          isCompleted: departmentIndex >= DEPARTMENTS.length - 1
-        });
+        res.json(completedProgress);
+      } catch (error) {
+        res.status(500).json({ message: "Erro ao concluir pedido" });
       }
-      
-      res.json(completedProgress);
     } catch (error) {
-      res.status(500).json({ message: "Erro ao concluir pedido" });
+      console.error("Erro ao completar atividade:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Erro ao completar atividade" 
+      });
     }
   });
 
