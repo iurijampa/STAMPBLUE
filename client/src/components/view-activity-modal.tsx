@@ -135,25 +135,10 @@ export default function ViewActivityModal({ isOpen, onClose, activity }: ViewAct
   
   // Função para gerar o PDF
   const handlePrintPDF = async () => {
-    if (!activity || !pdfContentRef.current) return;
+    if (!activity) return;
     
     try {
       setIsPrinting(true);
-      
-      // Criar um clone da div para remover elementos que não devem aparecer no PDF
-      const pdfContainer = pdfContentRef.current.cloneNode(true) as HTMLElement;
-      
-      // Remover botões e controles que não devem ser impressos
-      const buttonsToRemove = pdfContainer.querySelectorAll('.pdf-hide');
-      buttonsToRemove.forEach(btn => btn.remove());
-      
-      // Gerar canvas a partir do conteúdo HTML
-      const canvas = await html2canvas(pdfContentRef.current, {
-        scale: 2, // Aumentar resolução para melhor qualidade
-        useCORS: true, // Permitir imagens de outros domínios
-        logging: false,
-        allowTaint: true,
-      });
       
       // Criar o PDF formato A4
       const pdf = new jsPDF({
@@ -166,27 +151,177 @@ export default function ViewActivityModal({ isOpen, onClose, activity }: ViewAct
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
       
-      // Calcular proporção para manter o aspecto da imagem
-      const imgWidth = canvas.width;
-      const imgHeight = canvas.height;
+      // Adicionar título ao PDF
+      pdf.setFontSize(16);
+      pdf.setTextColor(0, 0, 100); // Azul da Stamp Blue
+      pdf.text('STAMP BLUE', pageWidth / 2, 15, { align: 'center' });
+      pdf.setFontSize(14);
+      pdf.setTextColor(0, 0, 0);
+      pdf.text('Detalhe de Pedido', pageWidth / 2, 25, { align: 'center' });
       
-      let pdfWidth = pageWidth;
-      let pdfHeight = (imgHeight * pdfWidth) / imgWidth;
+      // Adicionar linha horizontal
+      pdf.setDrawColor(200, 200, 200);
+      pdf.line(20, 30, pageWidth - 20, 30);
       
-      // Ajustar se a altura for maior que a página
-      if (pdfHeight > pageHeight - 20) { // Deixando uma margem
-        pdfHeight = pageHeight - 20;
-        pdfWidth = (imgWidth * pdfHeight) / imgHeight;
+      // Adicionar informações do pedido
+      pdf.setFontSize(12);
+      pdf.text(`Pedido: ${activity.title}`, 20, 40);
+      pdf.text(`Data de entrega: ${formatDate(activity.deadline)}`, 20, 48);
+      
+      // Adicionar descrição
+      pdf.setFontSize(11);
+      pdf.text('Descrição:', 20, 60);
+      
+      // Função para quebrar texto em linhas
+      const splitText = pdf.splitTextToSize(activity.description, pageWidth - 40);
+      pdf.text(splitText, 20, 68);
+      
+      let currentY = 68 + (splitText.length * 7); // Espaço para a descrição
+      
+      // Adicionar status atual
+      currentY += 10;
+      pdf.setFillColor(240, 240, 240);
+      pdf.rect(20, currentY - 5, pageWidth - 40, 10, 'F');
+      pdf.setFontSize(11);
+      pdf.text(`Status atual: ${translateStatus(activity.status)}`, 20, currentY);
+      
+      // Adicionar imagem principal
+      if (activity.image) {
+        try {
+          currentY += 20;
+          pdf.text('Imagem principal do pedido:', 20, currentY);
+          currentY += 8;
+          
+          // Calcular dimensões para a imagem
+          const maxImageWidth = pageWidth - 40; // Margens laterais
+          const maxImageHeight = 80; // Altura máxima para a imagem
+          
+          // Adicionar a imagem principal
+          pdf.addImage(
+            activity.image, 
+            'JPEG', 
+            20, 
+            currentY,
+            maxImageWidth,
+            maxImageHeight,
+            undefined,
+            'FAST'
+          );
+          
+          currentY += maxImageHeight + 10;
+          
+          // Adicionar imagens adicionais se houver (máximo 2 para não sobrecarregar o PDF)
+          if (activity.additionalImages && activity.additionalImages.length > 0) {
+            pdf.text('Imagens adicionais:', 20, currentY);
+            currentY += 8;
+            
+            // Limitar a 2 imagens adicionais para não tornar o PDF muito grande
+            const maxAdditionalImages = Math.min(2, activity.additionalImages.length);
+            const additionalImagesWidth = (maxImageWidth - 10) / maxAdditionalImages; // Largura com espaçamento
+            
+            for (let i = 0; i < maxAdditionalImages; i++) {
+              try {
+                pdf.addImage(
+                  activity.additionalImages[i],
+                  'JPEG',
+                  20 + (i * (additionalImagesWidth + 5)),
+                  currentY,
+                  additionalImagesWidth,
+                  60,
+                  undefined,
+                  'FAST'
+                );
+              } catch (additionalImgError) {
+                console.error(`Erro ao adicionar imagem adicional ${i+1}:`, additionalImgError);
+              }
+            }
+            
+            // Se houver mais imagens, informar
+            if (activity.additionalImages.length > maxAdditionalImages) {
+              currentY += 70;
+              pdf.text(`* Há mais ${activity.additionalImages.length - maxAdditionalImages} imagens disponíveis no sistema`, 20, currentY);
+            }
+            
+            currentY += 80;
+          }
+        } catch (imgError) {
+          console.error('Erro ao adicionar imagem principal:', imgError);
+          currentY += 5;
+          pdf.text('* Não foi possível carregar a imagem do pedido', 20, currentY);
+          currentY += 10;
+        }
       }
       
-      // Adicionar imagem do canvas ao PDF
-      const imgData = canvas.toDataURL('image/jpeg', 0.8);
-      pdf.addImage(imgData, 'JPEG', 
-        (pageWidth - pdfWidth) / 2, // Centralizar horizontalmente
-        10, // Margem superior
-        pdfWidth, 
-        pdfHeight
-      );
+      // Adicionar informações de departamento, se houver progressos
+      if (progressHistory.length > 0) {
+        currentY += 10;
+        pdf.text('Histórico de progresso:', 20, currentY);
+        currentY += 8;
+        
+        // Adicionar tabela com cabeçalho
+        pdf.setFillColor(220, 220, 220);
+        pdf.rect(20, currentY - 5, pageWidth - 40, 10, 'F');
+        pdf.text('Departamento', 25, currentY);
+        pdf.text('Responsável', 80, currentY);
+        pdf.text('Data', pageWidth - 40, currentY, { align: 'right' });
+        currentY += 8;
+        
+        // Adicionar linhas da tabela
+        const completedProgressItems = progressHistory
+          .filter(p => p.completedAt !== null)
+          .sort((a, b) => {
+            if (!a.completedAt || !b.completedAt) return 0;
+            return new Date(a.completedAt).getTime() - new Date(b.completedAt).getTime();
+          });
+          
+        completedProgressItems.forEach((progress, index) => {
+          const bgColor = index % 2 === 0 ? 245 : 255;
+          pdf.setFillColor(bgColor, bgColor, bgColor);
+          pdf.rect(20, currentY - 5, pageWidth - 40, 10, 'F');
+          
+          const deptName = progress.department.charAt(0).toUpperCase() + progress.department.slice(1);
+          pdf.text(deptName, 25, currentY);
+          pdf.text(progress.completedBy || 'Não informado', 80, currentY);
+          
+          const dateText = progress.completedAt ? formatDate(progress.completedAt) : '-';
+          pdf.text(dateText, pageWidth - 40, currentY, { align: 'right' });
+          
+          currentY += 10;
+          
+          // Adicionar notas se houver
+          if (progress.notes) {
+            pdf.setFontSize(9);
+            pdf.text(`Obs: ${progress.notes}`, 30, currentY);
+            pdf.setFontSize(11);
+            currentY += 8;
+          }
+        });
+      }
+      
+      // Informações de retorno, se o pedido foi retornado
+      if ((activity as any).wasReturned) {
+        currentY += 10;
+        pdf.setFillColor(255, 240, 240); // Fundo levemente vermelho
+        pdf.rect(20, currentY - 5, pageWidth - 40, 25, 'F');
+        
+        pdf.setTextColor(180, 0, 0); // Texto vermelho
+        pdf.setFontSize(11);
+        pdf.text('PEDIDO RETORNADO', 25, currentY);
+        pdf.text(`Retornado por: ${(activity as any).returnedBy || 'Não informado'}`, 25, currentY + 8);
+        
+        if ((activity as any).returnNotes) {
+          pdf.text(`Motivo: ${(activity as any).returnNotes}`, 25, currentY + 16);
+        }
+        
+        pdf.setTextColor(0, 0, 0); // Restaurar cor do texto
+        currentY += 30;
+      }
+      
+      // Adicionar rodapé
+      pdf.setFontSize(8);
+      pdf.setTextColor(100, 100, 100);
+      const today = new Date().toLocaleDateString('pt-BR');
+      pdf.text(`Gerado em ${today} | Stamp Blue 2025 | Desenvolvido por Iuri`, pageWidth / 2, pageHeight - 10, { align: 'center' });
       
       // Salvar o PDF
       pdf.save(`${activity.title || 'pedido'}.pdf`);
