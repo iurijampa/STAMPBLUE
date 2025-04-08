@@ -80,6 +80,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         department = req.user.role;
       }
       
+      console.log(`[DEBUG] Buscando atividades para o departamento: ${department}`);
+      
       // Verificar se o departamento é válido
       if (!DEPARTMENTS.includes(department as any) && department !== "admin") {
         return res.status(400).json({ message: "Departamento inválido" });
@@ -87,6 +89,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Obter as atividades para o departamento
       const activities = await storage.getActivitiesByDepartment(department);
+      
+      console.log(`[DEBUG] Encontradas ${activities.length} atividades para o departamento: ${department}`);
+      if (activities.length > 0) {
+        console.log(`[DEBUG] IDs das atividades: ${activities.map(a => a.id).join(', ')}`);
+      }
       
       // Para cada atividade, adicionar as observações do setor anterior (se houver)
       const activitiesWithPreviousNotes = await Promise.all(activities.map(async (activity) => {
