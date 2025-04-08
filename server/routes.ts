@@ -72,11 +72,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Obter atividades para um departamento específico (usando no dashboard do departamento)
   app.get("/api/activities/department/:department", isAuthenticated, async (req, res) => {
     try {
-      const department = req.params.department;
+      let department = req.params.department;
       
-      // Verificar se o departamento requisitado é o mesmo do usuário ou se é admin
-      if (req.user.role !== "admin" && req.user.role !== department) {
-        return res.status(403).json({ message: "Acesso negado para este departamento" });
+      // Sempre usar o departamento do usuário logado se não for admin
+      if (req.user.role !== "admin") {
+        department = req.user.role;
       }
       
       // Verificar se o departamento é válido
@@ -517,11 +517,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Statistics for department dashboard
   app.get("/api/department/:department/stats", isAuthenticated, async (req, res) => {
     try {
-      const department = req.params.department;
+      let department = req.params.department;
       
-      // Verificar se o departamento requisitado é o mesmo do usuário ou se é admin
-      if (req.user.role !== "admin" && req.user.role !== department) {
-        return res.status(403).json({ message: "Acesso negado para este departamento" });
+      // Sempre usar o departamento do usuário logado se não for admin
+      if (req.user.role !== "admin") {
+        department = req.user.role;
       }
       
       // Verificar se o departamento é válido

@@ -64,22 +64,21 @@ export default function DepartmentDashboard() {
   // Verificar se o usuário tem permissão para acessar este departamento
   useEffect(() => {
     if (user && department && user.role !== department && user.role !== 'admin') {
-      toast({
-        title: "Acesso negado",
-        description: "Você não tem permissão para acessar este departamento",
-        variant: "destructive"
-      });
+      // Redirecionar silenciosamente para o dashboard do usuário sem mostrar o toast
       navigate(`/department/${user.role}/dashboard`);
     }
-  }, [user, department, navigate, toast]);
+  }, [user, department, navigate]);
 
-  // Buscar atividades para o departamento da URL
+  // Usar o departamento do usuário logado em vez do departamento da URL
+  const userDepartment = user?.role !== 'admin' ? user?.role : department;
+  
+  // Buscar atividades para o departamento do usuário
   const { data: activitiesData = [], isLoading: activitiesLoading, refetch: refetchActivities } = useQuery({
-    queryKey: ["/api/department/activities", department],
+    queryKey: ["/api/department/activities", userDepartment],
     queryFn: async () => {
-      if (!department || !user) return [];
+      if (!userDepartment || !user) return [];
       
-      const response = await fetch(`/api/activities/department/${department}`, {
+      const response = await fetch(`/api/activities/department/${userDepartment}`, {
         credentials: 'include'
       });
       
@@ -89,23 +88,23 @@ export default function DepartmentDashboard() {
       
       return await response.json() as ActivityWithNotes[];
     },
-    enabled: !!user && !!department
+    enabled: !!user && !!userDepartment
   });
   
-  // Recarregar os dados quando o departamento mudar
+  // Recarregar os dados quando o departamento do usuário mudar
   useEffect(() => {
-    if (department && user) {
+    if (userDepartment && user) {
       refetchActivities();
     }
-  }, [department, user, refetchActivities]);
+  }, [userDepartment, user, refetchActivities]);
   
   // Buscar estatísticas do departamento
   const { data: stats = { pendingCount: 0, completedCount: 0 }, isLoading: statsLoading, refetch: refetchStats } = useQuery({
-    queryKey: ["/api/department/stats", department],
+    queryKey: ["/api/department/stats", userDepartment],
     queryFn: async () => {
-      if (!department || !user) return { pendingCount: 0, completedCount: 0 };
+      if (!userDepartment || !user) return { pendingCount: 0, completedCount: 0 };
       
-      const response = await fetch(`/api/department/${department}/stats`, {
+      const response = await fetch(`/api/department/${userDepartment}/stats`, {
         credentials: 'include'
       });
       
@@ -115,15 +114,15 @@ export default function DepartmentDashboard() {
       
       return await response.json();
     },
-    enabled: !!user && !!department
+    enabled: !!user && !!userDepartment
   });
   
-  // Recarregar estatísticas quando o departamento mudar
+  // Recarregar estatísticas quando o departamento do usuário mudar
   useEffect(() => {
-    if (department && user) {
+    if (userDepartment && user) {
       refetchStats();
     }
-  }, [department, user, refetchStats]);
+  }, [userDepartment, user, refetchStats]);
   
   // Função para formatar a data
   const formatDate = (date: Date | null) => {
@@ -209,7 +208,7 @@ export default function DepartmentDashboard() {
   };
 
   return (
-    <Layout title={`Dashboard - ${department ? capitalize(department) : 'Departamento'}`}>
+    <Layout title={`Dashboard - ${userDepartment ? capitalize(userDepartment) : 'Departamento'}`}>
       <div className="flex justify-between items-center mb-4">
         <div className="flex items-center gap-2">
           <h3 className="text-sm font-medium">

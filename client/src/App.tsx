@@ -73,6 +73,7 @@ function DashboardRedirect() {
     return <Redirect to="/admin/dashboard" />;
   }
   
+  // Modificado para usar a URL correta do departamento do usuário
   return <Redirect to={`/department/${user.role}/dashboard`} />;
 }
 
