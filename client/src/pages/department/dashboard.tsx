@@ -236,7 +236,25 @@ export default function DepartmentDashboard() {
             <CardContent>
               {activitiesData && activitiesData.length > 0 ? (
                 <div className="space-y-4">
-                  {activitiesData.map((activity) => (
+                  {/* Ordena atividades por data de entrega */}
+                  {[...activitiesData]
+                    .sort((a, b) => {
+                      // Se ambos têm deadline, ordena por data
+                      if (a.deadline && b.deadline) {
+                        return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
+                      }
+                      // Se apenas a atividade A tem deadline, ela vem primeiro
+                      else if (a.deadline) {
+                        return -1;
+                      }
+                      // Se apenas a atividade B tem deadline, ela vem primeiro
+                      else if (b.deadline) {
+                        return 1;
+                      }
+                      // Se nenhuma tem deadline, mantém a ordem original
+                      return 0;
+                    })
+                    .map((activity) => (
                     <div 
                       key={activity.id}
                       className="border rounded-lg p-4 hover:bg-neutral-50 transition-colors"
