@@ -70,13 +70,25 @@ export function setupAuth(app: Express) {
   passport.use(
     new LocalStrategy(async (username, password, done) => {
       try {
+        console.log(`Tentativa de login para o usuário: ${username}`);
         const user = await storage.getUserByUsername(username);
-        if (!user || !(await comparePasswords(password, user.password))) {
+        
+        if (!user) {
+          console.log(`Usuário ${username} não encontrado`);
+          return done(null, false);
+        }
+        
+        const passwordMatch = await comparePasswords(password, user.password);
+        console.log(`Verificação de senha para ${username}: ${passwordMatch ? 'Sucesso' : 'Falha'}`);
+        
+        if (!passwordMatch) {
           return done(null, false);
         } else {
+          console.log(`Usuário ${username} autenticado com sucesso`);
           return done(null, user);
         }
       } catch (error) {
+        console.error("Erro durante autenticação:", error);
         return done(error);
       }
     }),
