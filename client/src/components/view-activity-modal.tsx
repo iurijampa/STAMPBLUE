@@ -137,6 +137,26 @@ export default function ViewActivityModal({ isOpen, onClose, activity }: ViewAct
               <div className="text-sm text-neutral-700 mb-2">
                 <span className="font-medium">Data de entrega:</span> {formatDate(activity.deadline)}
               </div>
+              
+              {/* Informações de retorno de pedido, caso exista */}
+              {(activity as any).wasReturned && (
+                <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-md">
+                  <h4 className="text-red-600 font-medium">Pedido retornado</h4>
+                  <p className="text-sm text-red-700">
+                    <span className="font-medium">Retornado por:</span> {(activity as any).returnedBy || 'Não informado'}
+                  </p>
+                  {(activity as any).returnNotes && (
+                    <p className="text-sm text-red-700">
+                      <span className="font-medium">Motivo:</span> {(activity as any).returnNotes}
+                    </p>
+                  )}
+                  {(activity as any).returnedAt && (
+                    <p className="text-sm text-red-700">
+                      <span className="font-medium">Data:</span> {formatDate((activity as any).returnedAt)}
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
             
             {/* Imagem com controles de zoom avançados */}

@@ -89,9 +89,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Para cada atividade, adicionar as observações do setor anterior (se houver)
       const activitiesWithPreviousNotes = await Promise.all(activities.map(async (activity) => {
+        // Obter o progresso atual do departamento
+        const currentProgress = await storage.getActivityProgressByDepartment(activity.id, department);
+        
         // Se o departamento é o primeiro, não haverá setor anterior
         if (department === DEPARTMENTS[0]) {
-          return { ...activity, previousNotes: null, previousDepartment: null };
+          // Verificar se foi retornado pelo setor seguinte
+          return { 
+            ...activity, 
+            previousNotes: currentProgress?.notes, 
+            previousDepartment: null,
+            previousCompletedBy: null,
+            wasReturned: currentProgress?.returnedBy ? true : false,
+            returnedBy: currentProgress?.returnedBy,
+            returnNotes: currentProgress?.notes,
+            returnedAt: currentProgress?.returnedAt
+          };
         }
         
         // Encontrar o índice do departamento atual no fluxo
@@ -104,18 +117,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Buscar o progresso do departamento anterior
           const previousProgress = await storage.getActivityProgressByDepartment(activity.id, previousDept);
           
-          // Se há progresso e ele foi concluído, adicionar as notas ao resultado
+          // Verificar se esta atividade foi retornada pelo próximo setor
+          const wasReturned = currentProgress?.returnedBy ? true : false;
+          
+          // Se há progresso anterior e ele foi concluído, adicionar as notas ao resultado
           if (previousProgress && previousProgress.status === "completed") {
             return { 
               ...activity, 
               previousNotes: previousProgress.notes, 
               previousDepartment: previousDept,
-              previousCompletedBy: previousProgress.completedBy
+              previousCompletedBy: previousProgress.completedBy,
+              wasReturned,
+              returnedBy: currentProgress?.returnedBy,
+              returnNotes: currentProgress?.notes,
+              returnedAt: currentProgress?.returnedAt
+            };
+          }
+          
+          // Se só foi retornado mas sem progresso anterior concluído
+          if (wasReturned) {
+            return {
+              ...activity,
+              previousNotes: null,
+              previousDepartment: null,
+              previousCompletedBy: null,
+              wasReturned,
+              returnedBy: currentProgress?.returnedBy,
+              returnNotes: currentProgress?.notes,
+              returnedAt: currentProgress?.returnedAt
             };
           }
         }
         
-        return { ...activity, previousNotes: null, previousDepartment: null };
+        return { 
+          ...activity, 
+          previousNotes: null, 
+          previousDepartment: null,
+          previousCompletedBy: null,
+          wasReturned: false,
+          returnedBy: null,
+          returnNotes: null,
+          returnedAt: null
+        };
       }));
       
       return res.json(activitiesWithPreviousNotes);

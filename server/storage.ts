@@ -314,13 +314,13 @@ export class MemStorage implements IStorage {
       throw new Error("Progresso não encontrado");
     }
     
-    // Marcar o progresso atual como não concluído
+    // Remover o progresso atual para que não apareça mais neste departamento
     const updatedCurrentProgress: ActivityProgress = {
       ...currentProgress,
-      status: "pending",
-      completedBy: null,
-      completedAt: null,
-      notes: null
+      status: "completed", // Marcamos como completed para que não apareça mais neste departamento
+      completedBy: returnedBy, // Registramos quem retornou
+      completedAt: new Date(),
+      notes: notes || null
     };
     
     // Marcar o progresso anterior como pendente novamente
