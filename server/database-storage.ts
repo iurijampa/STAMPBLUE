@@ -11,7 +11,7 @@ import {
 } from "@shared/schema";
 import session from "express-session";
 import { db, sql as postgresClient, cachedQuery, clearCacheByPattern } from "./db";
-import { eq, desc, sql } from "drizzle-orm";
+import { eq, desc, sql, inArray } from "drizzle-orm";
 import connectPg from "connect-pg-simple";
 import { scrypt, randomBytes } from "crypto";
 import { promisify } from "util";
@@ -177,11 +177,20 @@ export class DatabaseStorage implements IStorage {
       // Se não houver activity IDs, retornar array vazio
       if (activityIds.length === 0) return [];
       
-      // Buscar detalhes completos das atividades - usar parâmetros em vez de string SQL direta
-      const result = await db
-        .select()
-        .from(activities)
-        .where(sql`${activities.id} IN (${activityIds.join(',')})`);
+      // Buscar detalhes completos das atividades 
+      // Se houver muitos IDs, fazer múltiplas consultas para evitar problemas de tamanho
+      let result: typeof activities.$inferSelect[] = [];
+      
+      // Processar em lotes de no máximo 10 IDs por vez para evitar strings SQL muito longas
+      for (let i = 0; i < activityIds.length; i += 10) {
+        const batchIds = activityIds.slice(i, i + 10);
+        const batchResults = await db
+          .select()
+          .from(activities)
+          .where(sql`${activities.id} IN (${batchIds.join(',')})`);
+        
+        result = [...result, ...batchResults];
+      }
       
       console.log(`[DEBUG] getActivitiesByDepartment: Recuperadas ${result.length} atividades completas`);
       
@@ -470,12 +479,20 @@ export class DatabaseStorage implements IStorage {
       // Obter todos os IDs de atividades necessários
       const activityIds = completedProgress.map(progress => progress.activityId);
       
-      // Buscar todas as atividades de uma só vez (otimização)
+      // Buscar todas as atividades usando o mesmo método de lotes para evitar problemas
       const activitiesMap = new Map<number, Activity>();
-      const activityList = await db
-        .select()
-        .from(activities)
-        .where(sql`${activities.id} IN (${activityIds.join(',')})`);
+      let activityList: typeof activities.$inferSelect[] = [];
+      
+      // Processar em lotes menores
+      for (let i = 0; i < activityIds.length; i += 10) {
+        const batchIds = activityIds.slice(i, i + 10);
+        const batchResults = await db
+          .select()
+          .from(activities)
+          .where(sql`${activities.id} IN (${batchIds.join(',')})`);
+        
+        activityList = [...activityList, ...batchResults];
+      }
       
       // Criar um mapa para lookup rápido por ID
       activityList.forEach(activity => {
