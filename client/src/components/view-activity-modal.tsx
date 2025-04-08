@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Activity, ActivityProgress } from "@shared/schema";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ZoomIn, ZoomOut, X, Maximize2, Loader2, RotateCw, RefreshCw } from "lucide-react";
+import { ZoomIn, ZoomOut, X, Maximize2, Loader2, RotateCw, RefreshCw, Printer } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
 import { 
@@ -13,6 +13,8 @@ import {
   AccordionTrigger 
 } from "@/components/ui/accordion";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
+import { jsPDF } from "jspdf";
+import html2canvas from "html2canvas";
 
 interface ViewActivityModalProps {
   isOpen: boolean;
@@ -28,6 +30,8 @@ export default function ViewActivityModal({ isOpen, onClose, activity }: ViewAct
   const [loadingProgress, setLoadingProgress] = useState(false);
   const [currentUser, setCurrentUser] = useState<{ role: string } | null>(null);
   const [userLoading, setUserLoading] = useState(false);
+  const [isPrinting, setIsPrinting] = useState(false);
+  const pdfContentRef = useRef<HTMLDivElement>(null);
   
   // Buscar o usuário atual
   useEffect(() => {
@@ -129,16 +133,99 @@ export default function ViewActivityModal({ isOpen, onClose, activity }: ViewAct
     resetZoom();
   };
   
+  // Função para gerar o PDF
+  const handlePrintPDF = async () => {
+    if (!activity || !pdfContentRef.current) return;
+    
+    try {
+      setIsPrinting(true);
+      
+      // Criar um clone da div para remover elementos que não devem aparecer no PDF
+      const pdfContainer = pdfContentRef.current.cloneNode(true) as HTMLElement;
+      
+      // Remover botões e controles que não devem ser impressos
+      const buttonsToRemove = pdfContainer.querySelectorAll('.pdf-hide');
+      buttonsToRemove.forEach(btn => btn.remove());
+      
+      // Gerar canvas a partir do conteúdo HTML
+      const canvas = await html2canvas(pdfContentRef.current, {
+        scale: 2, // Aumentar resolução para melhor qualidade
+        useCORS: true, // Permitir imagens de outros domínios
+        logging: false,
+        allowTaint: true,
+      });
+      
+      // Criar o PDF formato A4
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      });
+      
+      // Dimensões de página A4 em pontos
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      
+      // Calcular proporção para manter o aspecto da imagem
+      const imgWidth = canvas.width;
+      const imgHeight = canvas.height;
+      
+      let pdfWidth = pageWidth;
+      let pdfHeight = (imgHeight * pdfWidth) / imgWidth;
+      
+      // Ajustar se a altura for maior que a página
+      if (pdfHeight > pageHeight - 20) { // Deixando uma margem
+        pdfHeight = pageHeight - 20;
+        pdfWidth = (imgWidth * pdfHeight) / imgHeight;
+      }
+      
+      // Adicionar imagem do canvas ao PDF
+      const imgData = canvas.toDataURL('image/jpeg', 0.8);
+      pdf.addImage(imgData, 'JPEG', 
+        (pageWidth - pdfWidth) / 2, // Centralizar horizontalmente
+        10, // Margem superior
+        pdfWidth, 
+        pdfHeight
+      );
+      
+      // Salvar o PDF
+      pdf.save(`${activity.title || 'pedido'}.pdf`);
+      
+    } catch (error) {
+      console.error('Erro ao gerar PDF:', error);
+    } finally {
+      setIsPrinting(false);
+    }
+  };
+  
   return (
     <>
       {/* Modal de visualização principal */}
       <Dialog open={isOpen && !imageFullscreen} onOpenChange={(open) => !open && onClose()}>
         <DialogContent className="max-w-3xl">
-          <DialogHeader>
+          <DialogHeader className="flex flex-row justify-between items-center">
             <DialogTitle className="text-xl">Detalhes da Atividade</DialogTitle>
+            <Button
+              onClick={handlePrintPDF}
+              variant="outline"
+              className="gap-2"
+              disabled={isPrinting}
+            >
+              {isPrinting ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Gerando PDF...
+                </>
+              ) : (
+                <>
+                  <Printer className="h-4 w-4" />
+                  Imprimir Pedido
+                </>
+              )}
+            </Button>
           </DialogHeader>
           
-          <div className="flex flex-col gap-6 py-4">
+          <div ref={pdfContentRef} className="flex flex-col gap-6 py-4">
             {/* Título e Data de Entrega */}
             <div>
               <h3 className="text-xl font-semibold mb-2">{activity.title}</h3>
@@ -192,7 +279,7 @@ export default function ViewActivityModal({ isOpen, onClose, activity }: ViewAct
                                 className="max-h-60 max-w-full object-contain"
                               />
                             </TransformComponent>
-                            <div className="absolute bottom-2 left-2 flex space-x-1 z-10">
+                            <div className="absolute bottom-2 left-2 flex space-x-1 z-10 pdf-hide">
                               <Button 
                                 size="sm" 
                                 variant="secondary" 
@@ -222,7 +309,7 @@ export default function ViewActivityModal({ isOpen, onClose, activity }: ViewAct
                         )}
                       </TransformWrapper>
                     </div>
-                    <div className="absolute top-2 right-2 flex space-x-1 z-10">
+                    <div className="absolute top-2 right-2 flex space-x-1 z-10 pdf-hide">
                       <Button 
                         size="sm" 
                         variant="secondary" 
@@ -240,7 +327,7 @@ export default function ViewActivityModal({ isOpen, onClose, activity }: ViewAct
               
               {/* Miniaturas de imagens adicionais */}
               {activity.additionalImages && activity.additionalImages.length > 0 && (
-                <div>
+                <div className="pdf-hide">
                   <h4 className="text-sm font-medium mb-2">Imagens adicionais:</h4>
                   <div className="grid grid-cols-5 gap-2">
                     {/* Miniatura da imagem principal */}
@@ -288,13 +375,13 @@ export default function ViewActivityModal({ isOpen, onClose, activity }: ViewAct
                 <h4 className="font-medium text-base mb-2">Histórico de Progresso:</h4>
                 
                 {loadingProgress ? (
-                  <div className="flex items-center justify-center py-8">
+                  <div className="flex items-center justify-center py-8 pdf-hide">
                     <Loader2 className="h-6 w-6 animate-spin text-primary" />
                     <span className="ml-2 text-neutral-600">Carregando histórico...</span>
                   </div>
                 ) : progressHistory.length > 0 ? (
                   <div className="border rounded-md overflow-hidden">
-                    <Accordion type="single" collapsible className="w-full">
+                    <Accordion type="single" collapsible defaultValue="criacao" className="w-full">
                       {/* Entrada de criação (inicial) */}
                       <AccordionItem value="criacao" className="border-b">
                         <AccordionTrigger className="hover:bg-neutral-50 px-4 py-2">

@@ -2,6 +2,13 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Ocultar elementos com a classe pdf-hide durante a impressão do PDF */
+@media print {
+  .pdf-hide {
+    display: none !important;
+  }
+}
+
 @layer base {
   * {
     @apply border-border;
