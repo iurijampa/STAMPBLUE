@@ -72,7 +72,7 @@ export default function DepartmentDashboard() {
   }, [user, department, navigate, toast]);
 
   // Buscar atividades para o departamento da URL
-  const { data: activitiesData = [], isLoading: activitiesLoading } = useQuery({
+  const { data: activitiesData = [], isLoading: activitiesLoading, refetch: refetchActivities } = useQuery({
     queryKey: ["/api/department/activities", department],
     queryFn: async () => {
       if (!department || !user) return [];
@@ -90,8 +90,15 @@ export default function DepartmentDashboard() {
     enabled: !!user && !!department
   });
   
+  // Recarregar os dados quando o departamento mudar
+  useEffect(() => {
+    if (department && user) {
+      refetchActivities();
+    }
+  }, [department, user, refetchActivities]);
+  
   // Buscar estatísticas do departamento
-  const { data: stats = { pendingCount: 0, completedCount: 0 }, isLoading: statsLoading } = useQuery({
+  const { data: stats = { pendingCount: 0, completedCount: 0 }, isLoading: statsLoading, refetch: refetchStats } = useQuery({
     queryKey: ["/api/department/stats", department],
     queryFn: async () => {
       if (!department || !user) return { pendingCount: 0, completedCount: 0 };
@@ -108,6 +115,13 @@ export default function DepartmentDashboard() {
     },
     enabled: !!user && !!department
   });
+  
+  // Recarregar estatísticas quando o departamento mudar
+  useEffect(() => {
+    if (department && user) {
+      refetchStats();
+    }
+  }, [department, user, refetchStats]);
   
   // Função para formatar a data
   const formatDate = (date: Date | null) => {
@@ -136,6 +150,10 @@ export default function DepartmentDashboard() {
       description: "A atividade foi marcada como concluída e enviada para o próximo setor.",
     });
     setCompleteActivity(null);
+    
+    // Recarregar dados após a conclusão de uma atividade
+    refetchActivities();
+    refetchStats();
   };
 
   // Função para capitalizar a primeira letra
