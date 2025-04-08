@@ -190,6 +190,23 @@ export default function DepartmentDashboard() {
                               {activity.description}
                             </p>
                             
+                            {/* Observações do setor anterior */}
+                            {activity.previousNotes && (
+                              <div className="bg-amber-50 p-2 rounded-md mb-2 border border-amber-200">
+                                <p className="font-medium text-amber-800 text-sm">
+                                  Observações do setor anterior ({activity.previousDepartment}):
+                                </p>
+                                <p className="text-sm text-amber-700">
+                                  {activity.previousNotes}
+                                </p>
+                                {activity.previousCompletedBy && (
+                                  <p className="text-xs text-amber-600 mt-1">
+                                    Finalizado por: {activity.previousCompletedBy}
+                                  </p>
+                                )}
+                              </div>
+                            )}
+                            
                             <div className="flex items-center text-sm text-neutral-500 gap-4 mt-2">
                               <div className="flex items-center">
                                 <CalendarClock className="h-4 w-4 mr-1" />

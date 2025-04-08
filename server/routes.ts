@@ -81,8 +81,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Departamento inválido" });
       }
       
+      // Obter as atividades para o departamento
       const activities = await storage.getActivitiesByDepartment(department);
-      return res.json(activities);
+      
+      // Para cada atividade, adicionar as observações do setor anterior (se houver)
+      const activitiesWithPreviousNotes = await Promise.all(activities.map(async (activity) => {
+        // Se o departamento é o primeiro, não haverá setor anterior
+        if (department === DEPARTMENTS[0]) {
+          return { ...activity, previousNotes: null, previousDepartment: null };
+        }
+        
+        // Encontrar o índice do departamento atual no fluxo
+        const deptIndex = DEPARTMENTS.indexOf(department as any);
+        
+        if (deptIndex > 0) {
+          // Obter o departamento anterior
+          const previousDept = DEPARTMENTS[deptIndex - 1];
+          
+          // Buscar o progresso do departamento anterior
+          const previousProgress = await storage.getActivityProgressByDepartment(activity.id, previousDept);
+          
+          // Se há progresso e ele foi concluído, adicionar as notas ao resultado
+          if (previousProgress && previousProgress.status === "completed") {
+            return { 
+              ...activity, 
+              previousNotes: previousProgress.notes, 
+              previousDepartment: previousDept,
+              previousCompletedBy: previousProgress.completedBy
+            };
+          }
+        }
+        
+        return { ...activity, previousNotes: null, previousDepartment: null };
+      }));
+      
+      return res.json(activitiesWithPreviousNotes);
     } catch (error) {
       res.status(500).json({ message: "Erro ao buscar atividades para o departamento" });
     }

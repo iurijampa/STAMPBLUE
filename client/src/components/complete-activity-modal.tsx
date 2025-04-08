@@ -189,7 +189,7 @@ export default function CompleteActivityModal({
                 <Button 
                   type="submit"
                   disabled={completeMutation.isPending}
-                  className="bg-success-600 hover:bg-success-700"
+                  className="bg-green-600 hover:bg-green-700 text-white"
                 >
                   {completeMutation.isPending && (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
