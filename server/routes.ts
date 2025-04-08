@@ -216,13 +216,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           status: "pending",
         });
         
-        // Notify users in the next department
+        // Notify users in the next department with origin information
         const nextDeptUsers = await storage.getUsersByRole(nextDepartment);
         for (const user of nextDeptUsers) {
           await storage.createNotification({
             userId: user.id,
             activityId,
-            message: `Nova atividade disponível: ${activity.title}`
+            message: `Nova atividade de ${department} para ${nextDepartment}: ${activity.title}`
           });
         }
       } else {
@@ -230,14 +230,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await storage.updateActivityStatus(activityId, "completed");
       }
       
-      // Notify admin users about the completed step
+      // Notify admin users about the transition between departments
       const adminUsers = await storage.getUsersByRole("admin");
-      for (const user of adminUsers) {
-        await storage.createNotification({
-          userId: user.id,
-          activityId,
-          message: `Setor ${department} concluiu: ${activity.title}`
-        });
+      
+      if (departmentIndex < DEPARTMENTS.length - 1) {
+        // If there's a next department, show the flow
+        const nextDepartment = DEPARTMENTS[departmentIndex + 1];
+        for (const user of adminUsers) {
+          await storage.createNotification({
+            userId: user.id,
+            activityId,
+            message: `Atividade "${activity.title}" passou de ${department} para ${nextDepartment}`
+          });
+        }
+      } else {
+        // If this was the last department, show completion notification
+        for (const user of adminUsers) {
+          await storage.createNotification({
+            userId: user.id,
+            activityId,
+            message: `Setor ${department} concluiu a atividade "${activity.title}" (Finalizada)`
+          });
+        }
       }
       
       res.json(completedProgress);
@@ -329,7 +343,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/notifications/:id/read", isAuthenticated, async (req, res) => {
+  app.post("/api/notifications/:id/read", isAuthenticated, async (req, res) => {
     try {
       const notificationId = parseInt(req.params.id);
       const notification = await storage.getNotification(notificationId);
