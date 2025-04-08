@@ -27,7 +27,13 @@ export default function AdminDashboard() {
       if (!response.ok) {
         throw new Error("Falha ao carregar atividades");
       }
-      return response.json();
+      const data = await response.json();
+      // Ordenar por data de entrega, com datas mais próximas primeiro
+      return data.sort((a: Activity, b: Activity) => {
+        if (!a.deadline) return 1;
+        if (!b.deadline) return -1;
+        return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
+      });
     },
     enabled: !isLoading && !!user,
   });
@@ -211,6 +217,7 @@ export default function AdminDashboard() {
                         <th className="px-4 py-3 text-left font-medium">Cliente</th>
                         <th className="px-4 py-3 text-left font-medium">Qtd.</th>
                         <th className="px-4 py-3 text-left font-medium">Status</th>
+                        <th className="px-4 py-3 text-left font-medium">Entrega</th>
                         <th className="px-4 py-3 text-left font-medium">Criado em</th>
                         <th className="px-4 py-3 text-right font-medium">Ações</th>
                       </tr>
@@ -230,6 +237,16 @@ export default function AdminDashboard() {
                                activity.status === 'in_progress' ? 'Em Progresso' : 
                                'Concluído'}
                             </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            {activity.deadline ? (
+                              <span className={`font-medium ${
+                                new Date(activity.deadline) < new Date() ? 'text-red-500' : 
+                                new Date(activity.deadline).getTime() - new Date().getTime() < 7 * 24 * 60 * 60 * 1000 ? 'text-amber-600' : 'text-green-600'
+                              }`}>
+                                {new Date(activity.deadline).toLocaleDateString('pt-BR')}
+                              </span>
+                            ) : "—"}
                           </td>
                           <td className="px-4 py-3">
                             {new Date(activity.createdAt).toLocaleDateString('pt-BR')}

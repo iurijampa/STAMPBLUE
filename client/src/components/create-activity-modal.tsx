@@ -9,6 +9,11 @@ import { useState } from "react";
 import { FileInput } from "@/components/ui/file-input";
 import { apiRequest } from "@/lib/queryClient";
 import { DEPARTMENTS } from "@shared/schema";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { CalendarIcon } from "lucide-react";
 
 interface CreateActivityModalProps {
   isOpen: boolean;
@@ -26,6 +31,7 @@ export default function CreateActivityModal({ isOpen, onClose, onSuccess }: Crea
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [priority, setPriority] = useState<string>("normal");
   const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]);
+  const [deadline, setDeadline] = useState<Date | undefined>(undefined);
 
   const handleAddDepartment = (department: string) => {
     if (!selectedDepartments.includes(department)) {
@@ -66,13 +72,24 @@ export default function CreateActivityModal({ isOpen, onClose, onSuccess }: Crea
         imageData = await fileToBase64(imageFile);
       }
       
+      if (!deadline) {
+        toast({
+          title: "Erro ao criar atividade",
+          description: "A data de entrega é obrigatória",
+          variant: "destructive",
+        });
+        setIsLoading(false);
+        return;
+      }
+      
       const formData = {
         title,
         description,
         quantity: parseInt(quantity) || 0,
         clientName,
-        imageUrl: imageData,
+        image: imageData,
         priority,
+        deadline,
         workflowSteps: selectedDepartments.map(department => ({
           department,
           order: selectedDepartments.indexOf(department) + 1,
@@ -98,6 +115,7 @@ export default function CreateActivityModal({ isOpen, onClose, onSuccess }: Crea
       setImageFile(null);
       setPriority("normal");
       setSelectedDepartments([]);
+      setDeadline(undefined);
       
       onSuccess();
       onClose();
@@ -181,19 +199,46 @@ export default function CreateActivityModal({ isOpen, onClose, onSuccess }: Crea
             />
           </div>
           
-          <div className="space-y-2">
-            <Label htmlFor="priority">Prioridade</Label>
-            <Select value={priority} onValueChange={setPriority}>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione a prioridade" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="low">Baixa</SelectItem>
-                <SelectItem value="normal">Normal</SelectItem>
-                <SelectItem value="high">Alta</SelectItem>
-                <SelectItem value="urgent">Urgente</SelectItem>
-              </SelectContent>
-            </Select>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="priority">Prioridade</Label>
+              <Select value={priority} onValueChange={setPriority}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione a prioridade" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="low">Baixa</SelectItem>
+                  <SelectItem value="normal">Normal</SelectItem>
+                  <SelectItem value="high">Alta</SelectItem>
+                  <SelectItem value="urgent">Urgente</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="deadline">Data de Entrega</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant={"outline"}
+                    className={`w-full justify-start text-left font-normal ${!deadline && "text-muted-foreground"}`}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {deadline ? format(deadline, "PPP", { locale: ptBR }) : "Selecione uma data"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={deadline}
+                    onSelect={setDeadline}
+                    initialFocus
+                    locale={ptBR}
+                    required
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
           </div>
           
           <div className="space-y-2">
