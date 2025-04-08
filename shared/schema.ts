@@ -3,10 +3,10 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
 // User role enum
-export const roleEnum = pgEnum('role', ['admin', 'gabarito', 'impressao', 'batida', 'costura', 'embalagem']);
+export const roleEnum = pgEnum('role', ['admin', 'gabarito', 'impressao', 'batida', 'costura', 'embalagem', 'user']);
 
 // Sequential departments for workflow
-export const DEPARTMENTS = ['gabarito', 'impressao', 'batida', 'costura', 'embalagem'] as const;
+export const DEPARTMENTS = ['admin', 'gabarito', 'impressao', 'batida', 'costura', 'embalagem'] as const;
 export type Department = typeof DEPARTMENTS[number];
 
 // Users table
@@ -16,6 +16,7 @@ export const users = pgTable("users", {
   password: text("password").notNull(),
   name: text("name").notNull(),
   role: roleEnum("role").notNull(),
+  department: roleEnum("department").notNull(),
 });
 
 export const insertUserSchema = createInsertSchema(users).pick({
@@ -23,6 +24,7 @@ export const insertUserSchema = createInsertSchema(users).pick({
   password: true,
   name: true,
   role: true,
+  department: true,
 });
 
 // Activity status enum

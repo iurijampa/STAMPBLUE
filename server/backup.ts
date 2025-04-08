@@ -1,7 +1,6 @@
 import fs from 'fs';
 import path from 'path';
 import { db } from './db';
-import { activities, activityProgress, notifications, users } from '@shared/schema';
 import { log } from './vite';
 import { storage } from './storage';
 
