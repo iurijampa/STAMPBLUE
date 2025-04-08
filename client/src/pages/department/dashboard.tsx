@@ -66,15 +66,19 @@ export default function DepartmentDashboard() {
     }
   });
   
-  // Verificar se o usuário tem permissão para acessar este departamento
+  // Sempre verificar se o usuário está no dashboard correto de seu departamento
   useEffect(() => {
-    if (user && department && user.role !== department && user.role !== 'admin') {
-      // Redirecionar silenciosamente para o dashboard do usuário sem mostrar o toast
-      navigate(`/department/${user.role}/dashboard`);
+    if (user && user.role !== 'admin') {
+      // Se o usuário não é admin e o departamento na URL não corresponde ao seu, redirecione
+      if (department !== user.role) {
+        console.log(`Correção de departamento: redirecionando de ${department} para ${user.role}`);
+        navigate(`/department/${user.role}/dashboard`, { replace: true });
+      }
     }
   }, [user, department, navigate]);
 
-  // Usar o departamento do usuário logado em vez do departamento da URL
+  // Sempre usar o departamento do usuário logado, ignorando o que está na URL 
+  // (a menos que seja um admin, que pode visualizar qualquer departamento)
   const userDepartment = user?.role !== 'admin' ? user?.role : department;
   
   // Buscar atividades para o departamento do usuário
