@@ -181,15 +181,16 @@ export class DatabaseStorage implements IStorage {
       // Se houver muitos IDs, fazer múltiplas consultas para evitar problemas de tamanho
       let result: typeof activities.$inferSelect[] = [];
       
-      // Processar em lotes de no máximo 10 IDs por vez para evitar strings SQL muito longas
-      for (let i = 0; i < activityIds.length; i += 10) {
-        const batchIds = activityIds.slice(i, i + 10);
-        const batchResults = await db
+      // Processar cada ID individualmente para garantir que não haverá erros de sintaxe
+      for (const activityId of activityIds) {
+        const activityResult = await db
           .select()
           .from(activities)
-          .where(sql`${activities.id} IN (${batchIds.join(',')})`);
+          .where(eq(activities.id, activityId));
         
-        result = [...result, ...batchResults];
+        if (activityResult.length > 0) {
+          result.push(activityResult[0]);
+        }
       }
       
       console.log(`[DEBUG] getActivitiesByDepartment: Recuperadas ${result.length} atividades completas`);
@@ -483,15 +484,16 @@ export class DatabaseStorage implements IStorage {
       const activitiesMap = new Map<number, Activity>();
       let activityList: typeof activities.$inferSelect[] = [];
       
-      // Processar em lotes menores
-      for (let i = 0; i < activityIds.length; i += 10) {
-        const batchIds = activityIds.slice(i, i + 10);
-        const batchResults = await db
+      // Processar cada ID individualmente para evitar erros de sintaxe SQL
+      for (const activityId of activityIds) {
+        const activityResult = await db
           .select()
           .from(activities)
-          .where(sql`${activities.id} IN (${batchIds.join(',')})`);
+          .where(eq(activities.id, activityId));
         
-        activityList = [...activityList, ...batchResults];
+        if (activityResult.length > 0) {
+          activityList.push(activityResult[0]);
+        }
       }
       
       // Criar um mapa para lookup rápido por ID

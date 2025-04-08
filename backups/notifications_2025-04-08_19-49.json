@@ -1,0 +1,34 @@
+[
+  {
+    "id": 7,
+    "userId": 2,
+    "activityId": 7,
+    "message": "Nova atividade: camisas preta",
+    "read": false,
+    "createdAt": "2025-04-08T19:47:12.136Z"
+  },
+  {
+    "id": 6,
+    "userId": 2,
+    "activityId": 6,
+    "message": "Nova atividade: camisas branca",
+    "read": false,
+    "createdAt": "2025-04-08T19:46:38.770Z"
+  },
+  {
+    "id": 5,
+    "userId": 2,
+    "activityId": 5,
+    "message": "Nova atividade: TESTE 05",
+    "read": false,
+    "createdAt": "2025-04-08T19:45:37.199Z"
+  },
+  {
+    "id": 4,
+    "userId": 2,
+    "activityId": 4,
+    "message": "Nova atividade: Teste",
+    "read": false,
+    "createdAt": "2025-04-08T19:43:47.071Z"
+  }
+]
