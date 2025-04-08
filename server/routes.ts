@@ -222,7 +222,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           await storage.createNotification({
             userId: user.id,
             activityId,
-            message: `Nova atividade de ${department} para ${nextDepartment}: ${activity.title}`
+            message: `Novo pedido de ${department} para ${nextDepartment}: ${activity.title}`
           });
         }
       } else {
@@ -240,7 +240,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           await storage.createNotification({
             userId: user.id,
             activityId,
-            message: `Atividade "${activity.title}" passou de ${department} para ${nextDepartment}`
+            message: `Pedido "${activity.title}" passou de ${department} para ${nextDepartment} - Finalizado por: ${req.body.completedBy}${req.body.notes ? ` - Obs: ${req.body.notes}` : ''}`
           });
         }
       } else {
@@ -249,14 +249,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           await storage.createNotification({
             userId: user.id,
             activityId,
-            message: `Setor ${department} concluiu a atividade "${activity.title}" (Finalizada)`
+            message: `Setor ${department} finalizou o pedido "${activity.title}" (Produção concluída) - Finalizado por: ${req.body.completedBy}${req.body.notes ? ` - Obs: ${req.body.notes}` : ''}`
           });
         }
       }
       
       res.json(completedProgress);
     } catch (error) {
-      res.status(500).json({ message: "Erro ao concluir atividade" });
+      res.status(500).json({ message: "Erro ao concluir pedido" });
     }
   });
 

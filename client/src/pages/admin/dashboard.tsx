@@ -268,9 +268,9 @@ export default function AdminDashboard() {
 
           <div className="bg-white rounded-lg p-4 md:p-6 border border-border">
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-bold">Atividades</h2>
+              <h2 className="text-xl font-bold">Pedidos</h2>
               <Button onClick={() => setIsCreateModalOpen(true)}>
-                Nova Atividade
+                Novo Pedido
               </Button>
             </div>
             
@@ -281,9 +281,9 @@ export default function AdminDashboard() {
             ) : !activities || activities.length === 0 ? (
               <div className="text-center py-12 border-2 border-dashed rounded-lg">
                 <CircleX className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
-                <h3 className="text-lg font-medium text-muted-foreground">Nenhuma atividade encontrada</h3>
+                <h3 className="text-lg font-medium text-muted-foreground">Nenhum pedido encontrado</h3>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Clique em "Nova Atividade" para criar sua primeira atividade
+                  Clique em "Novo Pedido" para criar seu primeiro pedido
                 </p>
               </div>
             ) : (
@@ -368,12 +368,12 @@ export default function AdminDashboard() {
             )}
           </div>
 
-          {/* Notificações de atividades realizadas */}
+          {/* Notificações de pedidos realizados */}
           <div className="bg-white rounded-lg p-4 md:p-6 border border-border mt-6">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-bold flex items-center">
                 <BellRing className="mr-2 h-5 w-5 text-primary" />
-                Notificações de Atividades
+                Notificações de Pedidos
               </h2>
             </div>
             
@@ -386,7 +386,7 @@ export default function AdminDashboard() {
                 <Bell className="h-10 w-10 mx-auto text-muted-foreground mb-2" />
                 <h3 className="text-lg font-medium text-muted-foreground">Nenhuma notificação</h3>
                 <p className="text-sm text-muted-foreground mt-1">
-                  As atividades concluídas pelos setores aparecerão aqui
+                  Os pedidos concluídos pelos setores aparecerão aqui
                 </p>
               </div>
             ) : (
