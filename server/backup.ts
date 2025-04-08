@@ -3,6 +3,7 @@ import path from 'path';
 import { db } from './db';
 import { activities, activityProgress, notifications, users } from '@shared/schema';
 import { log } from './vite';
+import { storage } from './storage';
 
 const BACKUP_DIR = path.join(process.cwd(), 'backups');
 
@@ -19,9 +20,9 @@ function getBackupFilename(prefix: string): string {
 }
 
 // Função para fazer backup de uma tabela específica
-async function backupTable<T>(tableName: string, query: Promise<T[]>): Promise<void> {
+async function backupTable<T>(tableName: string, getData: () => Promise<T[]>): Promise<void> {
   try {
-    const data = await query;
+    const data = await getData();
     const filename = getBackupFilename(tableName);
     fs.writeFileSync(filename, JSON.stringify(data, null, 2));
     log(`Backup de ${tableName} concluído: ${filename}`, 'backup');
@@ -35,11 +36,31 @@ export async function createBackup(): Promise<void> {
   log('Iniciando backup do banco de dados...', 'backup');
   
   try {
-    // Backup de todas as tabelas
-    await backupTable('users', db.select().from(users));
-    await backupTable('activities', db.select().from(activities));
-    await backupTable('activity_progress', db.select().from(activityProgress));
-    await backupTable('notifications', db.select().from(notifications));
+    // Backup de todas as tabelas usando o storage
+    await backupTable('users', () => storage.getAllUsers());
+    await backupTable('activities', () => storage.getAllActivities());
+    await backupTable('activity_progress', async () => {
+      // Buscar todos os IDs de atividades
+      const activities = await storage.getAllActivities();
+      // Buscar progresso para cada atividade
+      const allProgress = [];
+      for (const activity of activities) {
+        const progress = await storage.getActivityProgress(activity.id);
+        allProgress.push(...progress);
+      }
+      return allProgress;
+    });
+    await backupTable('notifications', async () => {
+      // Buscar todos os IDs de usuários
+      const users = await storage.getAllUsers();
+      // Buscar notificações para cada usuário
+      const allNotifications = [];
+      for (const user of users) {
+        const notifications = await storage.getNotificationsByUser(user.id);
+        allNotifications.push(...notifications);
+      }
+      return allNotifications;
+    });
     
     // Limpeza de backups antigos (manter apenas os últimos 30)
     cleanOldBackups();
