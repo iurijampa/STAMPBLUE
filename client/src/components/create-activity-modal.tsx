@@ -1,360 +1,276 @@
-import { useState, useEffect } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { z } from "zod";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogDescription, 
-  DialogFooter, 
-  DialogHeader, 
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { 
-  Form, 
-  FormControl, 
-  FormField, 
-  FormItem, 
-  FormLabel, 
-  FormMessage 
-} from "@/components/ui/form";
-import { FileInput } from "@/components/ui/file-input";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { CalendarIcon, Loader2 } from "lucide-react";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
-import { format } from "date-fns";
-import { cn } from "@/lib/utils";
-
-// Form schema
-const activityFormSchema = z.object({
-  title: z.string().min(1, { message: "Título é obrigatório" }),
-  description: z.string().min(1, { message: "Descrição é obrigatória" }),
-  quantity: z.coerce.number().min(1, { message: "Quantidade deve ser pelo menos 1" }),
-  deadline: z.date().optional(),
-  notes: z.string().optional(),
-});
-
-type ActivityFormValues = z.infer<typeof activityFormSchema>;
+import { useState } from "react";
+import { FileInput } from "@/components/ui/file-input";
+import { apiRequest } from "@/lib/queryClient";
+import { DEPARTMENTS } from "@shared/schema";
 
 interface CreateActivityModalProps {
   isOpen: boolean;
   onClose: () => void;
-  activityId?: number | null;
+  onSuccess: () => void;
 }
 
-export default function CreateActivityModal({ 
-  isOpen, 
-  onClose,
-  activityId
-}: CreateActivityModalProps) {
+export default function CreateActivityModal({ isOpen, onClose, onSuccess }: CreateActivityModalProps) {
   const { toast } = useToast();
+  const [isLoading, setIsLoading] = useState(false);
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [quantity, setQuantity] = useState("");
+  const [clientName, setClientName] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [imageError, setImageError] = useState<string | null>(null);
-  const isEditing = !!activityId;
-  
-  // Fetch activity details for editing
-  const { data: activityData, isLoading: isLoadingActivity } = useQuery({
-    queryKey: [`/api/activities/${activityId}`],
-    enabled: isOpen && isEditing,
-  });
-  
-  const form = useForm<ActivityFormValues>({
-    resolver: zodResolver(activityFormSchema),
-    defaultValues: {
-      title: "",
-      description: "",
-      quantity: 1,
-      notes: "",
-    },
-  });
-  
-  // Update form values when editing an existing activity
-  useEffect(() => {
-    if (activityData && isEditing) {
-      form.reset({
-        title: activityData.title,
-        description: activityData.description,
-        quantity: activityData.quantity,
-        deadline: activityData.deadline ? new Date(activityData.deadline) : undefined,
-        notes: activityData.notes || "",
-      });
-      
-      // Set image preview for existing activity
-      if (activityData.image) {
-        setImagePreview(activityData.image);
-      }
+  const [priority, setPriority] = useState<string>("normal");
+  const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]);
+
+  const handleAddDepartment = (department: string) => {
+    if (!selectedDepartments.includes(department)) {
+      setSelectedDepartments([...selectedDepartments, department]);
     }
-  }, [activityData, isEditing, form]);
-  
-  // Create or update activity mutation
-  const activityMutation = useMutation({
-    mutationFn: async (values: ActivityFormValues & { image: string }) => {
-      if (isEditing) {
-        return await apiRequest("PUT", `/api/activities/${activityId}`, values);
-      } else {
-        return await apiRequest("POST", "/api/activities", values);
-      }
-    },
-    onSuccess: () => {
-      toast({
-        title: isEditing ? "Atividade atualizada" : "Atividade criada",
-        description: isEditing 
-          ? "A atividade foi atualizada com sucesso." 
-          : "A atividade foi criada com sucesso.",
-      });
-      
-      // Invalidate queries to refresh activities list
-      queryClient.invalidateQueries({ queryKey: ["/api/activities"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
-      
-      // Reset form and close modal
-      resetForm();
-      onClose();
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Erro",
-        description: error.message || "Ocorreu um erro. Tente novamente.",
-        variant: "destructive",
-      });
-    },
-  });
-  
-  // Convert image file to base64
+  };
+
+  const handleRemoveDepartment = (department: string) => {
+    setSelectedDepartments(selectedDepartments.filter(dep => dep !== department));
+  };
+
   const fileToBase64 = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.readAsDataURL(file);
       reader.onload = () => resolve(reader.result as string);
-      reader.onerror = (error) => reject(error);
+      reader.onerror = error => reject(error);
     });
   };
-  
-  // Handle form submission
-  const onSubmit = async (values: ActivityFormValues) => {
-    // Validate image
-    if (!imageFile && !imagePreview) {
-      setImageError("A imagem é obrigatória");
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (selectedDepartments.length === 0) {
+      toast({
+        title: "Erro ao criar atividade",
+        description: "Selecione pelo menos um departamento",
+        variant: "destructive",
+      });
       return;
     }
+
+    setIsLoading(true);
     
-    let imageBase64 = imagePreview;
-    
-    // If there's a new image file, convert it to base64
-    if (imageFile) {
-      try {
-        imageBase64 = await fileToBase64(imageFile);
-      } catch (error) {
-        setImageError("Erro ao processar a imagem");
-        return;
+    try {
+      let imageData = null;
+      if (imageFile) {
+        imageData = await fileToBase64(imageFile);
       }
-    }
-    
-    // Submit form with image
-    activityMutation.mutate({
-      ...values,
-      image: imageBase64 as string,
-    });
-  };
-  
-  // Reset form to initial state
-  const resetForm = () => {
-    form.reset({
-      title: "",
-      description: "",
-      quantity: 1,
-      deadline: undefined,
-      notes: "",
-    });
-    setImageFile(null);
-    setImagePreview(null);
-    setImageError(null);
-  };
-  
-  // Handle modal close
-  const handleClose = () => {
-    if (!activityMutation.isPending) {
-      resetForm();
+      
+      const formData = {
+        title,
+        description,
+        quantity: parseInt(quantity) || 0,
+        clientName,
+        imageUrl: imageData,
+        priority,
+        workflowSteps: selectedDepartments.map(department => ({
+          department,
+          order: selectedDepartments.indexOf(department) + 1,
+        }))
+      };
+      
+      const response = await apiRequest("POST", "/api/activities", formData);
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Erro ao criar atividade");
+      }
+      
+      toast({
+        title: "Atividade criada com sucesso",
+      });
+      
+      // Resetar formulário
+      setTitle("");
+      setDescription("");
+      setQuantity("");
+      setClientName("");
+      setImageFile(null);
+      setPriority("normal");
+      setSelectedDepartments([]);
+      
+      onSuccess();
       onClose();
+      
+    } catch (error) {
+      console.error("Erro ao criar atividade:", error);
+      toast({
+        title: "Erro ao criar atividade",
+        description: error instanceof Error ? error.message : "Erro desconhecido",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
     }
   };
-  
+
   return (
-    <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>{isEditing ? "Editar Atividade" : "Nova Atividade"}</DialogTitle>
+          <DialogTitle>Nova Atividade</DialogTitle>
           <DialogDescription>
-            {isEditing 
-              ? "Atualize os detalhes da atividade abaixo." 
-              : "Preencha os detalhes da nova atividade de produção."}
+            Preencha os detalhes da nova atividade a ser criada. Adicione todos os departamentos
+            que farão parte do fluxo de trabalho.
           </DialogDescription>
         </DialogHeader>
         
-        {isEditing && isLoadingActivity ? (
-          <div className="py-8 flex justify-center">
-            <Loader2 className="h-8 w-8 animate-spin text-primary-500" />
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="title">Título</Label>
+            <Input
+              id="title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              required
+            />
           </div>
-        ) : (
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-              <FormField
-                control={form.control}
-                name="title"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Título da Atividade</FormLabel>
-                    <FormControl>
-                      <Input 
-                        placeholder="Ex: Camisa Polo - Modelo XYZ" 
-                        {...field} 
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+          
+          <div className="space-y-2">
+            <Label htmlFor="description">Descrição</Label>
+            <Textarea
+              id="description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={3}
+              required
+            />
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="quantity">Quantidade</Label>
+              <Input
+                id="quantity"
+                type="number"
+                value={quantity}
+                onChange={(e) => setQuantity(e.target.value)}
+                required
               />
-              
-              <FormField
-                control={form.control}
-                name="description"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Descrição</FormLabel>
-                    <FormControl>
-                      <Textarea 
-                        placeholder="Detalhes sobre o produto a ser produzido..." 
-                        className="min-h-[100px]"
-                        {...field} 
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="clientName">Cliente</Label>
+              <Input
+                id="clientName"
+                value={clientName}
+                onChange={(e) => setClientName(e.target.value)}
+                required
               />
-              
-              <div>
-                <FormLabel>Imagem do Produto</FormLabel>
-                <FileInput 
-                  value={imageFile}
-                  onChange={(file) => {
-                    setImageFile(file);
-                    setImageError(null);
-                  }}
-                  accept="image/*"
-                  maxSize={2 * 1024 * 1024} // 2MB
-                  placeholder="Arraste e solte uma imagem ou clique para selecionar"
-                  error={imageError || undefined}
-                />
-              </div>
-              
-              <div className="flex flex-col sm:flex-row gap-4">
-                <FormField
-                  control={form.control}
-                  name="quantity"
-                  render={({ field }) => (
-                    <FormItem className="w-full sm:w-1/2">
-                      <FormLabel>Quantidade</FormLabel>
-                      <FormControl>
-                        <Input 
-                          type="number" 
-                          min={1}
-                          placeholder="Ex: 100" 
-                          {...field} 
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <FormField
-                  control={form.control}
-                  name="deadline"
-                  render={({ field }) => (
-                    <FormItem className="w-full sm:w-1/2">
-                      <FormLabel>Prazo</FormLabel>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <FormControl>
-                            <Button
-                              variant={"outline"}
-                              className={cn(
-                                "w-full pl-3 text-left font-normal",
-                                !field.value && "text-muted-foreground"
-                              )}
-                            >
-                              {field.value ? (
-                                format(field.value, "dd/MM/yyyy")
-                              ) : (
-                                <span>Selecione uma data</span>
-                              )}
-                              <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                            </Button>
-                          </FormControl>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
-                          <Calendar
-                            mode="single"
-                            selected={field.value}
-                            onSelect={field.onChange}
-                            disabled={(date) => date < new Date()}
-                            initialFocus
-                          />
-                        </PopoverContent>
-                      </Popover>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-              
-              <FormField
-                control={form.control}
-                name="notes"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Observações Adicionais</FormLabel>
-                    <FormControl>
-                      <Textarea 
-                        placeholder="Informações adicionais para os setores..." 
-                        {...field} 
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <DialogFooter className="mt-6">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleClose}
-                  disabled={activityMutation.isPending}
-                >
-                  Cancelar
-                </Button>
-                <Button 
-                  type="submit"
-                  disabled={activityMutation.isPending}
-                >
-                  {activityMutation.isPending && (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  )}
-                  {isEditing ? "Atualizar Atividade" : "Criar Atividade"}
-                </Button>
-              </DialogFooter>
-            </form>
-          </Form>
-        )}
+            </div>
+          </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="image">Imagem (opcional)</Label>
+            <FileInput
+              value={imageFile}
+              onChange={setImageFile}
+              accept="image/*"
+              maxSize={5 * 1024 * 1024} // 5MB
+              placeholder="Selecione uma imagem..."
+            />
+          </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="priority">Prioridade</Label>
+            <Select value={priority} onValueChange={setPriority}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione a prioridade" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="low">Baixa</SelectItem>
+                <SelectItem value="normal">Normal</SelectItem>
+                <SelectItem value="high">Alta</SelectItem>
+                <SelectItem value="urgent">Urgente</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          
+          <div className="space-y-2">
+            <Label>Fluxo de Trabalho</Label>
+            <p className="text-sm text-muted-foreground mb-2">
+              Adicione os departamentos na ordem do fluxo de trabalho
+            </p>
+            
+            <div className="flex gap-2 mb-2">
+              <Select onValueChange={handleAddDepartment}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Selecione..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {DEPARTMENTS.map((department) => (
+                    <SelectItem 
+                      key={department} 
+                      value={department}
+                      disabled={selectedDepartments.includes(department)}
+                    >
+                      {department.charAt(0).toUpperCase() + department.slice(1)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setSelectedDepartments([])}
+                disabled={selectedDepartments.length === 0}
+              >
+                Limpar
+              </Button>
+            </div>
+            
+            <div className="bg-muted p-2 rounded-md min-h-[100px]">
+              {selectedDepartments.length === 0 ? (
+                <p className="text-sm text-center text-muted-foreground p-4">
+                  Adicione departamentos ao fluxo de trabalho
+                </p>
+              ) : (
+                <ul className="space-y-2">
+                  {selectedDepartments.map((department, index) => (
+                    <li key={department} className="flex items-center justify-between p-2 bg-background rounded-md">
+                      <div className="flex items-center gap-2">
+                        <span className="bg-primary-200 text-primary-700 rounded-full w-6 h-6 flex items-center justify-center text-xs font-medium">
+                          {index + 1}
+                        </span>
+                        <span>
+                          {department.charAt(0).toUpperCase() + department.slice(1)}
+                        </span>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 p-0"
+                        onClick={() => handleRemoveDepartment(department)}
+                      >
+                        &times;
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose} disabled={isLoading}>
+              Cancelar
+            </Button>
+            <Button type="submit" disabled={isLoading}>
+              {isLoading ? "Criando..." : "Criar Atividade"}
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );

@@ -2,16 +2,55 @@ import { Button } from "@/components/ui/button";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { useEffect, useState } from "react";
-import { User } from "@shared/schema";
+import { Activity, User } from "@shared/schema";
+import { apiRequest } from "@/lib/queryClient";
+import { useQuery } from "@tanstack/react-query";
+import { Loader2, CircleX, AlertCircle, CheckCircle2 } from "lucide-react";
+import CreateActivityModal from "@/components/create-activity-modal";
 
 export default function AdminDashboard() {
   const [user, setUser] = useState<User | null>(null);
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
+  // Query para buscar todas as atividades
+  const { 
+    data: activities, 
+    isLoading: activitiesLoading,
+    refetch: refetchActivities
+  } = useQuery<Activity[]>({
+    queryKey: ['/api/activities'],
+    queryFn: async () => {
+      const response = await apiRequest("GET", "/api/activities");
+      if (!response.ok) {
+        throw new Error("Falha ao carregar atividades");
+      }
+      return response.json();
+    },
+    enabled: !isLoading && !!user,
+  });
+
+  // Dados de estatísticas
+  const { 
+    data: stats,
+    isLoading: statsLoading,
+    refetch: refetchStats 
+  } = useQuery({
+    queryKey: ['/api/stats'],
+    queryFn: async () => {
+      const response = await apiRequest("GET", "/api/stats");
+      if (!response.ok) {
+        throw new Error("Falha ao carregar estatísticas");
+      }
+      return response.json();
+    },
+    enabled: !isLoading && !!user,
+  });
+
+  // Verificar autenticação
   useEffect(() => {
-    // Verificar se o usuário está autenticado
     const checkAuth = async () => {
       try {
         const response = await fetch('/api/user', {
@@ -67,46 +106,146 @@ export default function AdminDashboard() {
     }
   };
 
+  const refreshData = () => {
+    refetchActivities();
+    refetchStats();
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin mr-2" />
+        <p>Carregando...</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen p-8">
-      <div className="max-w-5xl mx-auto bg-white rounded-lg shadow-md p-6">
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold">Dashboard do Administrador</h1>
-          <div className="flex items-center gap-4">
-            <p className="text-sm text-muted-foreground">
-              Bem-vindo, <span className="font-semibold">{user?.name || user?.username}</span>
-            </p>
-            <Button variant="outline" onClick={handleLogout}>
-              Sair
-            </Button>
+    <div className="min-h-screen p-4 md:p-8 bg-gray-50">
+      <div className="max-w-6xl mx-auto">
+        <div className="bg-white rounded-lg shadow-md p-4 md:p-6 mb-6">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Dashboard do Administrador</h1>
+            <div className="flex items-center gap-4">
+              <p className="text-sm text-muted-foreground">
+                Bem-vindo, <span className="font-semibold">{user?.name || user?.username}</span>
+              </p>
+              <Button variant="outline" onClick={handleLogout} size="sm">
+                Sair
+              </Button>
+            </div>
           </div>
-        </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-primary-50 rounded-lg p-4 border border-primary-200">
-            <h2 className="text-lg font-semibold mb-2">Atividades Pendentes</h2>
-            <p className="text-3xl font-bold">0</p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 mb-8">
+            <div className="bg-primary-50 rounded-lg p-4 border border-primary-200">
+              <div className="flex justify-between items-center">
+                <h2 className="text-lg font-semibold mb-2">Pendentes</h2>
+                <AlertCircle className="text-amber-500 h-5 w-5" />
+              </div>
+              <p className="text-3xl font-bold">
+                {statsLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : (
+                  stats?.pending || 0
+                )}
+              </p>
+            </div>
+            <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+              <div className="flex justify-between items-center">
+                <h2 className="text-lg font-semibold mb-2">Em Progresso</h2>
+                <Loader2 className="text-blue-500 h-5 w-5" />
+              </div>
+              <p className="text-3xl font-bold">
+                {statsLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : (
+                  stats?.inProgress || 0
+                )}
+              </p>
+            </div>
+            <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+              <div className="flex justify-between items-center">
+                <h2 className="text-lg font-semibold mb-2">Concluídas</h2>
+                <CheckCircle2 className="text-green-500 h-5 w-5" />
+              </div>
+              <p className="text-3xl font-bold">
+                {statsLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : (
+                  stats?.completed || 0
+                )}
+              </p>
+            </div>
           </div>
-          <div className="bg-primary-50 rounded-lg p-4 border border-primary-200">
-            <h2 className="text-lg font-semibold mb-2">Em Progresso</h2>
-            <p className="text-3xl font-bold">0</p>
-          </div>
-          <div className="bg-primary-50 rounded-lg p-4 border border-primary-200">
-            <h2 className="text-lg font-semibold mb-2">Concluídas</h2>
-            <p className="text-3xl font-bold">0</p>
-          </div>
-        </div>
 
-        <div className="bg-white rounded-lg p-6 border border-border">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-bold">Atividades Recentes</h2>
-            <Button>Nova Atividade</Button>
-          </div>
-          <div className="text-center py-8 text-muted-foreground">
-            Nenhuma atividade encontrada.
+          <div className="bg-white rounded-lg p-4 md:p-6 border border-border">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-bold">Atividades</h2>
+              <Button onClick={() => setIsCreateModalOpen(true)}>
+                Nova Atividade
+              </Button>
+            </div>
+            
+            {activitiesLoading ? (
+              <div className="flex justify-center py-8">
+                <Loader2 className="h-8 w-8 animate-spin" />
+              </div>
+            ) : !activities || activities.length === 0 ? (
+              <div className="text-center py-12 border-2 border-dashed rounded-lg">
+                <CircleX className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
+                <h3 className="text-lg font-medium text-muted-foreground">Nenhuma atividade encontrada</h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Clique em "Nova Atividade" para criar sua primeira atividade
+                </p>
+              </div>
+            ) : (
+              <div className="border rounded-lg overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-muted">
+                        <th className="px-4 py-3 text-left font-medium">Título</th>
+                        <th className="px-4 py-3 text-left font-medium">Cliente</th>
+                        <th className="px-4 py-3 text-left font-medium">Qtd.</th>
+                        <th className="px-4 py-3 text-left font-medium">Status</th>
+                        <th className="px-4 py-3 text-left font-medium">Criado em</th>
+                        <th className="px-4 py-3 text-right font-medium">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {activities.map((activity) => (
+                        <tr key={activity.id} className="hover:bg-muted/50">
+                          <td className="px-4 py-3">{activity.title}</td>
+                          <td className="px-4 py-3">{activity.clientName || "—"}</td>
+                          <td className="px-4 py-3">{activity.quantity}</td>
+                          <td className="px-4 py-3">
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium 
+                              ${activity.status === 'pending' ? 'bg-amber-100 text-amber-800' : 
+                              activity.status === 'in_progress' ? 'bg-blue-100 text-blue-800' : 
+                              'bg-green-100 text-green-800'}`}>
+                              {activity.status === 'pending' ? 'Pendente' : 
+                               activity.status === 'in_progress' ? 'Em Progresso' : 
+                               'Concluído'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            {new Date(activity.createdAt).toLocaleDateString('pt-BR')}
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <Button variant="ghost" size="sm">
+                              Visualizar
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
+
+      <CreateActivityModal 
+        isOpen={isCreateModalOpen} 
+        onClose={() => setIsCreateModalOpen(false)}
+        onSuccess={refreshData}
+      />
     </div>
   );
 }

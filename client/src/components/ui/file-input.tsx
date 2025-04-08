@@ -1,7 +1,7 @@
-import * as React from "react";
+import { useState, useRef } from "react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Upload, X } from "lucide-react";
-import { Button } from "./button";
 
 interface FileInputProps {
   className?: string;
@@ -17,33 +17,35 @@ export function FileInput({
   className,
   value,
   onChange,
-  accept = "image/*",
-  maxSize = 5 * 1024 * 1024, // 5MB default
-  placeholder = "Arraste e solte uma imagem ou clique para selecionar",
-  error,
+  accept,
+  maxSize,
+  placeholder = "Selecionar arquivo...",
+  error
 }: FileInputProps) {
-  const [preview, setPreview] = React.useState<string | null>(null);
-  const [dragActive, setDragActive] = React.useState(false);
-  const inputRef = React.useRef<HTMLInputElement>(null);
+  const [dragActive, setDragActive] = useState(false);
+  const [localError, setLocalError] = useState<string | undefined>(error);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  // Generate preview when file changes
-  React.useEffect(() => {
-    if (!value) {
-      setPreview(null);
+  const handleFile = (file: File) => {
+    if (maxSize && file.size > maxSize) {
+      setLocalError(`O arquivo excede o tamanho máximo de ${(maxSize / (1024 * 1024)).toFixed(1)}MB`);
       return;
     }
+    
+    setLocalError(undefined);
+    onChange(file);
+  };
 
-    const objectUrl = URL.createObjectURL(value);
-    setPreview(objectUrl);
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      handleFile(e.target.files[0]);
+    }
+  };
 
-    return () => {
-      URL.revokeObjectURL(objectUrl);
-    };
-  }, [value]);
-
-  const handleDrag = (e: React.DragEvent) => {
+  const handleDrag = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
+    
     if (e.type === "dragenter" || e.type === "dragover") {
       setDragActive(true);
     } else if (e.type === "dragleave") {
@@ -51,35 +53,14 @@ export function FileInput({
     }
   };
 
-  const handleDrop = (e: React.DragEvent) => {
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
     
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      const file = e.dataTransfer.files[0];
-      handleFile(file);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      handleFile(e.dataTransfer.files[0]);
     }
-  };
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      const file = e.target.files[0];
-      handleFile(file);
-    }
-  };
-
-  const handleFile = (file: File) => {
-    if (file.size > maxSize) {
-      alert(`Arquivo muito grande. Tamanho máximo: ${maxSize / 1024 / 1024}MB`);
-      return;
-    }
-    
-    onChange(file);
-  };
-
-  const handleButtonClick = () => {
-    inputRef.current?.click();
   };
 
   const handleRemove = () => {
@@ -90,65 +71,66 @@ export function FileInput({
   };
 
   return (
-    <div className={cn("relative", className)}>
-      <input
-        ref={inputRef}
-        type="file"
-        accept={accept}
-        onChange={handleChange}
-        className="sr-only"
-        aria-hidden="true"
-      />
-      
+    <div className="space-y-2">
       <div
         className={cn(
-          "flex flex-col items-center justify-center border-2 border-dashed rounded-md p-4 transition-colors",
-          "min-h-[150px] cursor-pointer",
-          dragActive 
-            ? "border-primary-500 bg-primary-50" 
-            : "border-neutral-300 bg-neutral-50 hover:bg-neutral-100",
-          error && "border-red-400",
-          preview && "border-solid"
+          "border-2 border-dashed rounded-md p-4 text-center cursor-pointer relative",
+          {
+            "border-primary bg-primary/5": dragActive,
+            "border-destructive": localError,
+            "border-input hover:border-primary/50": !dragActive && !localError,
+          },
+          className
         )}
         onDragEnter={handleDrag}
         onDragLeave={handleDrag}
         onDragOver={handleDrag}
         onDrop={handleDrop}
-        onClick={handleButtonClick}
+        onClick={() => inputRef.current?.click()}
       >
-        {preview ? (
-          <div className="relative w-full h-full flex items-center justify-center">
-            <img
-              src={preview}
-              alt="Preview"
-              className="max-h-[200px] max-w-full object-contain rounded"
-            />
-            <Button
-              variant="destructive"
-              size="icon"
-              className="absolute top-2 right-2 h-6 w-6"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleRemove();
-              }}
-              type="button"
-            >
-              <X className="h-4 w-4" />
-            </Button>
+        <Input
+          ref={inputRef}
+          type="file"
+          className="hidden"
+          onChange={handleChange}
+          accept={accept}
+        />
+        
+        {value ? (
+          <div className="py-2">
+            <p className="text-sm font-medium">{value.name}</p>
+            <p className="text-xs text-muted-foreground">
+              {(value.size / 1024).toFixed(1)} KB
+            </p>
           </div>
         ) : (
-          <>
-            <Upload className="h-10 w-10 text-neutral-400 mb-2" />
-            <p className="text-sm text-neutral-500 text-center">{placeholder}</p>
-            <p className="text-xs text-neutral-400 mt-1">
-              PNG, JPG ou GIF (max. {maxSize / 1024 / 1024}MB)
+          <div className="py-8 px-4">
+            <p className="text-sm text-muted-foreground mb-1">
+              {placeholder}
             </p>
-          </>
+            <p className="text-xs text-muted-foreground">
+              Arraste e solte ou clique para selecionar
+            </p>
+          </div>
         )}
       </div>
       
-      {error && (
-        <p className="text-red-500 text-sm mt-1">{error}</p>
+      {localError && (
+        <p className="text-sm text-destructive">{localError}</p>
+      )}
+      
+      {value && (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={(e) => {
+            e.stopPropagation();
+            handleRemove();
+          }}
+        >
+          Remover arquivo
+        </Button>
       )}
     </div>
   );
