@@ -323,13 +323,15 @@ export class MemStorage implements IStorage {
       notes: notes || null
     };
     
-    // Marcar o progresso anterior como pendente novamente
+    // Marcar o progresso anterior como pendente novamente e limpar quaisquer marcações anteriores de conclusão
     const updatedPreviousProgress: ActivityProgress = {
       ...previousProgress,
       status: "pending",
       notes: notes || null,
       returnedBy,
       returnedAt: new Date(),
+      completedBy: null,  // Limpar quem completou anteriormente
+      completedAt: null,  // Limpar quando foi completado
     };
     
     // Atualizar os progressos no armazenamento
