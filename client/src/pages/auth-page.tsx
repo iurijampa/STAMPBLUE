@@ -110,10 +110,10 @@ export default function AuthPage() {
   
   return (
     <div className="min-h-screen bg-background">
-      <div className="min-h-screen flex flex-col lg:flex-row">
+      <div className="grid min-h-screen lg:grid-cols-2">
         {/* Área de Hero - só aparece em telas maiores */}
-        <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-primary-600 to-primary-800">
-          <div className="w-full h-full flex items-center justify-center">
+        <div className="hidden lg:block bg-gradient-to-br from-primary-600 to-primary-800">
+          <div className="flex h-full items-center justify-center">
             <div className="max-w-md text-white space-y-4 px-6">
               <h1 className="text-3xl md:text-4xl font-bold tracking-tight">
                 Sistema de Gerenciamento de Produção
@@ -144,8 +144,8 @@ export default function AuthPage() {
         </div>
         
         {/* Área de Login - centralizada */}
-        <div className="flex flex-1 w-full lg:w-1/2 items-center justify-center">
-          <div className="w-full mx-auto max-w-sm px-4 sm:max-w-md sm:px-6">
+        <div className="flex items-center justify-center">
+          <div className="w-full max-w-md mx-auto px-6 py-12">
             <div className="text-center mb-8">
               <div className="mx-auto mb-6 flex justify-center">
                 <Logo size="xl" className="text-primary-600" />
