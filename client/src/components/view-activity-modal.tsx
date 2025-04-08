@@ -210,11 +210,7 @@ export default function ViewActivityModal({ isOpen, onClose, activity }: ViewAct
                 )}
               </div>
               
-              {activity.image && (
-                <div className="text-center text-sm text-neutral-500">
-                  <p>Use o mouse para arrastar a imagem. Role a roda do mouse ou use os botões para aplicar zoom.</p>
-                </div>
-              )}
+              {/* Dicas de uso foram removidas para não atrapalhar visualização em dispositivos móveis */}
             </div>
             
             {/* Descrição */}
@@ -418,10 +414,7 @@ export default function ViewActivityModal({ isOpen, onClose, activity }: ViewAct
               </Button>
             </div>
             
-            {/* Instruções de uso */}
-            <div className="absolute top-4 left-4 z-50 bg-black bg-opacity-50 text-white p-2 rounded-md text-sm">
-              <p>Arraste para mover • Role o mouse para zoom • Duplo clique para centralizar</p>
-            </div>
+            {/* Instruções de uso removidas para não atrapalhar visualização em dispositivos móveis */}
           </div>
         </div>
       )}
