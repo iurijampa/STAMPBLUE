@@ -70,6 +70,8 @@ export const activityProgress = pgTable("activity_progress", {
   completedBy: text("completed_by"),
   completedAt: timestamp("completed_at"),
   notes: text("notes"),
+  returnedBy: text("returned_by"),
+  returnedAt: timestamp("returned_at"),
 });
 
 export const insertActivityProgressSchema = createInsertSchema(activityProgress).pick({
@@ -79,6 +81,8 @@ export const insertActivityProgressSchema = createInsertSchema(activityProgress)
   completedBy: true,
   completedAt: true,
   notes: true,
+  returnedBy: true,
+  returnedAt: true,
 });
 
 // Notifications table

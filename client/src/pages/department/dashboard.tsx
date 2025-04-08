@@ -5,7 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useEffect, useState } from "react";
 import { User, Activity } from "@shared/schema";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, CalendarClock, Clock, Eye, RefreshCw } from "lucide-react";
+import { Loader2, CalendarClock, Clock, Eye, RefreshCw, RotateCcw } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import Layout from "@/components/Layout";
 import ViewActivityModal from "@/components/view-activity-modal";
 import CompleteActivityModal from "@/components/complete-activity-modal";
+import ReturnActivityModal from "@/components/return-activity-modal";
 
 // Estendendo a interface Activity para incluir os campos que estamos recebendo do backend
 interface ActivityWithNotes extends Activity {
@@ -27,6 +28,7 @@ export default function DepartmentDashboard() {
   const { toast } = useToast();
   const [viewActivity, setViewActivity] = useState<ActivityWithNotes | null>(null);
   const [completeActivity, setCompleteActivity] = useState<ActivityWithNotes | null>(null);
+  const [returnActivity, setReturnActivity] = useState<ActivityWithNotes | null>(null);
   
   // Obtendo o departamento da URL
   const department = params.department;
@@ -152,6 +154,19 @@ export default function DepartmentDashboard() {
     setCompleteActivity(null);
     
     // Recarregar dados após a conclusão de uma atividade
+    refetchActivities();
+    refetchStats();
+  };
+  
+  // Função para tratar o retorno da atividade
+  const handleActivityReturned = () => {
+    toast({
+      title: "Pedido retornado com sucesso",
+      description: "O pedido foi retornado ao setor anterior para correção.",
+    });
+    setReturnActivity(null);
+    
+    // Recarregar dados após o retorno de uma atividade
     refetchActivities();
     refetchStats();
   };
@@ -345,6 +360,16 @@ export default function DepartmentDashboard() {
                           >
                             Concluir
                           </Button>
+                          
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            className="flex items-center text-yellow-600 hover:text-yellow-700"
+                            onClick={() => setReturnActivity(activity)}
+                          >
+                            <RotateCcw className="h-4 w-4 mr-1" />
+                            <span>Retornar</span>
+                          </Button>
                         </div>
                       </div>
                     </div>
@@ -371,6 +396,14 @@ export default function DepartmentDashboard() {
             onClose={() => setCompleteActivity(null)}
             activityId={completeActivity?.id || null}
             onSuccess={handleActivityCompleted}
+          />
+          
+          {/* Modal de retorno de atividade */}
+          <ReturnActivityModal 
+            isOpen={!!returnActivity}
+            onClose={() => setReturnActivity(null)}
+            activityId={returnActivity?.id || null}
+            onSuccess={handleActivityReturned}
           />
         </>
       )}

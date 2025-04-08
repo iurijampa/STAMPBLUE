@@ -281,6 +281,66 @@ export class MemStorage implements IStorage {
     this.activitiesProgress.set(progress.id, updatedProgress);
     return updatedProgress;
   }
+  
+  async returnActivityToPreviousDepartment(
+    activityId: number,
+    currentDepartment: string,
+    returnedBy: string,
+    notes?: string
+  ): Promise<{ previousProgress: ActivityProgress, currentProgress: ActivityProgress }> {
+    // Pegar todos os progressos para esta atividade
+    const allProgresses = Array.from(this.activitiesProgress.values())
+      .filter(p => p.activityId === activityId)
+      .sort((a, b) => {
+        const aIndex = DEPARTMENTS.indexOf(a.department as Department);
+        const bIndex = DEPARTMENTS.indexOf(b.department as Department);
+        return aIndex - bIndex;
+      });
+    
+    // Encontrar o índice do departamento atual
+    const currentDeptIndex = allProgresses.findIndex(p => p.department === currentDepartment);
+    
+    if (currentDeptIndex <= 0) {
+      throw new Error("Não é possível retornar esta atividade, pois não há departamento anterior");
+    }
+    
+    // Obter o progresso atual
+    const currentProgress = allProgresses[currentDeptIndex];
+    
+    // Obter o progresso do departamento anterior
+    const previousProgress = allProgresses[currentDeptIndex - 1];
+    
+    if (!currentProgress || !previousProgress) {
+      throw new Error("Progresso não encontrado");
+    }
+    
+    // Marcar o progresso atual como não concluído
+    const updatedCurrentProgress: ActivityProgress = {
+      ...currentProgress,
+      status: "pending",
+      completedBy: null,
+      completedAt: null,
+      notes: null
+    };
+    
+    // Marcar o progresso anterior como pendente novamente
+    const updatedPreviousProgress: ActivityProgress = {
+      ...previousProgress,
+      status: "pending",
+      notes: notes || null,
+      returnedBy,
+      returnedAt: new Date(),
+    };
+    
+    // Atualizar os progressos no armazenamento
+    this.activitiesProgress.set(currentProgress.id, updatedCurrentProgress);
+    this.activitiesProgress.set(previousProgress.id, updatedPreviousProgress);
+    
+    return {
+      previousProgress: updatedPreviousProgress,
+      currentProgress: updatedCurrentProgress
+    };
+  }
 
   async getCompletedActivitiesByDepartment(
     department: string
