@@ -20,6 +20,11 @@ interface ActivityWithNotes extends Activity {
   previousNotes?: string | null;
   previousDepartment?: string | null;
   previousCompletedBy?: string | null;
+  // Campos para informações de retorno
+  wasReturned?: boolean;
+  returnedBy?: string | null;
+  returnNotes?: string | null;
+  returnedAt?: Date | null;
 }
 
 export default function DepartmentDashboard() {
@@ -342,8 +347,30 @@ export default function DepartmentDashboard() {
                               {activity.description}
                             </p>
                             
+                            {/* Informações de retorno, se o pedido foi retornado */}
+                            {activity.wasReturned && (
+                              <div className="bg-red-50 p-2 rounded-md mb-2 border border-red-200">
+                                <p className="font-medium text-red-800 text-sm">
+                                  Pedido retornado pelo próximo setor
+                                </p>
+                                <p className="text-sm text-red-700">
+                                  <span className="font-medium">Retornado por:</span> {activity.returnedBy || "Não informado"}
+                                </p>
+                                {activity.returnNotes && (
+                                  <p className="text-sm text-red-700">
+                                    <span className="font-medium">Motivo:</span> {activity.returnNotes}
+                                  </p>
+                                )}
+                                {activity.returnedAt && (
+                                  <p className="text-xs text-red-600 mt-1">
+                                    <span className="font-medium">Data:</span> {formatDate(activity.returnedAt)}
+                                  </p>
+                                )}
+                              </div>
+                            )}
+                            
                             {/* Observações do setor anterior */}
-                            {activity.previousNotes && (
+                            {activity.previousNotes && !activity.wasReturned && (
                               <div className="bg-amber-50 p-2 rounded-md mb-2 border border-amber-200">
                                 <p className="font-medium text-amber-800 text-sm">
                                   Observações do setor anterior ({activity.previousDepartment}):
