@@ -37,15 +37,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Activities
   app.get("/api/activities", isAuthenticated, async (req, res) => {
     try {
-      if (req.user.role === "admin") {
+      if (req.user && req.user.role === "admin") {
         const activities = await storage.getAllActivities();
         return res.json(activities);
-      } else {
+      } else if (req.user) {
         const department = req.user.role;
+        console.log(`[DEBUG] Usuario ${req.user.username} (${department}) solicitando atividades`);
         const activities = await storage.getActivitiesByDepartment(department);
         return res.json(activities);
+      } else {
+        return res.status(401).json({ message: "Usuário não autenticado" });
       }
     } catch (error) {
+      console.error("Erro ao buscar atividades:", error);
       res.status(500).json({ message: "Erro ao buscar atividades" });
     }
   });
@@ -76,7 +80,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let department = req.params.department;
       
       // Sempre usar o departamento do usuário logado se não for admin
-      if (req.user.role !== "admin") {
+      if (req.user && req.user.role !== "admin") {
         department = req.user.role;
       }
       
@@ -87,6 +91,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Departamento inválido" });
       }
       
+      console.log(`[DEBUG] Chamando getActivitiesByDepartment('${department}')`);
       // Obter as atividades para o departamento
       const activities = await storage.getActivitiesByDepartment(department);
       
@@ -96,81 +101,93 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Para cada atividade, adicionar as observações do setor anterior (se houver)
-      const activitiesWithPreviousNotes = await Promise.all(activities.map(async (activity) => {
-        // Obter o progresso atual do departamento
-        const currentProgress = await storage.getActivityProgressByDepartment(activity.id, department);
-        
-        // Se o departamento é o primeiro, não haverá setor anterior
-        if (department === DEPARTMENTS[0]) {
-          // Verificar se foi retornado pelo setor seguinte
-          return { 
+      let activitiesWithPreviousNotes = [];
+      
+      for (const activity of activities) {
+        try {
+          // Obter o progresso atual do departamento
+          const currentProgress = await storage.getActivityProgressByDepartment(activity.id, department);
+          console.log(`[DEBUG] Progresso para atividade ${activity.id} no departamento ${department}:`, 
+                    currentProgress ? JSON.stringify(currentProgress) : "null");
+          
+          let result = { 
             ...activity, 
-            previousNotes: currentProgress?.notes, 
+            previousNotes: null, 
             previousDepartment: null,
             previousCompletedBy: null,
-            wasReturned: currentProgress?.returnedBy ? true : false,
-            returnedBy: currentProgress?.returnedBy,
-            returnNotes: currentProgress?.notes,
-            returnedAt: currentProgress?.returnedAt
+            wasReturned: false,
+            returnedBy: null,
+            returnNotes: null,
+            returnedAt: null
           };
-        }
-        
-        // Encontrar o índice do departamento atual no fluxo
-        const deptIndex = DEPARTMENTS.indexOf(department as any);
-        
-        if (deptIndex > 0) {
-          // Obter o departamento anterior
-          const previousDept = DEPARTMENTS[deptIndex - 1];
           
-          // Buscar o progresso do departamento anterior
-          const previousProgress = await storage.getActivityProgressByDepartment(activity.id, previousDept);
-          
-          // Verificar se esta atividade foi retornada pelo próximo setor
-          const wasReturned = currentProgress?.returnedBy ? true : false;
-          
-          // Se há progresso anterior e ele foi concluído, adicionar as notas ao resultado
-          if (previousProgress && previousProgress.status === "completed") {
-            return { 
+          // Se o departamento é o primeiro, não haverá setor anterior
+          if (department === DEPARTMENTS[0]) {
+            // Verificar se foi retornado pelo setor seguinte
+            result = { 
               ...activity, 
-              previousNotes: previousProgress.notes, 
-              previousDepartment: previousDept,
-              previousCompletedBy: previousProgress.completedBy,
-              wasReturned,
-              returnedBy: currentProgress?.returnedBy,
-              returnNotes: currentProgress?.notes,
-              returnedAt: currentProgress?.returnedAt
-            };
-          }
-          
-          // Se só foi retornado mas sem progresso anterior concluído
-          if (wasReturned) {
-            return {
-              ...activity,
-              previousNotes: null,
+              previousNotes: currentProgress?.notes, 
               previousDepartment: null,
               previousCompletedBy: null,
-              wasReturned,
+              wasReturned: currentProgress?.returnedBy ? true : false,
               returnedBy: currentProgress?.returnedBy,
               returnNotes: currentProgress?.notes,
               returnedAt: currentProgress?.returnedAt
             };
+          } else {
+            // Encontrar o índice do departamento atual no fluxo
+            const deptIndex = DEPARTMENTS.indexOf(department as any);
+            
+            if (deptIndex > 0) {
+              // Obter o departamento anterior
+              const previousDept = DEPARTMENTS[deptIndex - 1];
+              
+              // Buscar o progresso do departamento anterior
+              const previousProgress = await storage.getActivityProgressByDepartment(activity.id, previousDept);
+              console.log(`[DEBUG] Progresso anterior para atividade ${activity.id} no departamento ${previousDept}:`, 
+                        previousProgress ? JSON.stringify(previousProgress) : "null");
+              
+              // Verificar se esta atividade foi retornada pelo próximo setor
+              const wasReturned = currentProgress?.returnedBy ? true : false;
+              
+              // Se há progresso anterior e ele foi concluído, adicionar as notas ao resultado
+              if (previousProgress && previousProgress.status === "completed") {
+                result = { 
+                  ...activity, 
+                  previousNotes: previousProgress.notes, 
+                  previousDepartment: previousDept,
+                  previousCompletedBy: previousProgress.completedBy,
+                  wasReturned,
+                  returnedBy: currentProgress?.returnedBy,
+                  returnNotes: currentProgress?.notes,
+                  returnedAt: currentProgress?.returnedAt
+                };
+              } else if (wasReturned) {
+                // Se só foi retornado mas sem progresso anterior concluído
+                result = {
+                  ...activity,
+                  previousNotes: null,
+                  previousDepartment: null,
+                  previousCompletedBy: null,
+                  wasReturned,
+                  returnedBy: currentProgress?.returnedBy,
+                  returnNotes: currentProgress?.notes,
+                  returnedAt: currentProgress?.returnedAt
+                };
+              }
+            }
           }
+          
+          activitiesWithPreviousNotes.push(result);
+        } catch (error) {
+          console.error(`[ERROR] Erro ao processar atividade ${activity.id}:`, error);
+          // Continue processing other activities even if one fails
         }
-        
-        return { 
-          ...activity, 
-          previousNotes: null, 
-          previousDepartment: null,
-          previousCompletedBy: null,
-          wasReturned: false,
-          returnedBy: null,
-          returnNotes: null,
-          returnedAt: null
-        };
-      }));
+      }
       
       return res.json(activitiesWithPreviousNotes);
     } catch (error) {
+      console.error("[ERROR] Erro ao buscar atividades para o departamento:", error);
       res.status(500).json({ message: "Erro ao buscar atividades para o departamento" });
     }
   });
@@ -643,7 +660,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let department = req.params.department;
       
       // Sempre usar o departamento do usuário logado se não for admin
-      if (req.user.role !== "admin") {
+      if (req.user && req.user.role !== "admin") {
         department = req.user.role;
       }
       
@@ -652,19 +669,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Departamento inválido" });
       }
       
-      // Obter atividades pendentes para o departamento
-      const activities = await storage.getActivitiesByDepartment(department);
-      const pendingCount = activities.length;
+      console.log(`[DEBUG] Buscando estatísticas para o departamento: ${department}`);
       
-      // Obter atividades concluídas pelo departamento
-      const completedActivities = await storage.getCompletedActivitiesByDepartment(department);
-      const completedCount = completedActivities.length;
-      
-      return res.json({
-        pendingCount,
-        completedCount
-      });
+      try {
+        // Obter atividades pendentes para o departamento
+        const activities = await storage.getActivitiesByDepartment(department);
+        const pendingCount = activities.length;
+        console.log(`[DEBUG] Atividades pendentes para ${department}: ${pendingCount}`);
+        
+        // Obter atividades concluídas pelo departamento
+        const completedActivities = await storage.getCompletedActivitiesByDepartment(department);
+        const completedCount = completedActivities.length;
+        console.log(`[DEBUG] Atividades completadas por ${department}: ${completedCount}`);
+        
+        return res.json({
+          pendingCount,
+          completedCount
+        });
+      } catch (error) {
+        console.error(`[ERROR] Erro ao processar estatísticas para ${department}:`, error);
+        throw error;
+      }
     } catch (error) {
+      console.error("Erro ao buscar estatísticas do departamento:", error);
       res.status(500).json({ message: "Erro ao buscar estatísticas do departamento" });
     }
   });

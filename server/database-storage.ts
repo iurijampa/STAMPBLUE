@@ -154,9 +154,10 @@ export class DatabaseStorage implements IStorage {
 
   async getActivitiesByDepartment(department: string): Promise<Activity[]> {
     // Usar uma junção (JOIN) para otimizar a consulta
-    return await cachedQuery(`activities_by_dept_${department}`, async () => {
-      console.log(`[DEBUG] getDeptActivities: Buscando atividades pendentes para: ${department}`);
+    try {
+      console.log(`[DEBUG] getActivitiesByDepartment: Buscando atividades pendentes para: ${department}`);
       
+      // Desabilitar o cache temporariamente para depuração
       // Primeiro, obter IDs das atividades pendentes neste departamento
       const progresses = await db
         .select()
@@ -165,21 +166,24 @@ export class DatabaseStorage implements IStorage {
           sql`${activityProgress.department} = ${department} AND ${activityProgress.status} = 'pending'`
         );
       
-      console.log(`[DEBUG] getDeptActivities: Encontrados ${progresses.length} progresso(s) pendente(s) para ${department}`);
+      console.log(`[DEBUG] getActivitiesByDepartment: Encontrados ${progresses.length} progresso(s) pendente(s) para ${department}`);
       
       if (progresses.length === 0) return [];
       
       // Montar a lista de IDs de atividades
       const activityIds = progresses.map(p => p.activityId);
-      console.log(`[DEBUG] getDeptActivities: IDs de atividades encontradas: ${activityIds.join(', ')}`);
+      console.log(`[DEBUG] getActivitiesByDepartment: IDs de atividades encontradas: ${activityIds.join(', ')}`);
+
+      // Se não houver activity IDs, retornar array vazio
+      if (activityIds.length === 0) return [];
       
-      // Buscar detalhes completos das atividades
+      // Buscar detalhes completos das atividades - usar parâmetros em vez de string SQL direta
       const result = await db
         .select()
         .from(activities)
         .where(sql`${activities.id} IN (${activityIds.join(',')})`);
       
-      console.log(`[DEBUG] getDeptActivities: Recuperadas ${result.length} atividades completas`);
+      console.log(`[DEBUG] getActivitiesByDepartment: Recuperadas ${result.length} atividades completas`);
       
       // Ordenar por deadline (mais urgentes primeiro)
       return result.sort((a, b) => {
@@ -189,7 +193,10 @@ export class DatabaseStorage implements IStorage {
         // Ordernar do mais antigo para o mais recente
         return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
       });
-    }, 5000); // Cache por 5 segundos
+    } catch (error) {
+      console.error(`[ERROR] getActivitiesByDepartment para ${department}:`, error);
+      throw error;
+    }
   }
 
   async updateActivity(id: number, activityData: InsertActivity): Promise<Activity> {

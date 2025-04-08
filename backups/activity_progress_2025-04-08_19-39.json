@@ -1,0 +1,35 @@
+[
+  {
+    "id": 1,
+    "activityId": 1,
+    "department": "gabarito",
+    "status": "pending",
+    "completedBy": null,
+    "completedAt": null,
+    "notes": null,
+    "returnedBy": null,
+    "returnedAt": null
+  },
+  {
+    "id": 2,
+    "activityId": 2,
+    "department": "gabarito",
+    "status": "pending",
+    "completedBy": null,
+    "completedAt": null,
+    "notes": null,
+    "returnedBy": null,
+    "returnedAt": null
+  },
+  {
+    "id": 3,
+    "activityId": 3,
+    "department": "gabarito",
+    "status": "pending",
+    "completedBy": null,
+    "completedAt": null,
+    "notes": null,
+    "returnedBy": null,
+    "returnedAt": null
+  }
+]
