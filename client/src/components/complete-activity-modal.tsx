@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { Activity } from "@shared/schema";
 import { useForm } from "react-hook-form";
 import {
   Dialog,
@@ -38,17 +39,19 @@ interface CompleteActivityModalProps {
   isOpen: boolean;
   onClose: () => void;
   activityId: number | null;
+  onSuccess?: () => void;
 }
 
 export default function CompleteActivityModal({
   isOpen,
   onClose,
-  activityId
+  activityId,
+  onSuccess
 }: CompleteActivityModalProps) {
   const { toast } = useToast();
   
   // Fetch activity details if needed
-  const { data: activityData, isLoading: isLoadingActivity } = useQuery({
+  const { data: activityData, isLoading: isLoadingActivity } = useQuery<Activity>({
     queryKey: [`/api/activities/${activityId}`],
     enabled: isOpen && !!activityId,
   });
@@ -74,7 +77,13 @@ export default function CompleteActivityModal({
       
       // Invalidate queries to refresh activities list
       queryClient.invalidateQueries({ queryKey: ["/api/activities"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/activities/completed"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/activities/department"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/department"] });
+      
+      // Call onSuccess callback if provided
+      if (onSuccess) {
+        onSuccess();
+      }
       
       // Reset form and close modal
       resetForm();

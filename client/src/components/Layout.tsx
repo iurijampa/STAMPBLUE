@@ -81,7 +81,7 @@ export default function Layout({ children, title }: LayoutProps) {
   };
 
   const handleLogout = () => {
-    logoutMutation.mutate();
+    logout();
   };
 
   return (

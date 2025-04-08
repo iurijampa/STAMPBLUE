@@ -45,6 +45,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Erro ao buscar atividades" });
     }
   });
+  
+  // Obter atividades para um departamento específico (usando no dashboard do departamento)
+  app.get("/api/activities/department/:department", isAuthenticated, async (req, res) => {
+    try {
+      const department = req.params.department;
+      
+      // Verificar se o departamento requisitado é o mesmo do usuário ou se é admin
+      if (req.user.role !== "admin" && req.user.role !== department) {
+        return res.status(403).json({ message: "Acesso negado para este departamento" });
+      }
+      
+      // Verificar se o departamento é válido
+      if (!DEPARTMENTS.includes(department as any) && department !== "admin") {
+        return res.status(400).json({ message: "Departamento inválido" });
+      }
+      
+      const activities = await storage.getActivitiesByDepartment(department);
+      return res.json(activities);
+    } catch (error) {
+      res.status(500).json({ message: "Erro ao buscar atividades para o departamento" });
+    }
+  });
 
   app.get("/api/activities/:id", isAuthenticated, async (req, res) => {
     try {
@@ -335,6 +357,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(stats);
     } catch (error) {
       res.status(500).json({ message: "Erro ao buscar estatísticas" });
+    }
+  });
+  
+  // Statistics for department dashboard
+  app.get("/api/department/:department/stats", isAuthenticated, async (req, res) => {
+    try {
+      const department = req.params.department;
+      
+      // Verificar se o departamento requisitado é o mesmo do usuário ou se é admin
+      if (req.user.role !== "admin" && req.user.role !== department) {
+        return res.status(403).json({ message: "Acesso negado para este departamento" });
+      }
+      
+      // Verificar se o departamento é válido
+      if (!DEPARTMENTS.includes(department as any) && department !== "admin") {
+        return res.status(400).json({ message: "Departamento inválido" });
+      }
+      
+      // Obter atividades pendentes para o departamento
+      const activities = await storage.getActivitiesByDepartment(department);
+      const pendingCount = activities.length;
+      
+      // Obter atividades concluídas pelo departamento
+      const completedActivities = await storage.getCompletedActivitiesByDepartment(department);
+      const completedCount = completedActivities.length;
+      
+      return res.json({
+        pendingCount,
+        completedCount
+      });
+    } catch (error) {
+      res.status(500).json({ message: "Erro ao buscar estatísticas do departamento" });
     }
   });
 

@@ -1,105 +1,253 @@
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { useEffect, useState } from "react";
-import { User } from "@shared/schema";
+import { User, Activity } from "@shared/schema";
+import { useQuery } from "@tanstack/react-query";
+import { Loader2, CalendarClock, Clock, Eye } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
+import Layout from "@/components/Layout";
+import ViewActivityModal from "@/components/view-activity-modal";
+import CompleteActivityModal from "@/components/complete-activity-modal";
 
 export default function DepartmentDashboard() {
-  const [user, setUser] = useState<User | null>(null);
   const [, navigate] = useLocation();
   const { toast } = useToast();
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    // Verificar se o usuário está autenticado
-    const checkAuth = async () => {
-      try {
-        const response = await fetch('/api/user', {
-          credentials: 'include'
-        });
-        
-        if (response.status === 401) {
-          navigate("/auth");
-          return;
-        }
-        
-        if (response.ok) {
-          const userData = await response.json();
-          setUser(userData);
-          
-          // Verificar se o usuário é admin
-          if (userData.role === "admin") {
-            navigate("/admin/dashboard");
-          }
-        }
-      } catch (err) {
-        console.error("Erro ao verificar autenticação:", err);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    
-    checkAuth();
-  }, [navigate]);
-
-  const handleLogout = async () => {
-    try {
-      const response = await fetch('/api/logout', {
-        method: 'POST',
-        credentials: 'include',
+  const [viewActivity, setViewActivity] = useState<Activity | null>(null);
+  const [completeActivity, setCompleteActivity] = useState<Activity | null>(null);
+  
+  // Buscar dados do usuário autenticado
+  const { data: user, isLoading: userLoading } = useQuery({
+    queryKey: ["/api/user"],
+    queryFn: async () => {
+      const response = await fetch('/api/user', {
+        credentials: 'include'
       });
       
-      if (response.ok) {
-        toast({
-          title: "Logout realizado com sucesso",
-        });
+      if (response.status === 401) {
         navigate("/auth");
-      } else {
-        throw new Error('Falha ao fazer logout');
+        return null;
       }
-    } catch (error) {
-      console.error("Erro ao fazer logout:", error);
-      toast({
-        title: "Falha no logout",
-        description: error instanceof Error ? error.message : "Erro desconhecido",
-        variant: "destructive",
-      });
+      
+      if (!response.ok) {
+        throw new Error('Erro ao buscar dados do usuário');
+      }
+      
+      const userData = await response.json();
+      
+      // Verificar se o usuário é admin
+      if (userData.role === "admin") {
+        navigate("/admin/dashboard");
+      }
+      
+      return userData as User;
     }
+  });
+  
+  // Buscar atividades para o departamento do usuário
+  const { data: activitiesData = [], isLoading: activitiesLoading } = useQuery({
+    queryKey: ["/api/department/activities"],
+    queryFn: async () => {
+      if (!user) return [];
+      
+      const response = await fetch(`/api/activities/department/${user.role}`, {
+        credentials: 'include'
+      });
+      
+      if (!response.ok) {
+        throw new Error('Erro ao buscar atividades do departamento');
+      }
+      
+      return await response.json() as Activity[];
+    },
+    enabled: !!user
+  });
+  
+  // Buscar estatísticas do departamento
+  const { data: stats = { pendingCount: 0, completedCount: 0 }, isLoading: statsLoading } = useQuery({
+    queryKey: ["/api/department/stats"],
+    queryFn: async () => {
+      if (!user) return { pendingCount: 0, completedCount: 0 };
+      
+      const response = await fetch(`/api/department/${user.role}/stats`, {
+        credentials: 'include'
+      });
+      
+      if (!response.ok) {
+        throw new Error('Erro ao buscar estatísticas do departamento');
+      }
+      
+      return await response.json();
+    },
+    enabled: !!user
+  });
+  
+  // Função para formatar a data
+  const formatDate = (date: Date | null) => {
+    if (!date) return "Sem data";
+    return new Date(date).toLocaleDateString('pt-BR');
+  };
+  
+  // Função para obter a cor conforme o prazo
+  const getDeadlineColor = (deadline: Date | null) => {
+    if (!deadline) return "bg-gray-500";
+    
+    const today = new Date();
+    const deadlineDate = new Date(deadline);
+    const diffTime = deadlineDate.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays < 0) return "bg-red-500"; // Atrasado
+    if (diffDays <= 2) return "bg-yellow-500"; // Próximo do prazo
+    return "bg-green-500"; // Dentro do prazo
+  };
+  
+  // Função para tratar a conclusão da atividade
+  const handleActivityCompleted = () => {
+    toast({
+      title: "Atividade concluída com sucesso",
+      description: "A atividade foi marcada como concluída e enviada para o próximo setor.",
+    });
+    setCompleteActivity(null);
   };
 
   return (
-    <div className="min-h-screen p-8">
-      <div className="max-w-5xl mx-auto bg-white rounded-lg shadow-md p-6">
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold">Dashboard do Departamento - {user?.role.toUpperCase()}</h1>
-          <div className="flex items-center gap-4">
-            <p className="text-sm text-muted-foreground">
-              Bem-vindo, <span className="font-semibold">{user?.name || user?.username}</span>
-            </p>
-            <Button variant="outline" onClick={handleLogout}>
-              Sair
-            </Button>
-          </div>
+    <Layout title={`Dashboard - ${user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : 'Departamento'}`}>
+      {userLoading || activitiesLoading ? (
+        <div className="h-64 flex items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary-500" />
         </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          <div className="bg-primary-50 rounded-lg p-4 border border-primary-200">
-            <h2 className="text-lg font-semibold mb-2">Atividades Pendentes</h2>
-            <p className="text-3xl font-bold">0</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg font-semibold">Atividades Pendentes</CardTitle>
+                <CardDescription>Atividades aguardando seu departamento</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p className="text-3xl font-bold">{stats.pendingCount || 0}</p>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg font-semibold">Atividades Concluídas</CardTitle>
+                <CardDescription>Atividades finalizadas pelo seu departamento</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p className="text-3xl font-bold">{stats.completedCount || 0}</p>
+              </CardContent>
+            </Card>
           </div>
-          <div className="bg-primary-50 rounded-lg p-4 border border-primary-200">
-            <h2 className="text-lg font-semibold mb-2">Atividades Concluídas</h2>
-            <p className="text-3xl font-bold">0</p>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-lg p-6 border border-border">
-          <h2 className="text-xl font-bold mb-4">Atividades Pendentes</h2>
-          <div className="text-center py-8 text-muted-foreground">
-            Nenhuma atividade pendente encontrada para o seu departamento.
-          </div>
-        </div>
-      </div>
-    </div>
+          
+          <Card>
+            <CardHeader>
+              <CardTitle>Atividades Pendentes</CardTitle>
+              <CardDescription>
+                Lista de atividades que precisam ser processadas pelo seu departamento
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {activitiesData && activitiesData.length > 0 ? (
+                <div className="space-y-4">
+                  {activitiesData.map((activity) => (
+                    <div 
+                      key={activity.id}
+                      className="border rounded-lg p-4 hover:bg-neutral-50 transition-colors"
+                    >
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <Badge 
+                              variant="outline" 
+                              className={cn("text-white", getDeadlineColor(activity.deadline))}
+                            >
+                              {activity.deadline ? formatDate(activity.deadline) : "Sem prazo"}
+                            </Badge>
+                            {activity.clientName && (
+                              <Badge variant="outline">
+                                Cliente: {activity.clientName}
+                              </Badge>
+                            )}
+                          </div>
+                          
+                          <h3 className="text-lg font-semibold">{activity.title}</h3>
+                          <p className="text-neutral-600 line-clamp-2 my-2">
+                            {activity.description}
+                          </p>
+                          
+                          <div className="flex items-center text-sm text-neutral-500 gap-4 mt-2">
+                            <div className="flex items-center">
+                              <CalendarClock className="h-4 w-4 mr-1" />
+                              <span>Criado: {formatDate(activity.createdAt)}</span>
+                            </div>
+                            
+                            {activity.deadline && (
+                              <div className="flex items-center">
+                                <Clock className="h-4 w-4 mr-1" />
+                                <span>
+                                  Entrega em {formatDistanceToNow(new Date(activity.deadline), {
+                                    addSuffix: true, 
+                                    locale: ptBR
+                                  })}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        
+                        <div className="flex flex-col gap-2">
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            className="flex items-center"
+                            onClick={() => setViewActivity(activity)}
+                          >
+                            <Eye className="h-4 w-4 mr-1" />
+                            <span>Visualizar</span>
+                          </Button>
+                          
+                          <Button 
+                            variant="default" 
+                            size="sm"
+                            onClick={() => setCompleteActivity(activity)}
+                          >
+                            Concluir
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-neutral-500">
+                  Nenhuma atividade pendente encontrada para o seu departamento.
+                </div>
+              )}
+            </CardContent>
+          </Card>
+          
+          {/* Modal de visualização de atividade */}
+          <ViewActivityModal 
+            isOpen={!!viewActivity}
+            onClose={() => setViewActivity(null)}
+            activity={viewActivity}
+          />
+          
+          {/* Modal de conclusão de atividade */}
+          <CompleteActivityModal 
+            isOpen={!!completeActivity}
+            onClose={() => setCompleteActivity(null)}
+            activityId={completeActivity?.id || null}
+            onSuccess={handleActivityCompleted}
+          />
+        </>
+      )}
+    </Layout>
   );
 }
