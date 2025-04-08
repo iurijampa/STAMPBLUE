@@ -1,6 +1,7 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { scheduleBackups } from "./backup";
 
 const app = express();
 app.use(express.json({ limit: '50mb' }));
@@ -66,5 +67,16 @@ app.use((req, res, next) => {
     reusePort: true,
   }, () => {
     log(`serving on port ${port}`);
+    
+    // Iniciar sistema de backups automáticos
+    const backupTimer = scheduleBackups();
+    log("Sistema de backup automático iniciado com sucesso", "express");
+    
+    // Garantir que o timer de backup seja limpo ao encerrar o servidor
+    process.on('SIGINT', () => {
+      clearInterval(backupTimer);
+      log("Sistema de backup interrompido", "express");
+      process.exit(0);
+    });
   });
 })();

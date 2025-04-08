@@ -8,6 +8,9 @@ import {
   DEPARTMENTS
 } from "@shared/schema";
 import { fromZodError } from "zod-validation-error";
+import fs from 'fs';
+import path from 'path';
+import { createBackup } from "./backup";
 
 // Middleware to check if the user is authenticated
 function isAuthenticated(req: Request, res: Response, next: Function) {
@@ -456,6 +459,78 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       res.status(500).json({ message: "Erro ao buscar estatísticas do departamento" });
+    }
+  });
+
+  // Backup system endpoints (admin only)
+  app.get("/api/backup", isAdmin, async (req, res) => {
+    try {
+      const BACKUP_DIR = path.join(process.cwd(), 'backups');
+      
+      // Verificar se o diretório de backup existe
+      if (!fs.existsSync(BACKUP_DIR)) {
+        return res.json({ 
+          status: "warning", 
+          message: "Nenhum backup encontrado ainda", 
+          backups: [] 
+        });
+      }
+      
+      // Listar os arquivos de backup
+      const files = fs.readdirSync(BACKUP_DIR);
+      
+      // Organizar por tabela
+      const backupsByTable: Record<string, {date: Date, file: string}[]> = {};
+      
+      for (const file of files) {
+        const prefixMatch = file.match(/^([^_]+)_/);
+        if (prefixMatch) {
+          const prefix = prefixMatch[1];
+          const filePath = path.join(BACKUP_DIR, file);
+          const stats = fs.statSync(filePath);
+          
+          if (!backupsByTable[prefix]) {
+            backupsByTable[prefix] = [];
+          }
+          
+          backupsByTable[prefix].push({
+            date: stats.mtime,
+            file
+          });
+        }
+      }
+      
+      // Ordenar backups por data (mais recentes primeiro)
+      for (const table in backupsByTable) {
+        backupsByTable[table].sort((a, b) => b.date.getTime() - a.date.getTime());
+      }
+      
+      res.json({
+        status: "success",
+        message: "Backups listados com sucesso",
+        backups: backupsByTable
+      });
+    } catch (error) {
+      res.status(500).json({ 
+        status: "error", 
+        message: "Erro ao listar backups" 
+      });
+    }
+  });
+  
+  // Force manual backup creation
+  app.post("/api/backup", isAdmin, async (req, res) => {
+    try {
+      await createBackup();
+      res.json({ 
+        status: "success", 
+        message: "Backup iniciado com sucesso. Este processo ocorre em segundo plano e pode levar alguns segundos para ser concluído." 
+      });
+    } catch (error) {
+      res.status(500).json({ 
+        status: "error", 
+        message: "Erro ao iniciar backup manual" 
+      });
     }
   });
 

@@ -21,12 +21,14 @@ import {
   Trash2, 
   Eye,
   Bell,
-  BellRing
+  BellRing,
+  Database
 } from "lucide-react";
 import CreateActivityModal from "@/components/create-activity-modal";
 import EditActivityModal from "@/components/edit-activity-modal";
 import DeleteActivityDialog from "@/components/delete-activity-dialog";
 import ViewActivityModal from "@/components/view-activity-modal";
+import BackupManager from "@/components/backup-manager";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function AdminDashboard() {
@@ -398,6 +400,18 @@ export default function AdminDashboard() {
                 </div>
               </div>
             )}
+          </div>
+
+          {/* Sistema de backup */}
+          <div className="bg-white rounded-lg p-4 md:p-6 border border-border mt-6">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold flex items-center">
+                <Database className="mr-2 h-5 w-5 text-primary" />
+                Sistema de Backup
+              </h2>
+            </div>
+            
+            <BackupManager />
           </div>
 
           {/* Notificações de pedidos realizados */}
