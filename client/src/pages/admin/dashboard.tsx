@@ -5,8 +5,19 @@ import { useEffect, useState } from "react";
 import { Activity, User } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, CircleX, AlertCircle, CheckCircle2, Users } from "lucide-react";
+import { 
+  Loader2, 
+  CircleX, 
+  AlertCircle, 
+  CheckCircle2, 
+  Users, 
+  Edit, 
+  Trash2, 
+  Eye 
+} from "lucide-react";
 import CreateActivityModal from "@/components/create-activity-modal";
+import EditActivityModal from "@/components/edit-activity-modal";
+import DeleteActivityDialog from "@/components/delete-activity-dialog";
 
 export default function AdminDashboard() {
   const [user, setUser] = useState<User | null>(null);
@@ -14,6 +25,9 @@ export default function AdminDashboard() {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null);
 
   // Query para buscar todas as atividades
   const { 
@@ -115,6 +129,25 @@ export default function AdminDashboard() {
   const refreshData = () => {
     refetchActivities();
     refetchStats();
+  };
+
+  const handleEditActivity = (activity: Activity) => {
+    setSelectedActivity(activity);
+    setIsEditModalOpen(true);
+  };
+
+  const handleDeleteActivity = (activity: Activity) => {
+    setSelectedActivity(activity);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleViewActivity = (activity: Activity) => {
+    // No futuro, podemos expandir esta funcionalidade para mostrar mais detalhes
+    // Por enquanto, apenas mostra uma notificação
+    toast({
+      title: `Detalhes de ${activity.title}`,
+      description: `Status: ${activity.status}, Cliente: ${activity.clientName}, Quantidade: ${activity.quantity}`,
+    });
   };
 
   if (isLoading) {
@@ -252,9 +285,33 @@ export default function AdminDashboard() {
                             {new Date(activity.createdAt).toLocaleDateString('pt-BR')}
                           </td>
                           <td className="px-4 py-3 text-right">
-                            <Button variant="ghost" size="sm">
-                              Visualizar
-                            </Button>
+                            <div className="flex justify-end gap-1">
+                              <Button 
+                                variant="ghost" 
+                                size="icon"
+                                onClick={() => handleViewActivity(activity)}
+                                title="Visualizar"
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                              <Button 
+                                variant="ghost" 
+                                size="icon"
+                                onClick={() => handleEditActivity(activity)}
+                                title="Editar"
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button 
+                                variant="ghost" 
+                                size="icon"
+                                onClick={() => handleDeleteActivity(activity)}
+                                className="text-red-500 hover:text-red-600 hover:bg-red-50"
+                                title="Excluir"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -267,10 +324,32 @@ export default function AdminDashboard() {
         </div>
       </div>
 
+      {/* Modais */}
       <CreateActivityModal 
         isOpen={isCreateModalOpen} 
         onClose={() => setIsCreateModalOpen(false)}
         onSuccess={refreshData}
+      />
+      
+      <EditActivityModal 
+        isOpen={isEditModalOpen}
+        onClose={() => {
+          setIsEditModalOpen(false);
+          setSelectedActivity(null);
+        }}
+        onSuccess={refreshData}
+        activity={selectedActivity}
+      />
+      
+      <DeleteActivityDialog 
+        isOpen={isDeleteDialogOpen}
+        onClose={() => {
+          setIsDeleteDialogOpen(false);
+          setSelectedActivity(null);
+        }}
+        onSuccess={refreshData}
+        activityId={selectedActivity?.id || null}
+        activityTitle={selectedActivity?.title || ""}
       />
     </div>
   );
