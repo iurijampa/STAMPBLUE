@@ -5,7 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useEffect, useState } from "react";
 import { User, Activity } from "@shared/schema";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, CalendarClock, Clock, Eye } from "lucide-react";
+import { Loader2, CalendarClock, Clock, Eye, RefreshCw } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
@@ -161,8 +161,47 @@ export default function DepartmentDashboard() {
     return text.charAt(0).toUpperCase() + text.slice(1);
   };
 
+  // Função para atualizar manualmente todos os dados
+  const handleRefresh = () => {
+    refetchActivities();
+    refetchStats();
+    toast({
+      title: "Dados atualizados",
+      description: "Os dados foram atualizados com sucesso",
+    });
+  };
+
   return (
     <Layout title={`Dashboard - ${department ? capitalize(department) : 'Departamento'}`}>
+      <div className="flex justify-end mb-4">
+        <Button 
+          variant="outline" 
+          size="sm" 
+          onClick={handleRefresh}
+          className="flex items-center gap-1"
+          disabled={userLoading || activitiesLoading}
+        >
+          <svg 
+            xmlns="http://www.w3.org/2000/svg" 
+            width="16" 
+            height="16" 
+            viewBox="0 0 24 24" 
+            fill="none" 
+            stroke="currentColor" 
+            strokeWidth="2" 
+            strokeLinecap="round" 
+            strokeLinejoin="round" 
+            className="h-4 w-4"
+          >
+            <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+            <path d="M21 3v5h-5" />
+            <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+            <path d="M8 16H3v5" />
+          </svg>
+          <span>Atualizar</span>
+        </Button>
+      </div>
+      
       {userLoading || activitiesLoading ? (
         <div className="h-64 flex items-center justify-center">
           <Loader2 className="h-8 w-8 animate-spin text-primary-500" />
