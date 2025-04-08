@@ -9,9 +9,9 @@ import { useToast } from "@/hooks/use-toast";
 import { Logo, FooterCredits } from "@/components/ui/logo";
 
 export default function AuthPage() {
-  const [username, setUsername] = useState("admin");
-  const [password, setPassword] = useState("admin123");
-  const [name, setName] = useState("Administrador");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
   const [role, setRole] = useState("admin");
   const [isLoading, setIsLoading] = useState(false);
   const [, navigate] = useLocation();
@@ -143,7 +143,7 @@ export default function AuthPage() {
       
       {/* Form Section - Tela inteira em mobile */}
       <div className="w-full md:w-1/2 bg-background flex flex-1 justify-center items-center min-h-screen py-8">
-        <div className="w-full max-w-md px-4 py-6 flex flex-col h-full">
+        <div className="w-full max-w-md px-4 py-6 flex flex-col items-center justify-center">
           <div className="text-center mb-6 md:mb-8 flex flex-col items-center">
             <div className="mb-4">
               <Logo size="xl" className="text-primary-600" />
@@ -152,7 +152,7 @@ export default function AuthPage() {
             <p className="text-muted-foreground mt-2">Faça login para acessar o painel</p>
           </div>
 
-          <Card className="w-full mb-auto">
+          <Card className="w-full">
             <CardHeader>
               <CardTitle>Login</CardTitle>
               <CardDescription>
@@ -191,7 +191,9 @@ export default function AuthPage() {
             </CardContent>
           </Card>
           
-          <FooterCredits />
+          <div className="mt-6">
+            <FooterCredits />
+          </div>
         </div>
       </div>
     </div>
