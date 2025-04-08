@@ -46,6 +46,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // Get all activity progress data (admin only)
+  app.get("/api/activities/progress", isAdmin, async (req, res) => {
+    try {
+      const activities = await storage.getAllActivities();
+      const progressData = [];
+      
+      for (const activity of activities) {
+        const progress = await storage.getActivityProgress(activity.id);
+        progressData.push({
+          activityId: activity.id,
+          progress: progress
+        });
+      }
+      
+      res.json(progressData);
+    } catch (error) {
+      res.status(500).json({ message: "Erro ao buscar progresso das atividades" });
+    }
+  });
+  
   // Obter atividades para um departamento específico (usando no dashboard do departamento)
   app.get("/api/activities/department/:department", isAuthenticated, async (req, res) => {
     try {

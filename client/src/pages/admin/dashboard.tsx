@@ -2,8 +2,14 @@ import { Button } from "@/components/ui/button";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { useEffect, useState } from "react";
-import { Activity, User, Notification, DEPARTMENTS } from "@shared/schema";
+import { Activity, User, Notification, DEPARTMENTS, ActivityProgress } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
+
+// Interface para o retorno do endpoint de progresso das atividades
+interface ActivityProgressData {
+  activityId: number;
+  progress: ActivityProgress[];
+}
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { 
   Loader2, 
@@ -51,6 +57,22 @@ export default function AdminDashboard() {
         if (!b.deadline) return -1;
         return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
       });
+    },
+    enabled: !isLoading && !!user,
+  });
+  
+  // Consulta para obter progresso de todos os pedidos
+  const {
+    data: progressData,
+    isLoading: progressLoading
+  } = useQuery<ActivityProgressData[]>({
+    queryKey: ['/api/activities/progress'],
+    queryFn: async () => {
+      const response = await apiRequest("GET", "/api/activities/progress");
+      if (!response.ok) {
+        throw new Error("Falha ao carregar progresso dos pedidos");
+      }
+      return response.json();
     },
     enabled: !isLoading && !!user,
   });
@@ -310,9 +332,22 @@ export default function AdminDashboard() {
                               ${activity.status === 'completed' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'}`}>
                               {activity.status === 'completed' ? 
                                 'Concluído' : 
-                                // Simplificamos para apenas mostrar "Em Progresso" por enquanto
-                                // Em uma atualização futura, podemos implementar a lógica para mostrar o departamento exato
-                                'Em Progresso'
+                                (() => {
+                                  // Obter o departamento atual com base no progresso
+                                  if (progressData) {
+                                    const activityProgress = progressData.find((p: {activityId: number}) => p.activityId === activity.id);
+                                    if (activityProgress && activityProgress.progress.length > 0) {
+                                      // Encontrar o departamento com status "pending"
+                                      const pendingProgress = activityProgress.progress.find((p: ActivityProgress) => p.status === 'pending');
+                                      if (pendingProgress) {
+                                        // Capitalizar o nome do departamento
+                                        return pendingProgress.department.charAt(0).toUpperCase() + 
+                                               pendingProgress.department.slice(1);
+                                      }
+                                    }
+                                  }
+                                  return 'Em Progresso';
+                                })()
                               }
                             </span>
                           </td>
