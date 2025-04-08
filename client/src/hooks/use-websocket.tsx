@@ -2,6 +2,7 @@ import { useAuth } from './use-auth';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useToast } from './use-toast';
 import { queryClient } from '@/lib/queryClient';
+import { useSoundPlayer, SoundType } from '@/components/sound-player';
 
 export function useWebSocket() {
   const { user } = useAuth();
@@ -9,6 +10,7 @@ export function useWebSocket() {
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
+  const { playSound } = useSoundPlayer();
   
   // Função para enviar mensagens para o WebSocket
   const sendMessage = useCallback((data: any) => {
@@ -74,6 +76,9 @@ export function useWebSocket() {
               // Invalidar cache para atualizar lista de atividades
               queryClient.invalidateQueries({ queryKey: ['/api/activities'] });
               
+              // Reproduzir som de notificação bem chamativo
+              playSound('NEW_ACTIVITY', 1.0);
+              
               // Notificar usuário sobre nova atividade
               toast({
                 title: 'Novo Pedido Recebido',
@@ -85,6 +90,9 @@ export function useWebSocket() {
               // Invalidar cache para atualizar lista de atividades
               queryClient.invalidateQueries({ queryKey: ['/api/activities'] });
               
+              // Reproduzir som de alerta para pedidos retornados
+              playSound('RETURN_ALERT', 1.0);
+              
               // Notificar usuário sobre pedido retornado
               toast({
                 title: 'Pedido Retornado',
@@ -95,12 +103,18 @@ export function useWebSocket() {
             else if (data.type === 'activity_returned_update' || data.type === 'activity_completed') {
               // Apenas invalidar cache para atualizar lista de atividades
               queryClient.invalidateQueries({ queryKey: ['/api/activities'] });
+              
+              // Som sutil de atualização
+              playSound('UPDATE', 0.7);
             } 
             else if (data.type === 'activity_progress') {
               // Invalidar cache para atualizar lista de atividades e progresso
               queryClient.invalidateQueries({ queryKey: ['/api/activities'] });
               queryClient.invalidateQueries({ queryKey: ['/api/activities/progress'] });
               queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
+              
+              // Som de atualização
+              playSound('UPDATE', 0.8);
               
               // Notificar admins sobre o progresso de atividades
               if (user.role === 'admin') {
@@ -158,12 +172,13 @@ export function useWebSocket() {
         socketRef.current.close();
       }
     };
-  }, [user, registerWithDepartment, toast]);
+  }, [user, registerWithDepartment, toast, playSound]);
   
   return {
     connected,
     error,
     sendMessage,
-    registerWithDepartment
+    registerWithDepartment,
+    playSound // Exportar a função de reprodução de som para uso direto
   };
 }

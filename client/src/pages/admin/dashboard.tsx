@@ -31,6 +31,7 @@ import EditActivityModal from "@/components/edit-activity-modal";
 import DeleteActivityDialog from "@/components/delete-activity-dialog";
 import ViewActivityModal from "@/components/view-activity-modal";
 import BackupManager from "@/components/backup-manager";
+import SoundTest from "@/components/sound-test";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function AdminDashboard() {
@@ -501,6 +502,11 @@ export default function AdminDashboard() {
           {/* Sistema de backup (expansível) */}
           <div className="mt-6">
             <BackupManager />
+          </div>
+          
+          {/* Sistema de teste de sons */}
+          <div>
+            <SoundTest />
           </div>
         </div>
       </div>
