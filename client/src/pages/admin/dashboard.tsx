@@ -1,9 +1,11 @@
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Activity, User, Notification, DEPARTMENTS, ActivityProgress } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
+import { Search } from "lucide-react";
 
 // Interface para o retorno do endpoint de progresso das atividades
 interface ActivityProgressData {
@@ -41,6 +43,7 @@ export default function AdminDashboard() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
 
   // Query para buscar todas as atividades
   const { 
@@ -218,6 +221,30 @@ export default function AdminDashboard() {
     setIsViewModalOpen(true);
   };
 
+  // Filtrar atividades com base no termo de pesquisa
+  const filteredActivities = useMemo(() => {
+    if (!activities) return [];
+    if (!searchTerm.trim()) return activities;
+    
+    const searchTermLower = searchTerm.toLowerCase().trim();
+    
+    return activities.filter((activity) => {
+      // Buscar por título
+      const titleMatch = activity.title?.toLowerCase().includes(searchTermLower);
+      
+      // Buscar por cliente
+      const clientMatch = activity.clientName?.toLowerCase().includes(searchTermLower);
+      
+      // Buscar por data de entrega
+      const deadlineStr = activity.deadline 
+        ? new Date(activity.deadline).toLocaleDateString('pt-BR')
+        : '';
+      const deadlineMatch = deadlineStr.includes(searchTermLower);
+      
+      return titleMatch || clientMatch || deadlineMatch;
+    });
+  }, [activities, searchTerm]);
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -289,11 +316,24 @@ export default function AdminDashboard() {
           </div>
 
           <div className="bg-white rounded-lg p-4 md:p-6 border border-border">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-bold">Pedidos</h2>
-              <Button onClick={() => setIsCreateModalOpen(true)}>
-                Novo Pedido
-              </Button>
+            <div className="flex flex-col space-y-4 mb-6">
+              <div className="flex justify-between items-center">
+                <h2 className="text-xl font-bold">Pedidos</h2>
+                <Button onClick={() => setIsCreateModalOpen(true)}>
+                  Novo Pedido
+                </Button>
+              </div>
+              
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  type="text"
+                  placeholder="Buscar por título, cliente ou data de entrega..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10 w-full"
+                />
+              </div>
             </div>
             
             {activitiesLoading ? (
@@ -323,7 +363,13 @@ export default function AdminDashboard() {
                       </tr>
                     </thead>
                     <tbody className="divide-y">
-                      {activities.map((activity) => (
+                      {filteredActivities.length === 0 && searchTerm.trim() !== '' ? (
+                        <tr>
+                          <td colSpan={6} className="px-4 py-6 text-center text-muted-foreground">
+                            Nenhum pedido encontrado para: "{searchTerm}"
+                          </td>
+                        </tr>
+                      ) : filteredActivities.map((activity) => (
                         <tr key={activity.id} className="hover:bg-muted/50">
                           <td className="px-4 py-3 truncate max-w-[150px]">{activity.title}</td>
                           <td className="px-4 py-3 truncate max-w-[100px]">{activity.clientName || "—"}</td>
