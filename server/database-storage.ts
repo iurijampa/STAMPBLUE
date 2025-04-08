@@ -153,11 +153,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getActivitiesByDepartment(department: string): Promise<Activity[]> {
-    // Usar uma junção (JOIN) para otimizar a consulta
     try {
       console.log(`[DEBUG] getActivitiesByDepartment: Buscando atividades pendentes para: ${department}`);
       
-      // Abordagem com parâmetros explícitos para evitar erros de SQL
+      // ETAPA 1: Buscar progresso de atividades pendentes para o departamento
+      // Usamos um approach mais seguro com eq() e and() para evitar SQL dinâmico
       const progresses = await db
         .select()
         .from(activityProgress)
@@ -170,34 +170,40 @@ export class DatabaseStorage implements IStorage {
       
       console.log(`[DEBUG] getActivitiesByDepartment: Encontrados ${progresses.length} progresso(s) pendente(s) para ${department}`);
       
-      if (progresses.length === 0) return [];
+      if (progresses.length === 0) {
+        return [];
+      }
       
-      // Montar a lista de IDs de atividades
+      // ETAPA 2: Mapear IDs das atividades para buscar os detalhes
       const activityIds = progresses.map(p => p.activityId);
       console.log(`[DEBUG] getActivitiesByDepartment: IDs de atividades encontradas: ${activityIds.join(', ')}`);
-
-      // Se não houver activity IDs, retornar array vazio
-      if (activityIds.length === 0) return [];
       
-      // Buscar detalhes completos das atividades 
-      // Se houver muitos IDs, fazer múltiplas consultas para evitar problemas de tamanho
-      let result: typeof activities.$inferSelect[] = [];
+      // ETAPA 3: Buscar detalhes de cada atividade individualmente
+      // Isto evita erros de sintaxe SQL quando há múltiplos IDs ou valores problemáticos
+      const result: Activity[] = [];
       
-      // Processar cada ID individualmente para garantir que não haverá erros de sintaxe
-      for (const activityId of activityIds) {
-        const activityResult = await db
-          .select()
-          .from(activities)
-          .where(eq(activities.id, activityId));
-        
-        if (activityResult.length > 0) {
-          result.push(activityResult[0]);
+      // Usar um loop para processar cada ID individualmente
+      for (let i = 0; i < activityIds.length; i++) {
+        try {
+          const id = activityIds[i];
+          // Consulta segura por ID individual
+          const [activity] = await db
+            .select()
+            .from(activities)
+            .where(eq(activities.id, id));
+          
+          if (activity) {
+            result.push(activity);
+          }
+        } catch (err) {
+          console.error(`[ERROR] Erro ao buscar atividade ${activityIds[i]}:`, err);
+          // Continuar com outros IDs mesmo se um falhar
         }
       }
       
       console.log(`[DEBUG] getActivitiesByDepartment: Recuperadas ${result.length} atividades completas`);
       
-      // Ordenar por deadline (mais urgentes primeiro)
+      // ETAPA 4: Ordenar por deadline (mais urgentes primeiro)
       return result.sort((a, b) => {
         // Se não tiver deadline, vai para o final
         if (!a.deadline) return 1;
@@ -207,7 +213,8 @@ export class DatabaseStorage implements IStorage {
       });
     } catch (error) {
       console.error(`[ERROR] getActivitiesByDepartment para ${department}:`, error);
-      throw error;
+      // Retornar array vazio em caso de erro para não quebrar a aplicação
+      return [];
     }
   }
 
@@ -473,56 +480,80 @@ export class DatabaseStorage implements IStorage {
   async getCompletedActivitiesByDepartment(
     department: string
   ): Promise<{ activity: Activity; progress: ActivityProgress; }[]> {
-    // Cache para atividades completadas por departamento (10 segundos)
-    return cachedQuery(`completed_activities_dept_${department}`, async () => {
-      // Obter todos os progressos concluídos para este departamento
-      const completedProgress = await db
-        .select()
-        .from(activityProgress)
-        .where(
-          and(
-            eq(activityProgress.department, department as any),
-            eq(activityProgress.status, "completed")
-          )
-        );
+    try {
+      console.log(`[DEBUG] getCompletedActivitiesByDepartment: Buscando atividades concluídas para: ${department}`);
       
-      if (completedProgress.length === 0) return [];
-      
-      // Obter todos os IDs de atividades necessários
-      const activityIds = completedProgress.map(progress => progress.activityId);
-      
-      // Buscar todas as atividades usando o mesmo método de lotes para evitar problemas
-      const activitiesMap = new Map<number, Activity>();
-      let activityList: typeof activities.$inferSelect[] = [];
-      
-      // Processar cada ID individualmente para evitar erros de sintaxe SQL
-      for (const activityId of activityIds) {
-        const activityResult = await db
+      // Cache para atividades completadas por departamento (10 segundos)
+      return cachedQuery(`completed_activities_dept_${department}`, async () => {
+        // ETAPA 1: Obter todos os progressos concluídos para este departamento
+        const completedProgress = await db
           .select()
-          .from(activities)
-          .where(eq(activities.id, activityId));
+          .from(activityProgress)
+          .where(
+            and(
+              eq(activityProgress.department, department as any),
+              eq(activityProgress.status, "completed")
+            )
+          );
         
-        if (activityResult.length > 0) {
-          activityList.push(activityResult[0]);
+        console.log(`[DEBUG] getCompletedActivitiesByDepartment: Encontrados ${completedProgress.length} progresso(s) concluído(s) para ${department}`);
+        
+        if (completedProgress.length === 0) {
+          return [];
         }
-      }
-      
-      // Criar um mapa para lookup rápido por ID
-      activityList.forEach(activity => {
-        activitiesMap.set(activity.id, activity);
-      });
-      
-      // Montar o resultado final usando o mapa
-      const result: { activity: Activity; progress: ActivityProgress; }[] = [];
-      for (const progress of completedProgress) {
-        const activity = activitiesMap.get(progress.activityId);
-        if (activity) {
-          result.push({ activity, progress });
+        
+        // ETAPA 2: Obter IDs de atividades a partir dos progressos
+        const activityIds = completedProgress.map(progress => progress.activityId);
+        console.log(`[DEBUG] getCompletedActivitiesByDepartment: IDs de atividades encontradas: ${activityIds.join(', ')}`);
+        
+        // ETAPA 3: Buscar detalhes de cada atividade individualmente
+        // Isto evita erros de sintaxe SQL quando há múltiplos IDs
+        const activitiesMap = new Map<number, Activity>();
+        
+        for (let i = 0; i < activityIds.length; i++) {
+          try {
+            const activityId = activityIds[i];
+            // Consulta segura para cada ID individual
+            const [activity] = await db
+              .select()
+              .from(activities)
+              .where(eq(activities.id, activityId));
+            
+            if (activity) {
+              activitiesMap.set(activityId, activity);
+            }
+          } catch (err) {
+            console.error(`[ERROR] Erro ao buscar atividade concluída ${activityIds[i]}:`, err);
+            // Continuar com os próximos IDs mesmo se um falhar
+          }
         }
-      }
-      
-      return result;
-    }, 10000); // Cache por 10 segundos
+        
+        console.log(`[DEBUG] getCompletedActivitiesByDepartment: Recuperadas ${activitiesMap.size} atividades completas`);
+        
+        // ETAPA 4: Montar o resultado combinando progresso e atividade
+        const result: { activity: Activity; progress: ActivityProgress; }[] = [];
+        
+        for (const progress of completedProgress) {
+          const activity = activitiesMap.get(progress.activityId);
+          if (activity) {
+            result.push({ activity, progress });
+          }
+        }
+        
+        console.log(`[DEBUG] getCompletedActivitiesByDepartment: Retornando ${result.length} resultados combinados`);
+        
+        // ETAPA 5: Ordenar por data de conclusão (mais recentes primeiro)
+        return result.sort((a, b) => {
+          if (!a.progress.completedAt) return 1;
+          if (!b.progress.completedAt) return -1;
+          return new Date(b.progress.completedAt).getTime() - new Date(a.progress.completedAt).getTime();
+        });
+      }, 10000); // Cache por 10 segundos
+    } catch (error) {
+      console.error(`[ERROR] getCompletedActivitiesByDepartment para ${department}:`, error);
+      // Retornar array vazio em caso de erro para não quebrar a aplicação
+      return [];
+    }
   }
 
   // ===== MÉTODOS DE NOTIFICAÇÃO =====
