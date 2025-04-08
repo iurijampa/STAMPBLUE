@@ -222,6 +222,85 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Erro ao buscar progresso da atividade" });
     }
   });
+  
+  // Retornar atividade ao setor anterior
+  app.post("/api/activities/:id/return", isAuthenticated, async (req, res) => {
+    try {
+      const activityId = parseInt(req.params.id);
+      const department = req.user.role;
+      
+      // Non-admin users can only return activities from their department
+      if (department === "admin") {
+        return res.status(403).json({ message: "Administradores não podem retornar atividades" });
+      }
+      
+      // Verify if the activity exists
+      const activity = await storage.getActivity(activityId);
+      if (!activity) {
+        return res.status(404).json({ message: "Atividade não encontrada" });
+      }
+      
+      // Verify if the activity is assigned to the user's department
+      const departmentProgress = await storage.getActivityProgressByDepartment(activityId, department);
+      if (!departmentProgress || departmentProgress.status !== "pending") {
+        return res.status(403).json({ 
+          message: "Esta atividade não está disponível para este setor ou já foi concluída" 
+        });
+      }
+      
+      // Validar se temos os dados necessários
+      if (!req.body.returnedBy) {
+        return res.status(400).json({ message: "É necessário informar quem está retornando a atividade" });
+      }
+      
+      // Get the department index
+      const departmentIndex = DEPARTMENTS.indexOf(department as any);
+      
+      // Não podemos retornar se for o primeiro departamento
+      if (departmentIndex <= 0) {
+        return res.status(400).json({ 
+          message: "Não é possível retornar este pedido pois não há setor anterior" 
+        });
+      }
+      
+      // Retornar a atividade para o departamento anterior
+      const result = await storage.returnActivityToPreviousDepartment(
+        activityId,
+        department,
+        req.body.returnedBy,
+        req.body.notes
+      );
+      
+      // Enviar notificação para os administradores
+      const adminUsers = await storage.getUsersByRole("admin");
+      const previousDepartment = DEPARTMENTS[departmentIndex - 1];
+      
+      for (const user of adminUsers) {
+        await storage.createNotification({
+          userId: user.id,
+          activityId,
+          message: `Pedido "${activity.title}" retornado de ${department} para ${previousDepartment} - Retornado por: ${req.body.returnedBy}${req.body.notes ? ` - Motivo: ${req.body.notes}` : ''}`
+        });
+      }
+      
+      // Notificar usuários do departamento anterior
+      const prevDeptUsers = await storage.getUsersByRole(previousDepartment);
+      for (const user of prevDeptUsers) {
+        await storage.createNotification({
+          userId: user.id,
+          activityId: activityId,
+          message: `Pedido "${activity.title}" foi retornado pelo setor ${department}${req.body.notes ? ` - Motivo: ${req.body.notes}` : ''}`
+        });
+      }
+      
+      res.json(result);
+    } catch (error) {
+      console.error("Erro ao retornar atividade:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Erro ao retornar atividade" 
+      });
+    }
+  });
 
   app.post("/api/activities/:id/complete", isAuthenticated, async (req, res) => {
     try {
@@ -270,6 +349,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           activityId,
           department: nextDepartment,
           status: "pending",
+          completedBy: null,
+          completedAt: null,
+          notes: null,
+          returnedBy: null,
+          returnedAt: null
         });
         
         // Notify users in the next department with origin information
