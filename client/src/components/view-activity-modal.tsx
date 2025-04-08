@@ -133,7 +133,7 @@ export default function ViewActivityModal({ isOpen, onClose, activity }: ViewAct
     resetZoom();
   };
   
-  // Função simplificada para gerar o PDF
+  // Função para gerar o PDF com layout melhorado
   const handlePrintPDF = async () => {
     if (!activity) return;
     
@@ -151,6 +151,11 @@ export default function ViewActivityModal({ isOpen, onClose, activity }: ViewAct
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
       
+      // Margens reduzidas
+      const marginLeft = 10;
+      const marginRight = 10;
+      const contentWidth = pageWidth - marginLeft - marginRight;
+      
       // Adicionar título ao PDF
       pdf.setFontSize(16);
       pdf.setTextColor(0, 0, 100); // Azul da Stamp Blue
@@ -161,131 +166,245 @@ export default function ViewActivityModal({ isOpen, onClose, activity }: ViewAct
       
       // Adicionar linha horizontal
       pdf.setDrawColor(200, 200, 200);
-      pdf.line(20, 30, pageWidth - 20, 30);
+      pdf.line(marginLeft, 30, pageWidth - marginRight, 30);
       
       // Adicionar informações do pedido - com destaque para número e data
       pdf.setFontSize(12);
       
       // Título do pedido com número em negrito
       pdf.setFont('helvetica', 'bold');
-      pdf.text('Pedido:', 20, 40);
+      pdf.text('Pedido:', marginLeft, 40);
       pdf.setFont('helvetica', 'normal');
-      pdf.text(` ${activity.title}`, 55, 40);
+      pdf.text(` ${activity.title}`, marginLeft + 35, 40);
       
       // Data de entrega com destaque para a data
       pdf.setFont('helvetica', 'bold');
-      pdf.text('Data de entrega:', 20, 48);
+      pdf.text('Data de entrega:', marginLeft, 48);
       pdf.setFont('helvetica', 'normal');
-      pdf.text(` ${formatDate(activity.deadline)}`, 90, 48);
+      pdf.text(` ${formatDate(activity.deadline)}`, marginLeft + 70, 48);
       
-      // Adicionar descrição
+      // Adicionar descrição e imagem lado a lado quando possível
       pdf.setFontSize(11);
-      pdf.setFont('helvetica', 'bold');
-      pdf.text('Descrição:', 20, 60);
-      pdf.setFont('helvetica', 'normal');
       
-      // Função para quebrar texto em linhas
-      const splitText = pdf.splitTextToSize(activity.description, pageWidth - 40);
-      pdf.text(splitText, 20, 68);
+      // Início da área de descrição e imagem
+      let startY = 60;
       
-      let currentY = 68 + (splitText.length * 7); // Espaço para a descrição
-      currentY += 10;
-      
-      // Adicionar imagem principal
       if (activity.image) {
         try {
-          currentY += 20;
-          pdf.setFont('helvetica', 'bold');
-          pdf.text('Imagem principal do pedido:', 20, currentY);
-          pdf.setFont('helvetica', 'normal');
-          currentY += 8;
+          // Verificar o tamanho da descrição para determinar o layout
+          const descriptionLines = pdf.splitTextToSize(activity.description, contentWidth * 0.5); // Metade da largura para descrição
           
-          // Calcular dimensões para a imagem
-          const maxImageWidth = pageWidth - 40; // Margens laterais
-          const maxImageHeight = 80; // Altura máxima para a imagem
+          // Se a descrição for longa (mais de 5 linhas), usamos layout em coluna
+          const isLongDescription = descriptionLines.length > 5;
           
-          // Adicionar a imagem principal
-          pdf.addImage(
-            activity.image, 
-            'JPEG', 
-            20, 
-            currentY,
-            maxImageWidth,
-            maxImageHeight,
-            undefined,
-            'FAST'
-          );
-          
-          currentY += maxImageHeight + 10;
-          
-          // Adicionar imagens adicionais se houver (máximo 2 para não sobrecarregar o PDF)
-          if (activity.additionalImages && activity.additionalImages.length > 0) {
+          if (isLongDescription) {
+            // LAYOUT PARA DESCRIÇÃO LONGA: Imagem à direita, texto à esquerda
+            
+            // Adicionamos a descrição à esquerda
             pdf.setFont('helvetica', 'bold');
-            pdf.text('Imagens adicionais:', 20, currentY);
+            pdf.text('Descrição:', marginLeft, startY);
+            pdf.setFont('helvetica', 'normal');
+            
+            // Texto da descrição ocupa 60% da largura
+            const textWidth = contentWidth * 0.58;
+            const splitText = pdf.splitTextToSize(activity.description, textWidth);
+            pdf.text(splitText, marginLeft, startY + 8);
+            
+            // Imagem à direita
+            const imageX = marginLeft + textWidth + 5; // 5mm de espaço entre texto e imagem
+            const imageWidth = contentWidth * 0.38; // Imagem ocupa 38% da largura
+            const imageHeight = 80; // Altura fixa para a imagem
+            
+            pdf.setFont('helvetica', 'bold');
+            pdf.text('Imagem:', imageX, startY);
+            
+            // Adicionar a imagem com proporção preservada
+            pdf.addImage(
+              activity.image, 
+              'JPEG', 
+              imageX, 
+              startY + 8,
+              imageWidth,
+              imageHeight,
+              undefined,
+              'FAST'
+            );
+            
+            // Atualizar a posição Y após o maior elemento (texto ou imagem)
+            const textEndY = startY + 8 + (splitText.length * 5);
+            const imageEndY = startY + 8 + imageHeight;
+            let currentY = Math.max(textEndY, imageEndY) + 15;
+            
+            // Adicionar imagens adicionais se houver
+            if (activity.additionalImages && activity.additionalImages.length > 0) {
+              pdf.setFont('helvetica', 'bold');
+              pdf.text('Imagens adicionais:', marginLeft, currentY);
+              pdf.setFont('helvetica', 'normal');
+              currentY += 8;
+              
+              // Limitar a 2 imagens adicionais
+              const maxAdditionalImages = Math.min(2, activity.additionalImages.length);
+              const additionalImagesWidth = (contentWidth - 10) / maxAdditionalImages;
+              
+              for (let i = 0; i < maxAdditionalImages; i++) {
+                try {
+                  pdf.addImage(
+                    activity.additionalImages[i],
+                    'JPEG',
+                    marginLeft + (i * (additionalImagesWidth + 5)),
+                    currentY,
+                    additionalImagesWidth,
+                    60,
+                    undefined,
+                    'FAST'
+                  );
+                } catch (additionalImgError) {
+                  console.error(`Erro ao adicionar imagem adicional ${i+1}:`, additionalImgError);
+                }
+              }
+              
+              // Se houver mais imagens, informar
+              if (activity.additionalImages.length > maxAdditionalImages) {
+                currentY += 70;
+                pdf.text(`* Há mais ${activity.additionalImages.length - maxAdditionalImages} imagens disponíveis no sistema`, marginLeft, currentY);
+              }
+              
+              currentY += 80;
+            }
+          } else {
+            // LAYOUT PARA DESCRIÇÃO CURTA: Descrição primeiro, imagem abaixo
+            
+            pdf.setFont('helvetica', 'bold');
+            pdf.text('Descrição:', marginLeft, startY);
+            pdf.setFont('helvetica', 'normal');
+            
+            // Com descrição curta, texto ocupa toda a largura
+            const splitText = pdf.splitTextToSize(activity.description, contentWidth);
+            pdf.text(splitText, marginLeft, startY + 8);
+            
+            let currentY = startY + 8 + (splitText.length * 5) + 15;
+            
+            // Adicionar imagem principal abaixo do texto
+            pdf.setFont('helvetica', 'bold');
+            pdf.text('Imagem principal do pedido:', marginLeft, currentY);
             pdf.setFont('helvetica', 'normal');
             currentY += 8;
             
-            // Limitar a 2 imagens adicionais para não tornar o PDF muito grande
-            const maxAdditionalImages = Math.min(2, activity.additionalImages.length);
-            const additionalImagesWidth = (maxImageWidth - 10) / maxAdditionalImages; // Largura com espaçamento
+            // Dimensões para a imagem - deixamos maior quando está abaixo do texto
+            const maxImageWidth = contentWidth;
+            const maxImageHeight = 100;
             
-            for (let i = 0; i < maxAdditionalImages; i++) {
-              try {
-                pdf.addImage(
-                  activity.additionalImages[i],
-                  'JPEG',
-                  20 + (i * (additionalImagesWidth + 5)),
-                  currentY,
-                  additionalImagesWidth,
-                  60,
-                  undefined,
-                  'FAST'
-                );
-              } catch (additionalImgError) {
-                console.error(`Erro ao adicionar imagem adicional ${i+1}:`, additionalImgError);
+            pdf.addImage(
+              activity.image, 
+              'JPEG', 
+              marginLeft, 
+              currentY,
+              maxImageWidth,
+              maxImageHeight,
+              undefined,
+              'FAST'
+            );
+            
+            currentY += maxImageHeight + 10;
+            
+            // Adicionar imagens adicionais se houver
+            if (activity.additionalImages && activity.additionalImages.length > 0) {
+              pdf.setFont('helvetica', 'bold');
+              pdf.text('Imagens adicionais:', marginLeft, currentY);
+              pdf.setFont('helvetica', 'normal');
+              currentY += 8;
+              
+              // Limitar a 3 imagens adicionais quando estão abaixo do texto
+              const maxAdditionalImages = Math.min(3, activity.additionalImages.length);
+              const additionalImagesWidth = (contentWidth - 10) / maxAdditionalImages;
+              
+              for (let i = 0; i < maxAdditionalImages; i++) {
+                try {
+                  pdf.addImage(
+                    activity.additionalImages[i],
+                    'JPEG',
+                    marginLeft + (i * (additionalImagesWidth + 5)),
+                    currentY,
+                    additionalImagesWidth,
+                    60,
+                    undefined,
+                    'FAST'
+                  );
+                } catch (additionalImgError) {
+                  console.error(`Erro ao adicionar imagem adicional ${i+1}:`, additionalImgError);
+                }
               }
+              
+              // Se houver mais imagens, informar
+              if (activity.additionalImages.length > maxAdditionalImages) {
+                currentY += 70;
+                pdf.text(`* Há mais ${activity.additionalImages.length - maxAdditionalImages} imagens disponíveis no sistema`, marginLeft, currentY);
+              }
+              
+              currentY += 80;
             }
-            
-            // Se houver mais imagens, informar
-            if (activity.additionalImages.length > maxAdditionalImages) {
-              currentY += 70;
-              pdf.text(`* Há mais ${activity.additionalImages.length - maxAdditionalImages} imagens disponíveis no sistema`, 20, currentY);
-            }
-            
-            currentY += 80;
           }
         } catch (imgError) {
           console.error('Erro ao adicionar imagem principal:', imgError);
-          currentY += 5;
-          pdf.text('* Não foi possível carregar a imagem do pedido', 20, currentY);
+          
+          // Apenas descrição se houver erro na imagem
+          pdf.setFont('helvetica', 'bold');
+          pdf.text('Descrição:', marginLeft, startY);
+          pdf.setFont('helvetica', 'normal');
+          
+          const splitText = pdf.splitTextToSize(activity.description, contentWidth);
+          pdf.text(splitText, marginLeft, startY + 8);
+          
+          let currentY = startY + 8 + (splitText.length * 5) + 10;
+          pdf.text('* Não foi possível carregar a imagem do pedido', marginLeft, currentY);
           currentY += 10;
         }
+      } else {
+        // Sem imagem, apenas descrição
+        pdf.setFont('helvetica', 'bold');
+        pdf.text('Descrição:', marginLeft, startY);
+        pdf.setFont('helvetica', 'normal');
+        
+        const splitText = pdf.splitTextToSize(activity.description, contentWidth);
+        pdf.text(splitText, marginLeft, startY + 8);
+        
+        startY = startY + 8 + (splitText.length * 5) + 15;
+      }
+      
+      // Informações adicionais
+      let infoY = Math.min(pageHeight - 50, startY + 110); // Garantir que não ultrapasse a página
+      
+      // Informações de quantidade e outras métricas
+      pdf.setFontSize(10);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text(`Quantidade: ${activity.quantity} unidade(s)`, marginLeft, infoY);
+      if (activity.clientName) {
+        pdf.text(`Cliente: ${activity.clientName}`, marginLeft + 80, infoY);
       }
       
       // Informações de retorno, se o pedido foi retornado
       if ((activity as any).wasReturned) {
-        currentY += 10;
+        infoY += 10;
         pdf.setFillColor(255, 240, 240); // Fundo levemente vermelho
-        pdf.rect(20, currentY - 5, pageWidth - 40, 25, 'F');
+        pdf.rect(marginLeft, infoY - 5, contentWidth, 25, 'F');
         
         pdf.setTextColor(180, 0, 0); // Texto vermelho
         pdf.setFontSize(11);
-        pdf.text('PEDIDO RETORNADO', 25, currentY);
-        pdf.text(`Retornado por: ${(activity as any).returnedBy || 'Não informado'}`, 25, currentY + 8);
+        pdf.text('PEDIDO RETORNADO', marginLeft + 5, infoY);
+        pdf.text(`Retornado por: ${(activity as any).returnedBy || 'Não informado'}`, marginLeft + 5, infoY + 8);
         
         if ((activity as any).returnNotes) {
-          pdf.text(`Motivo: ${(activity as any).returnNotes}`, 25, currentY + 16);
+          pdf.text(`Motivo: ${(activity as any).returnNotes}`, marginLeft + 5, infoY + 16);
         }
         
         pdf.setTextColor(0, 0, 0); // Restaurar cor do texto
-        currentY += 30;
       }
       
       // Adicionar rodapé
       pdf.setFontSize(8);
       pdf.setTextColor(100, 100, 100);
       const today = new Date().toLocaleDateString('pt-BR');
-      pdf.text(`Gerado em ${today} | Stamp Blue 2025 | Desenvolvido por Iuri`, pageWidth / 2, pageHeight - 10, { align: 'center' });
+      pdf.text(`Gerado em ${today} | Stamp Blue 2025 | Desenvolvido por Iuri`, pageWidth / 2, pageHeight - 5, { align: 'center' });
       
       // Salvar o PDF
       pdf.save(`${activity.title || 'pedido'}.pdf`);
