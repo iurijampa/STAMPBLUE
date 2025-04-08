@@ -2,7 +2,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
@@ -110,49 +109,51 @@ export default function AuthPage() {
   };
   
   return (
-    <div className="flex flex-col md:flex-row min-h-screen">
-      {/* Hero Section - Oculto em telas muito pequenas */}
-      <div className="hidden md:flex md:w-1/2 bg-gradient-to-br from-primary-600 to-primary-800 items-center justify-center">
-        <div className="max-w-md text-white space-y-4 px-4">
-          <h1 className="text-3xl md:text-4xl font-bold tracking-tight">
-            Sistema de Gerenciamento de Produção
-          </h1>
-          <p className="text-base md:text-lg text-primary-50">
-            Bem-vindo ao sistema de gerenciamento de fluxo de trabalho para fábrica de camisas. 
-            Este sistema permite o controle completo do processo de produção entre diferentes setores.
-          </p>
-          <div className="bg-white/10 p-4 rounded-lg backdrop-blur-sm">
-            <h3 className="font-semibold text-primary-50 mb-2">Funcionalidades principais:</h3>
-            <ul className="space-y-2">
-              <li className="flex items-center gap-2">
-                <span className="bg-primary-400 rounded-full p-1 w-6 h-6 flex items-center justify-center text-xs">✓</span>
-                <span>Rastreamento sequencial de tarefas</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <span className="bg-primary-400 rounded-full p-1 w-6 h-6 flex items-center justify-center text-xs">✓</span>
-                <span>Controle de acessos baseado em funções</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <span className="bg-primary-400 rounded-full p-1 w-6 h-6 flex items-center justify-center text-xs">✓</span>
-                <span>Notificações de mudanças de status</span>
-              </li>
-            </ul>
+    <div className="grid grid-cols-1 md:grid-cols-2 min-h-screen">
+      {/* Hero Section - Visível apenas em desktop */}
+      <div className="hidden md:block bg-gradient-to-br from-primary-600 to-primary-800">
+        <div className="flex items-center justify-center h-full">
+          <div className="max-w-md text-white space-y-4 px-6">
+            <h1 className="text-3xl md:text-4xl font-bold tracking-tight">
+              Sistema de Gerenciamento de Produção
+            </h1>
+            <p className="text-base md:text-lg text-primary-50">
+              Bem-vindo ao sistema de gerenciamento de fluxo de trabalho para fábrica de camisas. 
+              Este sistema permite o controle completo do processo de produção entre diferentes setores.
+            </p>
+            <div className="bg-white/10 p-4 rounded-lg backdrop-blur-sm">
+              <h3 className="font-semibold text-primary-50 mb-2">Funcionalidades principais:</h3>
+              <ul className="space-y-2">
+                <li className="flex items-center gap-2">
+                  <span className="bg-primary-400 rounded-full p-1 w-6 h-6 flex items-center justify-center text-xs">✓</span>
+                  <span>Rastreamento sequencial de tarefas</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="bg-primary-400 rounded-full p-1 w-6 h-6 flex items-center justify-center text-xs">✓</span>
+                  <span>Controle de acessos baseado em funções</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="bg-primary-400 rounded-full p-1 w-6 h-6 flex items-center justify-center text-xs">✓</span>
+                  <span>Notificações de mudanças de status</span>
+                </li>
+              </ul>
+            </div>
           </div>
         </div>
       </div>
       
-      {/* Form Section - Ocupa a tela toda em mobile e metade em desktop */}
-      <div className="flex w-full md:w-1/2 bg-background items-center justify-center min-h-screen py-8">
-        <div className="w-full max-w-md px-4 flex flex-col items-center justify-center">
-          <div className="text-center mb-6 md:mb-8 flex flex-col items-center">
-            <div className="mb-4">
+      {/* Form Section */}
+      <div className="flex items-center justify-center bg-background">
+        <div className="w-full max-w-md px-6 py-12">
+          <div className="text-center mb-8">
+            <div className="mx-auto mb-4 flex justify-center">
               <Logo size="xl" className="text-primary-600" />
             </div>
             <h2 className="text-2xl md:text-3xl font-bold">Acesso ao Sistema</h2>
             <p className="text-muted-foreground mt-2">Faça login para acessar o painel</p>
           </div>
 
-          <Card className="w-full">
+          <Card>
             <CardHeader>
               <CardTitle>Login</CardTitle>
               <CardDescription>
@@ -191,7 +192,7 @@ export default function AuthPage() {
             </CardContent>
           </Card>
           
-          <div className="mt-6">
+          <div className="mt-8 text-center">
             <FooterCredits />
           </div>
         </div>
