@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useLocation, Link } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
-import { Bell, Menu, LogOut, ChevronDown } from "lucide-react";
+import { Bell, Menu, LogOut, ChevronDown, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { 
   DropdownMenu, 
@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -23,17 +24,32 @@ interface LayoutProps {
 }
 
 export default function Layout({ children, title }: LayoutProps) {
-  const { user, logoutMutation } = useAuth();
+  const { user, logout } = useAuth();
   const [location] = useLocation();
   const [open, setOpen] = useState(false);
 
-  // Get unread notifications count
-  const { data: notifications = [] } = useQuery({
+  // Get notifications
+  const { 
+    data: notifications = [],
+    refetch: refetchNotifications
+  } = useQuery({
     queryKey: ["/api/notifications"],
     enabled: !!user
   });
 
   const unreadCount = notifications.filter((n: any) => !n.read).length;
+
+  // Função para marcar notificação como lida
+  const markAsRead = async (notificationId: number) => {
+    if (!user) return;
+    
+    try {
+      await apiRequest("PUT", `/api/notifications/${notificationId}/read`);
+      refetchNotifications();
+    } catch (error) {
+      console.error("Erro ao marcar notificação como lida:", error);
+    }
+  };
 
   const isAdmin = user?.role === "admin";
   
@@ -221,9 +237,12 @@ export default function Layout({ children, title }: LayoutProps) {
                 ) : (
                   <div className="max-h-80 overflow-y-auto">
                     {notifications.map((notification: any) => (
-                      <DropdownMenuItem key={notification.id} className="cursor-default">
+                      <DropdownMenuItem 
+                        key={notification.id} 
+                        className="flex justify-between items-start cursor-default px-3 py-2 hover:bg-neutral-100"
+                      >
                         <div className={cn(
-                          "py-2 px-1 w-full",
+                          "w-full",
                           !notification.read && "font-medium"
                         )}>
                           <div className="mb-1">{notification.message}</div>
@@ -231,6 +250,20 @@ export default function Layout({ children, title }: LayoutProps) {
                             {new Date(notification.createdAt).toLocaleString('pt-BR')}
                           </div>
                         </div>
+                        {!notification.read && (
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="ml-2 h-7 w-7 p-0 text-green-600 hover:text-green-700 hover:bg-green-100"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              markAsRead(notification.id);
+                            }}
+                          >
+                            <CheckCircle2 className="h-4 w-4" />
+                            <span className="sr-only">Marcar como lido</span>
+                          </Button>
+                        )}
                       </DropdownMenuItem>
                     ))}
                   </div>
