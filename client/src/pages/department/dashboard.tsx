@@ -161,43 +161,53 @@ export default function DepartmentDashboard() {
                       className="border rounded-lg p-4 hover:bg-neutral-50 transition-colors"
                     >
                       <div className="flex justify-between items-start">
-                        <div>
-                          <div className="flex items-center gap-2 mb-1">
-                            <Badge 
-                              variant="outline" 
-                              className={cn("text-white", getDeadlineColor(activity.deadline))}
-                            >
-                              {activity.deadline ? formatDate(activity.deadline) : "Sem prazo"}
-                            </Badge>
-                            {activity.clientName && (
-                              <Badge variant="outline">
-                                Cliente: {activity.clientName}
-                              </Badge>
+                        <div className="flex gap-4">
+                          {/* Miniatura da imagem */}
+                          <div className="w-16 h-16 min-w-16 rounded overflow-hidden border bg-neutral-100 flex items-center justify-center">
+                            {activity.image ? (
+                              <img 
+                                src={activity.image} 
+                                alt={`Imagem de ${activity.title}`} 
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <span className="text-xs text-neutral-400">Sem imagem</span>
                             )}
                           </div>
                           
-                          <h3 className="text-lg font-semibold">{activity.title}</h3>
-                          <p className="text-neutral-600 line-clamp-2 my-2">
-                            {activity.description}
-                          </p>
-                          
-                          <div className="flex items-center text-sm text-neutral-500 gap-4 mt-2">
-                            <div className="flex items-center">
-                              <CalendarClock className="h-4 w-4 mr-1" />
-                              <span>Criado: {formatDate(activity.createdAt)}</span>
+                          <div>
+                            <div className="flex items-center gap-2 mb-1">
+                              <Badge 
+                                variant="outline" 
+                                className={cn("text-white", getDeadlineColor(activity.deadline))}
+                              >
+                                {activity.deadline ? formatDate(activity.deadline) : "Sem prazo"}
+                              </Badge>
                             </div>
                             
-                            {activity.deadline && (
+                            <h3 className="text-lg font-semibold">{activity.title}</h3>
+                            <p className="text-neutral-600 line-clamp-2 my-2">
+                              {activity.description}
+                            </p>
+                            
+                            <div className="flex items-center text-sm text-neutral-500 gap-4 mt-2">
                               <div className="flex items-center">
-                                <Clock className="h-4 w-4 mr-1" />
-                                <span>
-                                  Entrega em {formatDistanceToNow(new Date(activity.deadline), {
-                                    addSuffix: true, 
-                                    locale: ptBR
-                                  })}
-                                </span>
+                                <CalendarClock className="h-4 w-4 mr-1" />
+                                <span>Criado: {formatDate(activity.createdAt)}</span>
                               </div>
-                            )}
+                              
+                              {activity.deadline && (
+                                <div className="flex items-center">
+                                  <Clock className="h-4 w-4 mr-1" />
+                                  <span>
+                                    Entrega em {formatDistanceToNow(new Date(activity.deadline), {
+                                      addSuffix: true, 
+                                      locale: ptBR
+                                    })}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
                         
