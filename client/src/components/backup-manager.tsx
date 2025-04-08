@@ -11,9 +11,10 @@ import {
   TableRow 
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Download, Save } from "lucide-react";
+import { Loader2, Download, Save, ChevronDown, ChevronUp } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getQueryFn, apiRequest, queryClient } from "@/lib/queryClient";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 type Backup = {
   date: string;
@@ -31,6 +32,7 @@ type BackupResponse = {
 export default function BackupManager() {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<string>("users");
+  const [isOpen, setIsOpen] = useState(false);
   
   // Obter a lista de backups
   const { data, isLoading, isError } = useQuery<BackupResponse>({
@@ -121,90 +123,109 @@ export default function BackupManager() {
   const tables = Object.keys(data?.backups || {});
   
   return (
-    <Card className="w-full">
-      <CardHeader>
-        <CardTitle>Sistema de Backup</CardTitle>
-        <CardDescription>O sistema realiza backups automáticos a cada hora</CardDescription>
-      </CardHeader>
-      <CardContent>
-        {tables.length === 0 ? (
-          <div className="bg-muted p-4 rounded-md">
-            <p>Nenhum backup encontrado. Clique em "Criar backup manual" para gerar seu primeiro backup.</p>
+    <Collapsible
+      open={isOpen}
+      onOpenChange={setIsOpen}
+      className="w-full"
+    >
+      <Card className="w-full">
+        <CardHeader className="pb-3">
+          <div className="flex justify-between items-center">
+            <div>
+              <CardTitle>Sistema de Backup</CardTitle>
+              <CardDescription>O sistema realiza backups automáticos a cada hora</CardDescription>
+            </div>
+            <CollapsibleTrigger asChild>
+              <Button variant="ghost" size="sm" className="w-9 p-0">
+                {isOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </Button>
+            </CollapsibleTrigger>
           </div>
-        ) : (
-          <>
-            <div className="mb-4">
-              <Tabs defaultValue={activeTab} onValueChange={setActiveTab}>
-                <TabsList className="mb-4">
-                  {tables.map((table) => (
-                    <TabsTrigger key={table} value={table}>
-                      {table.charAt(0).toUpperCase() + table.slice(1)}
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
+        </CardHeader>
+        
+        <CollapsibleContent>
+          <CardContent>
+            {tables.length === 0 ? (
+              <div className="bg-muted p-4 rounded-md">
+                <p>Nenhum backup encontrado. Clique em "Criar backup manual" para gerar seu primeiro backup.</p>
+              </div>
+            ) : (
+              <>
+                <div className="mb-4">
+                  <Tabs defaultValue={activeTab} onValueChange={setActiveTab}>
+                    <TabsList className="mb-4">
+                      {tables.map((table) => (
+                        <TabsTrigger key={table} value={table}>
+                          {table.charAt(0).toUpperCase() + table.slice(1)}
+                        </TabsTrigger>
+                      ))}
+                    </TabsList>
+                    
+                    {tables.map((table) => (
+                      <TabsContent key={table} value={table}>
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Data e hora</TableHead>
+                              <TableHead>Arquivo</TableHead>
+                              <TableHead className="w-[100px]">Ações</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {data?.backups[table]?.map((backup, index) => (
+                              <TableRow key={index}>
+                                <TableCell>{backup.date ? formatDate(backup.date) : '-'}</TableCell>
+                                <TableCell className="font-mono text-xs truncate max-w-[200px]">
+                                  {backup.file}
+                                </TableCell>
+                                <TableCell>
+                                  <Button variant="ghost" size="icon">
+                                    <Download className="h-4 w-4" />
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </TabsContent>
+                    ))}
+                  </Tabs>
+                </div>
                 
-                {tables.map((table) => (
-                  <TabsContent key={table} value={table}>
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Data e hora</TableHead>
-                          <TableHead>Arquivo</TableHead>
-                          <TableHead className="w-[100px]">Ações</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {data?.backups[table]?.map((backup, index) => (
-                          <TableRow key={index}>
-                            <TableCell>{formatDate(backup.date)}</TableCell>
-                            <TableCell className="font-mono text-xs truncate max-w-[200px]">
-                              {backup.file}
-                            </TableCell>
-                            <TableCell>
-                              <Button variant="ghost" size="icon">
-                                <Download className="h-4 w-4" />
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </TabsContent>
-                ))}
-              </Tabs>
-            </div>
-            
-            <div className="text-sm text-muted-foreground mt-4">
-              <p>O sistema mantém até 30 backups por tabela, removendo automaticamente os mais antigos.</p>
-            </div>
-          </>
-        )}
-      </CardContent>
-      <CardFooter className="flex justify-between">
-        <div className="text-sm text-muted-foreground">
-          Último backup: {
-            tables.length > 0 && data?.backups[tables[0]]?.length > 0
-              ? formatDate(data?.backups[tables[0]][0].date)
-              : "Nenhum backup realizado"
-          }
-        </div>
-        <Button 
-          onClick={() => createBackupMutation.mutate()}
-          disabled={createBackupMutation.isPending}
-        >
-          {createBackupMutation.isPending ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Criando backup...
-            </>
-          ) : (
-            <>
-              <Save className="mr-2 h-4 w-4" />
-              Criar backup manual
-            </>
-          )}
-        </Button>
-      </CardFooter>
-    </Card>
+                <div className="text-sm text-muted-foreground mt-4">
+                  <p>O sistema mantém até 30 backups por tabela, removendo automaticamente os mais antigos.</p>
+                </div>
+              </>
+            )}
+          </CardContent>
+        </CollapsibleContent>
+        
+        <CardFooter className="flex justify-between">
+          <div className="text-sm text-muted-foreground">
+            Último backup: {
+              tables.length > 0 && data?.backups && data.backups[tables[0]] && data.backups[tables[0]].length > 0 && data.backups[tables[0]][0].date
+                ? formatDate(data.backups[tables[0]][0].date)
+                : "Nenhum backup realizado"
+            }
+          </div>
+          <Button 
+            onClick={() => createBackupMutation.mutate()}
+            disabled={createBackupMutation.isPending}
+          >
+            {createBackupMutation.isPending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Criando backup...
+              </>
+            ) : (
+              <>
+                <Save className="mr-2 h-4 w-4" />
+                Criar backup manual
+              </>
+            )}
+          </Button>
+        </CardFooter>
+      </Card>
+    </Collapsible>
   );
 }

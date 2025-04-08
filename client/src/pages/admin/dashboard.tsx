@@ -452,15 +452,8 @@ export default function AdminDashboard() {
             )}
           </div>
 
-          {/* Sistema de backup */}
-          <div className="bg-white rounded-lg p-4 md:p-6 border border-border mt-6">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold flex items-center">
-                <Database className="mr-2 h-5 w-5 text-primary" />
-                Sistema de Backup
-              </h2>
-            </div>
-            
+          {/* Sistema de backup (expansível) */}
+          <div className="mt-6">
             <BackupManager />
           </div>
         </div>
