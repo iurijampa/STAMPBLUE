@@ -64,42 +64,17 @@ export default function ViewActivityModal({ isOpen, onClose, activity }: ViewAct
             <DialogTitle className="text-xl">Detalhes da Atividade</DialogTitle>
           </DialogHeader>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4">
-            {/* Informações básicas */}
-            <div className="flex flex-col space-y-4">
-              <div>
-                <h3 className="text-lg font-semibold mb-1">{activity.title}</h3>
-                <div className="flex items-center gap-2 mb-3">
-                  <Badge className={cn("text-white", getStatusColor(activity.status))}>
-                    {translateStatus(activity.status)}
-                  </Badge>
-                  <span className="text-sm text-neutral-500">
-                    Data de entrega: {formatDate(activity.deadline)}
-                  </span>
-                </div>
-                <p className="text-neutral-700 whitespace-pre-line">{activity.description}</p>
-              </div>
-              
-              <div>
-                <h4 className="font-medium text-neutral-900">Detalhes adicionais</h4>
-                <dl className="grid grid-cols-2 gap-x-4 gap-y-2 mt-2">
-                  <dt className="text-neutral-500 text-sm">Cliente:</dt>
-                  <dd>{activity.clientName || "Não especificado"}</dd>
-                  
-                  <dt className="text-neutral-500 text-sm">Prioridade:</dt>
-                  <dd>{activity.priority || "Normal"}</dd>
-                  
-                  <dt className="text-neutral-500 text-sm">Quantidade:</dt>
-                  <dd>{activity.quantity}</dd>
-                  
-                  <dt className="text-neutral-500 text-sm">Notas:</dt>
-                  <dd className="col-span-2 whitespace-pre-line">{activity.notes || "Nenhuma nota"}</dd>
-                </dl>
+          <div className="flex flex-col gap-6 py-4">
+            {/* Título e Data de Entrega */}
+            <div>
+              <h3 className="text-xl font-semibold mb-2">{activity.title}</h3>
+              <div className="text-sm text-neutral-700 mb-2">
+                <span className="font-medium">Data de entrega:</span> {formatDate(activity.deadline)}
               </div>
             </div>
             
             {/* Imagem com controles de zoom */}
-            <div className="flex flex-col space-y-2">
+            <div className="flex flex-col space-y-3">
               <div className="relative overflow-hidden border rounded-md h-60 flex items-center justify-center bg-neutral-100">
                 {activity.image ? (
                   <>
@@ -158,6 +133,12 @@ export default function ViewActivityModal({ isOpen, onClose, activity }: ViewAct
                   </Button>
                 </div>
               )}
+            </div>
+            
+            {/* Descrição */}
+            <div>
+              <h4 className="font-medium text-base mb-2">Descrição:</h4>
+              <p className="text-neutral-700 whitespace-pre-line">{activity.description}</p>
             </div>
           </div>
         </DialogContent>
