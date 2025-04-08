@@ -44,17 +44,22 @@ export const activities = pgTable("activities", {
   status: activityStatusEnum("status").notNull().default('in_progress'),
 });
 
-export const insertActivitySchema = createInsertSchema(activities).pick({
-  title: true,
-  description: true,
-  image: true,
-  quantity: true,
-  clientName: true,
-  priority: true,
-  deadline: true,
-  notes: true,
-  createdBy: true,
-});
+// Criamos o esquema base e depois sobrescrevemos o deadline para aceitar string ISO
+export const insertActivitySchema = createInsertSchema(activities)
+  .pick({
+    title: true,
+    description: true,
+    image: true,
+    quantity: true,
+    clientName: true,
+    priority: true,
+    deadline: true,
+    notes: true,
+    createdBy: true,
+  })
+  .extend({
+    deadline: z.string().nullable().transform(val => val ? new Date(val) : null),
+  });
 
 // Activity progress tracking
 export const activityProgress = pgTable("activity_progress", {

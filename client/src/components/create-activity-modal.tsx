@@ -82,6 +82,7 @@ export default function CreateActivityModal({ isOpen, onClose, onSuccess }: Crea
         return;
       }
       
+      // Convertendo a data para string ISO para o backend
       const formData = {
         title,
         description,
@@ -89,7 +90,7 @@ export default function CreateActivityModal({ isOpen, onClose, onSuccess }: Crea
         clientName,
         image: imageData,
         priority,
-        deadline,
+        deadline: deadline ? deadline.toISOString() : null,
         workflowSteps: selectedDepartments.map(department => ({
           department,
           order: selectedDepartments.indexOf(department) + 1,
