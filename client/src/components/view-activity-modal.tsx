@@ -163,36 +163,41 @@ export default function ViewActivityModal({ isOpen, onClose, activity }: ViewAct
       pdf.setDrawColor(200, 200, 200);
       pdf.line(20, 30, pageWidth - 20, 30);
       
-      // Adicionar informações do pedido
+      // Adicionar informações do pedido - com destaque para número e data
       pdf.setFontSize(12);
-      pdf.text(`Pedido: ${activity.title}`, 20, 40);
-      pdf.text(`Data de entrega: ${formatDate(activity.deadline)}`, 20, 48);
+      
+      // Título do pedido com número em negrito
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('Pedido:', 20, 40);
+      pdf.setFont('helvetica', 'normal');
+      pdf.text(` ${activity.title}`, 55, 40);
+      
+      // Data de entrega com destaque para a data
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('Data de entrega:', 20, 48);
+      pdf.setFont('helvetica', 'normal');
+      pdf.text(` ${formatDate(activity.deadline)}`, 90, 48);
       
       // Adicionar descrição
       pdf.setFontSize(11);
+      pdf.setFont('helvetica', 'bold');
       pdf.text('Descrição:', 20, 60);
+      pdf.setFont('helvetica', 'normal');
       
       // Função para quebrar texto em linhas
       const splitText = pdf.splitTextToSize(activity.description, pageWidth - 40);
       pdf.text(splitText, 20, 68);
       
       let currentY = 68 + (splitText.length * 7); // Espaço para a descrição
-      
-      // Adicionar status atual
       currentY += 10;
-      pdf.setFillColor(240, 240, 240);
-      pdf.rect(20, currentY - 5, pageWidth - 40, 10, 'F');
-      pdf.setFontSize(11);
-      let statusText = 'Pendente';
-      if (activity.status === 'in_progress') statusText = 'Em andamento';
-      if (activity.status === 'completed') statusText = 'Concluído';
-      pdf.text(`Status atual: ${statusText}`, 20, currentY);
       
       // Adicionar imagem principal
       if (activity.image) {
         try {
           currentY += 20;
+          pdf.setFont('helvetica', 'bold');
           pdf.text('Imagem principal do pedido:', 20, currentY);
+          pdf.setFont('helvetica', 'normal');
           currentY += 8;
           
           // Calcular dimensões para a imagem
@@ -215,7 +220,9 @@ export default function ViewActivityModal({ isOpen, onClose, activity }: ViewAct
           
           // Adicionar imagens adicionais se houver (máximo 2 para não sobrecarregar o PDF)
           if (activity.additionalImages && activity.additionalImages.length > 0) {
+            pdf.setFont('helvetica', 'bold');
             pdf.text('Imagens adicionais:', 20, currentY);
+            pdf.setFont('helvetica', 'normal');
             currentY += 8;
             
             // Limitar a 2 imagens adicionais para não tornar o PDF muito grande
