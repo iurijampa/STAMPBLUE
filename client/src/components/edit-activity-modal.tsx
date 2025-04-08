@@ -8,7 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
 import { FileInput } from "@/components/ui/file-input";
 import { apiRequest } from "@/lib/queryClient";
-import { Activity, DEPARTMENTS } from "@shared/schema";
+import { DEPARTMENTS, Activity } from "@shared/schema";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from "date-fns";
@@ -27,7 +27,6 @@ export default function EditActivityModal({ isOpen, onClose, onSuccess, activity
   const [isLoading, setIsLoading] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [quantity, setQuantity] = useState("");
   const [clientName, setClientName] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imageData, setImageData] = useState<string | null>(null);
@@ -40,7 +39,6 @@ export default function EditActivityModal({ isOpen, onClose, onSuccess, activity
     if (activity) {
       setTitle(activity.title);
       setDescription(activity.description || "");
-      setQuantity(activity.quantity.toString());
       setClientName(activity.clientName || "");
       setPriority(activity.priority || "normal");
       setImageData(activity.image || null);
@@ -55,16 +53,6 @@ export default function EditActivityModal({ isOpen, onClose, onSuccess, activity
       setSelectedDepartments([...DEPARTMENTS]);
     }
   }, [activity]);
-
-  const handleAddDepartment = (department: string) => {
-    if (!selectedDepartments.includes(department)) {
-      setSelectedDepartments([...selectedDepartments, department]);
-    }
-  };
-
-  const handleRemoveDepartment = (department: string) => {
-    setSelectedDepartments(selectedDepartments.filter(dep => dep !== department));
-  };
 
   const fileToBase64 = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -118,7 +106,7 @@ export default function EditActivityModal({ isOpen, onClose, onSuccess, activity
       const formData = {
         title,
         description,
-        quantity: parseInt(quantity) || 0,
+        quantity: 1, // Valor padrão fixo
         clientName,
         image: finalImageData,
         priority,
@@ -187,27 +175,14 @@ export default function EditActivityModal({ isOpen, onClose, onSuccess, activity
             />
           </div>
           
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="quantity">Quantidade</Label>
-              <Input
-                id="quantity"
-                type="number"
-                value={quantity}
-                onChange={(e) => setQuantity(e.target.value)}
-                required
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="clientName">Cliente</Label>
-              <Input
-                id="clientName"
-                value={clientName}
-                onChange={(e) => setClientName(e.target.value)}
-                required
-              />
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="clientName">Cliente</Label>
+            <Input
+              id="clientName"
+              value={clientName}
+              onChange={(e) => setClientName(e.target.value)}
+              required
+            />
           </div>
           
           <div className="space-y-2">

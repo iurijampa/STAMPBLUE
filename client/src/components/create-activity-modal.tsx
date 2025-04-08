@@ -26,7 +26,6 @@ export default function CreateActivityModal({ isOpen, onClose, onSuccess }: Crea
   const [isLoading, setIsLoading] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [quantity, setQuantity] = useState("");
   const [clientName, setClientName] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [priority, setPriority] = useState<string>("normal");
@@ -86,7 +85,7 @@ export default function CreateActivityModal({ isOpen, onClose, onSuccess }: Crea
       const formData = {
         title,
         description,
-        quantity: parseInt(quantity) || 0,
+        quantity: 1, // Valor padrão já que não usamos mais a quantidade
         clientName,
         image: imageData,
         priority,
@@ -111,7 +110,6 @@ export default function CreateActivityModal({ isOpen, onClose, onSuccess }: Crea
       // Resetar formulário
       setTitle("");
       setDescription("");
-      setQuantity("");
       setClientName("");
       setImageFile(null);
       setPriority("normal");
@@ -166,27 +164,14 @@ export default function CreateActivityModal({ isOpen, onClose, onSuccess }: Crea
             />
           </div>
           
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="quantity">Quantidade</Label>
-              <Input
-                id="quantity"
-                type="number"
-                value={quantity}
-                onChange={(e) => setQuantity(e.target.value)}
-                required
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="clientName">Cliente</Label>
-              <Input
-                id="clientName"
-                value={clientName}
-                onChange={(e) => setClientName(e.target.value)}
-                required
-              />
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="clientName">Cliente</Label>
+            <Input
+              id="clientName"
+              value={clientName}
+              onChange={(e) => setClientName(e.target.value)}
+              required
+            />
           </div>
           
           <div className="space-y-2">
