@@ -1,79 +1,100 @@
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { useState } from "react";
-import { apiRequest } from "@/lib/queryClient";
+import { useEffect, useState } from "react";
+import { useLocation } from "wouter";
+import { User } from "@shared/schema";
+import { Loader2 } from "lucide-react";
 
 export default function TestPage() {
   const { toast } = useToast();
-  const [loading, setLoading] = useState(false);
-  const [registered, setRegistered] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [, navigate] = useLocation();
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const response = await fetch('/api/user', {
+          credentials: 'include'
+        });
+        
+        if (response.status === 401) {
+          navigate("/auth");
+          return;
+        }
+        
+        if (response.ok) {
+          const userData = await response.json();
+          setUser(userData);
+        } else {
+          navigate("/auth");
+        }
+      } catch (err) {
+        console.error("Erro ao verificar autenticação:", err);
+        navigate("/auth");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    checkAuth();
+  }, [navigate]);
   
-  const createTestAdmin = async () => {
-    setLoading(true);
+  const handleLogout = async () => {
     try {
-      const response = await apiRequest("POST", "/api/register", {
-        username: "admin",
-        password: "admin123",
-        role: "admin",
-        name: "Administrador"
+      const response = await fetch('/api/logout', {
+        method: 'POST',
+        credentials: 'include',
       });
       
       if (response.ok) {
         toast({
-          title: "Sucesso",
-          description: "Usuário administrador criado com sucesso!",
+          title: "Logout realizado com sucesso",
         });
-        setRegistered(true);
+        navigate("/auth");
       } else {
-        const data = await response.json();
-        toast({
-          title: "Erro",
-          description: data.message || "Erro ao criar usuário",
-          variant: "destructive",
-        });
+        throw new Error('Falha ao fazer logout');
       }
     } catch (error) {
+      console.error("Erro ao fazer logout:", error);
       toast({
-        title: "Erro",
-        description: "Falha ao se comunicar com o servidor",
+        title: "Falha no logout",
+        description: error instanceof Error ? error.message : "Erro desconhecido",
         variant: "destructive",
       });
-    } finally {
-      setLoading(false);
     }
   };
 
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin mr-2" />
+        <p>Carregando...</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 to-neutral-100">
-      <div className="bg-white p-8 rounded-lg shadow-md max-w-md w-full">
-        <h1 className="text-2xl font-bold text-center mb-6">Sistema de Gerenciamento de Produção</h1>
-        <p className="text-center text-gray-600 mb-6">
-          Bem-vindo ao sistema de gerenciamento de fluxo de trabalho para fábrica de camisas. 
-          Este sistema permite o controle completo do processo de produção entre diferentes setores.
-        </p>
-        
-        {!registered ? (
-          <div className="text-center">
-            <Button 
-              onClick={createTestAdmin} 
-              disabled={loading}
-              className="w-full mb-4"
-            >
-              {loading ? "Criando..." : "Criar Usuário Administrador"}
+    <div className="min-h-screen p-8">
+      <div className="max-w-5xl mx-auto bg-white rounded-lg shadow-md p-6">
+        <div className="flex justify-between items-center mb-8">
+          <h1 className="text-3xl font-bold">Página de Teste</h1>
+          <div className="flex items-center gap-4">
+            <p className="text-sm text-muted-foreground">
+              Usuário: <span className="font-semibold">{user?.name || user?.username}</span>
+            </p>
+            <Button variant="outline" onClick={handleLogout}>
+              Sair
             </Button>
-            <p className="text-xs text-muted-foreground">
-              Clique no botão acima para criar um usuário administrador de teste com as credenciais: admin / admin123
-            </p>
           </div>
-        ) : (
-          <div className="text-center p-4 border rounded-md bg-green-50">
-            <p className="font-medium text-green-800 mb-2">Usuário administrador criado!</p>
-            <p className="text-sm text-green-700">
-              Username: admin <br />
-              Senha: admin123
-            </p>
-          </div>
-        )}
+        </div>
+
+        <div className="bg-white rounded-lg p-6 border border-border">
+          <h2 className="text-xl font-bold mb-4">Informações do Usuário</h2>
+          <pre className="bg-slate-100 p-4 rounded-md overflow-auto">
+            {JSON.stringify(user, null, 2)}
+          </pre>
+        </div>
       </div>
     </div>
   );

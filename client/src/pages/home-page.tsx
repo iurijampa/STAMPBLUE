@@ -1,21 +1,42 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
-import { useAuth } from "@/hooks/use-auth";
 import { Loader2 } from "lucide-react";
 
 export default function HomePage() {
-  const [_, navigate] = useLocation();
-  const { user, isLoading } = useAuth();
+  const [, navigate] = useLocation();
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (!isLoading) {
-      if (user?.role === "admin") {
-        navigate("/admin/dashboard");
-      } else {
-        navigate("/department/dashboard");
+    const checkAuth = async () => {
+      try {
+        const response = await fetch('/api/user', {
+          credentials: 'include'
+        });
+        
+        if (response.status === 401) {
+          navigate("/auth");
+          return;
+        }
+        
+        if (response.ok) {
+          const userData = await response.json();
+          
+          if (userData.role === "admin") {
+            navigate("/admin/dashboard");
+          } else {
+            navigate("/department/dashboard");
+          }
+        }
+      } catch (err) {
+        console.error("Erro ao verificar autenticação:", err);
+        navigate("/auth");
+      } finally {
+        setIsLoading(false);
       }
-    }
-  }, [user, isLoading, navigate]);
+    };
+    
+    checkAuth();
+  }, [navigate]);
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center">

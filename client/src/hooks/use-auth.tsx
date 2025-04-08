@@ -1,7 +1,6 @@
-import React from 'react';
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { createContext, useContext, useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { User as SelectUser, InsertUser } from "@shared/schema";
-import { getQueryFn, apiRequest } from "../lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
 // Tipo para os dados de login
@@ -10,62 +9,62 @@ type LoginData = {
   password: string;
 };
 
+// Interface do contexto de autenticação
+interface AuthContextType {
+  user: SelectUser | null;
+  isLoading: boolean;
+  error: Error | null;
+  login: (data: LoginData) => Promise<SelectUser>;
+  register: (data: InsertUser) => Promise<SelectUser>;
+  logout: () => Promise<void>;
+}
+
 // Criando o contexto de autenticação
-const AuthContext = React.createContext<ReturnType<typeof useProvideAuth> | null>(null);
+const AuthContext = createContext<AuthContextType | null>(null);
 
 // Provider component
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const auth = useProvideAuth();
-  return <AuthContext.Provider value={auth}>{children}</AuthContext.Provider>;
-}
-
-// Hook para usar o contexto de autenticação
-export function useAuth() {
-  const context = React.useContext(AuthContext);
-  if (context === null) {
-    throw new Error("useAuth must be used within an AuthProvider");
-  }
-  return context;
-}
-
-// Hook que implementa a lógica de autenticação
-function useProvideAuth() {
+  const [user, setUser] = useState<SelectUser | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [error, setError] = useState<Error | null>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  
+
   // Buscar o usuário atual
-  const { 
-    data: user,
-    isLoading,
-    error 
-  } = useQuery<SelectUser | null, Error>({
-    queryKey: ['/api/user'],
-    queryFn: async () => {
+  useEffect(() => {
+    const fetchUser = async () => {
+      setIsLoading(true);
       try {
         const response = await fetch('/api/user', {
           credentials: 'include'
         });
         
         if (response.status === 401) {
-          return null;
+          setUser(null);
+          return;
         }
         
         if (!response.ok) {
           throw new Error(`Error: ${response.status}`);
         }
         
-        return await response.json();
+        const userData = await response.json();
+        setUser(userData);
+        queryClient.setQueryData(['/api/user'], userData);
       } catch (err) {
         console.error("Error fetching user:", err);
-        return null;
+        setError(err instanceof Error ? err : new Error("Erro desconhecido"));
+        setUser(null);
+      } finally {
+        setIsLoading(false);
       }
-    },
-    staleTime: 300000, // 5 minutos
-    retry: false
-  });
+    };
+
+    fetchUser();
+  }, [queryClient]);
   
-  // Login mutation
-  const login = async (data: LoginData) => {
+  // Login function
+  const login = async (data: LoginData): Promise<SelectUser> => {
     try {
       const response = await fetch('/api/login', {
         method: 'POST',
@@ -80,12 +79,13 @@ function useProvideAuth() {
         throw new Error('Falha no login. Por favor, verifique suas credenciais.');
       }
       
-      const userData = await response.json();
+      const userData: SelectUser = await response.json();
+      setUser(userData);
       queryClient.setQueryData(['/api/user'], userData);
       
       toast({
         title: "Login realizado com sucesso",
-        description: `Bem-vindo, ${userData.name}!`,
+        description: `Bem-vindo, ${userData.name || userData.username}!`,
       });
       
       return userData;
@@ -99,8 +99,8 @@ function useProvideAuth() {
     }
   };
   
-  // Registro mutation
-  const register = async (data: InsertUser) => {
+  // Registro function
+  const register = async (data: InsertUser): Promise<SelectUser> => {
     try {
       const response = await fetch('/api/register', {
         method: 'POST',
@@ -112,15 +112,17 @@ function useProvideAuth() {
       });
       
       if (!response.ok) {
-        throw new Error('Falha no registro. Por favor, tente novamente.');
+        const errorMessage = await response.text();
+        throw new Error(errorMessage || 'Falha no registro. Por favor, tente novamente.');
       }
       
-      const userData = await response.json();
+      const userData: SelectUser = await response.json();
+      setUser(userData);
       queryClient.setQueryData(['/api/user'], userData);
       
       toast({
         title: "Registro realizado com sucesso",
-        description: `Bem-vindo, ${userData.name}!`,
+        description: `Bem-vindo, ${userData.name || userData.username}!`,
       });
       
       return userData;
@@ -134,8 +136,8 @@ function useProvideAuth() {
     }
   };
   
-  // Logout mutation
-  const logout = async () => {
+  // Logout function
+  const logout = async (): Promise<void> => {
     try {
       const response = await fetch('/api/logout', {
         method: 'POST',
@@ -146,6 +148,7 @@ function useProvideAuth() {
         throw new Error('Falha ao fazer logout');
       }
       
+      setUser(null);
       queryClient.setQueryData(['/api/user'], null);
       queryClient.invalidateQueries({ queryKey: ['/api/user'] });
       
@@ -162,8 +165,8 @@ function useProvideAuth() {
     }
   };
   
-  // Retornar os valores do hook
-  return {
+  // Valores do contexto
+  const contextValue: AuthContextType = {
     user,
     isLoading,
     error,
@@ -171,4 +174,19 @@ function useProvideAuth() {
     register,
     logout
   };
+
+  return (
+    <AuthContext.Provider value={contextValue}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+// Hook para usar o contexto de autenticação
+export function useAuth() {
+  const context = useContext(AuthContext);
+  if (context === null) {
+    throw new Error("useAuth must be used within an AuthProvider");
+  }
+  return context;
 }

@@ -1,94 +1,267 @@
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useState } from "react";
+import { useLocation } from "wouter";
+import { useToast } from "@/hooks/use-toast";
 
 export default function AuthPage() {
+  const [username, setUsername] = useState("admin");
+  const [password, setPassword] = useState("admin123");
+  const [name, setName] = useState("Administrador");
+  const [role, setRole] = useState("admin");
   const [isLoading, setIsLoading] = useState(false);
+  const [, navigate] = useLocation();
+  const { toast } = useToast();
 
-  const handleLogin = async () => {
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
     setIsLoading(true);
+    
     try {
       const response = await fetch('/api/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          username: "admin",
-          password: "admin123"
-        }),
+        body: JSON.stringify({ username, password }),
         credentials: 'include',
       });
       
-      if (response.ok) {
-        window.location.href = "/";
-      } else {
-        alert("Falha no login");
+      if (!response.ok) {
+        throw new Error('Falha no login. Por favor, verifique suas credenciais.');
       }
-    } catch (error) {
-      alert("Erro ao fazer login");
+      
+      const userData = await response.json();
+      
+      toast({
+        title: "Login realizado com sucesso",
+        description: `Bem-vindo, ${userData.name || userData.username}!`,
+      });
+      
+      if (userData.role === 'admin') {
+        navigate("/admin/dashboard");
+      } else {
+        navigate("/department/dashboard");
+      }
+    } catch (err) {
+      toast({
+        title: "Falha no login",
+        description: err instanceof Error ? err.message : "Erro desconhecido",
+        variant: "destructive",
+      });
+      console.error("Erro ao fazer login:", err);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleRegister = async () => {
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
     setIsLoading(true);
+    
     try {
       const response = await fetch('/api/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          username: "admin",
-          password: "admin123",
-          name: "Administrador",
-          role: "admin"
+        body: JSON.stringify({ 
+          username, 
+          password, 
+          name, 
+          role 
         }),
         credentials: 'include',
       });
       
-      if (response.ok) {
-        window.location.href = "/";
-      } else {
-        alert("Falha no registro");
+      if (!response.ok) {
+        const errorMessage = await response.text();
+        throw new Error(errorMessage || 'Falha no registro. Por favor, tente novamente.');
       }
-    } catch (error) {
-      alert("Erro ao fazer registro");
+      
+      const userData = await response.json();
+      
+      toast({
+        title: "Registro realizado com sucesso",
+        description: `Bem-vindo, ${userData.name || userData.username}!`,
+      });
+      
+      if (userData.role === 'admin') {
+        navigate("/admin/dashboard");
+      } else {
+        navigate("/department/dashboard");
+      }
+    } catch (err) {
+      toast({
+        title: "Falha no registro",
+        description: err instanceof Error ? err.message : "Erro desconhecido",
+        variant: "destructive",
+      });
+      console.error("Erro ao fazer registro:", err);
     } finally {
       setIsLoading(false);
     }
   };
   
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 to-neutral-100 p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle className="text-2xl font-bold text-center">Sistema de Gerenciamento</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <Button 
-            onClick={handleLogin}
-            className="w-full" 
-            disabled={isLoading}
-          >
-            {isLoading ? "Processando..." : "Login como Admin"}
-          </Button>
-          <Button 
-            onClick={handleRegister}
-            className="w-full" 
-            variant="outline"
-            disabled={isLoading}
-          >
-            {isLoading ? "Processando..." : "Registrar Admin"}
-          </Button>
-          <p className="text-sm text-center text-muted-foreground">
-            Este é um formulário simplificado para testes.<br />
-            Username: admin, Senha: admin123
+    <div className="min-h-screen flex flex-col md:flex-row">
+      {/* Hero Section */}
+      <div className="w-full md:w-1/2 bg-gradient-to-br from-primary-600 to-primary-800 p-8 flex items-center justify-center">
+        <div className="max-w-md text-white space-y-6">
+          <h1 className="text-4xl font-bold tracking-tight">
+            Sistema de Gerenciamento de Produção
+          </h1>
+          <p className="text-lg text-primary-50">
+            Bem-vindo ao sistema de gerenciamento de fluxo de trabalho para fábrica de camisas. 
+            Este sistema permite o controle completo do processo de produção entre diferentes setores.
           </p>
-        </CardContent>
-      </Card>
+          <div className="bg-white/10 p-4 rounded-lg backdrop-blur-sm">
+            <h3 className="font-semibold text-primary-50 mb-2">Funcionalidades principais:</h3>
+            <ul className="space-y-2">
+              <li className="flex items-center gap-2">
+                <span className="bg-primary-400 rounded-full p-1 w-6 h-6 flex items-center justify-center text-xs">✓</span>
+                <span>Rastreamento sequencial de tarefas</span>
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="bg-primary-400 rounded-full p-1 w-6 h-6 flex items-center justify-center text-xs">✓</span>
+                <span>Controle de acessos baseado em funções</span>
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="bg-primary-400 rounded-full p-1 w-6 h-6 flex items-center justify-center text-xs">✓</span>
+                <span>Notificações de mudanças de status</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      
+      {/* Form Section */}
+      <div className="w-full md:w-1/2 bg-background p-8 flex items-center justify-center">
+        <div className="w-full max-w-md space-y-6">
+          <div className="text-center mb-8">
+            <h2 className="text-3xl font-bold">Acesso ao Sistema</h2>
+            <p className="text-muted-foreground mt-2">Faça login ou registre-se para acessar</p>
+          </div>
+
+          <Tabs defaultValue="login" className="w-full">
+            <TabsList className="grid w-full grid-cols-2 mb-8">
+              <TabsTrigger value="login">Login</TabsTrigger>
+              <TabsTrigger value="register">Registro</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="login">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Login</CardTitle>
+                  <CardDescription>
+                    Entre com suas credenciais para acessar o sistema
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={handleLogin} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="login-username">Nome de usuário</Label>
+                      <Input 
+                        id="login-username" 
+                        value={username} 
+                        onChange={(e) => setUsername(e.target.value)} 
+                        required 
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="login-password">Senha</Label>
+                      <Input 
+                        id="login-password" 
+                        type="password" 
+                        value={password} 
+                        onChange={(e) => setPassword(e.target.value)} 
+                        required 
+                      />
+                    </div>
+                    <Button 
+                      type="submit" 
+                      className="w-full" 
+                      disabled={isLoading}
+                    >
+                      {isLoading ? "Processando..." : "Entrar"}
+                    </Button>
+                  </form>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="register">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Registro</CardTitle>
+                  <CardDescription>
+                    Crie uma nova conta no sistema
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={handleRegister} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="register-username">Nome de usuário</Label>
+                      <Input 
+                        id="register-username" 
+                        value={username} 
+                        onChange={(e) => setUsername(e.target.value)} 
+                        required 
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="register-password">Senha</Label>
+                      <Input 
+                        id="register-password" 
+                        type="password" 
+                        value={password} 
+                        onChange={(e) => setPassword(e.target.value)} 
+                        required 
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="register-name">Nome completo</Label>
+                      <Input 
+                        id="register-name" 
+                        value={name} 
+                        onChange={(e) => setName(e.target.value)} 
+                        required 
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="register-role">Função</Label>
+                      <select 
+                        id="register-role"
+                        className="w-full h-10 rounded-md border border-input bg-background px-3 py-2"
+                        value={role} 
+                        onChange={(e) => setRole(e.target.value)} 
+                        required
+                      >
+                        <option value="admin">Administrador</option>
+                        <option value="gabarito">Gabarito</option>
+                        <option value="impressao">Impressão</option>
+                        <option value="batida">Batida</option>
+                        <option value="costura">Costura</option>
+                        <option value="embalagem">Embalagem</option>
+                      </select>
+                    </div>
+                    <Button 
+                      type="submit" 
+                      className="w-full" 
+                      disabled={isLoading}
+                    >
+                      {isLoading ? "Processando..." : "Registrar"}
+                    </Button>
+                  </form>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+        </div>
+      </div>
     </div>
   );
 }
