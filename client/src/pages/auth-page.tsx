@@ -41,10 +41,11 @@ export default function AuthPage() {
         description: `Bem-vindo, ${userData.name || userData.username}!`,
       });
       
+      // Redirecionar para o dashboard apropriado
       if (userData.role === 'admin') {
         navigate("/admin/dashboard");
       } else {
-        navigate("/department/dashboard");
+        navigate(`/department/${userData.role}/dashboard`);
       }
     } catch (err) {
       toast({
@@ -89,10 +90,11 @@ export default function AuthPage() {
         description: `Bem-vindo, ${userData.name || userData.username}!`,
       });
       
+      // Redirecionar para o dashboard apropriado
       if (userData.role === 'admin') {
         navigate("/admin/dashboard");
       } else {
-        navigate("/department/dashboard");
+        navigate(`/department/${userData.role}/dashboard`);
       }
     } catch (err) {
       toast({

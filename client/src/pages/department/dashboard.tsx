@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { useLocation } from "wouter";
+import { useLocation, useParams } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { useEffect, useState } from "react";
 import { User, Activity } from "@shared/schema";
@@ -14,11 +14,22 @@ import Layout from "@/components/Layout";
 import ViewActivityModal from "@/components/view-activity-modal";
 import CompleteActivityModal from "@/components/complete-activity-modal";
 
+// Estendendo a interface Activity para incluir os campos que estamos recebendo do backend
+interface ActivityWithNotes extends Activity {
+  previousNotes?: string | null;
+  previousDepartment?: string | null;
+  previousCompletedBy?: string | null;
+}
+
 export default function DepartmentDashboard() {
+  const params = useParams();
   const [, navigate] = useLocation();
   const { toast } = useToast();
-  const [viewActivity, setViewActivity] = useState<Activity | null>(null);
-  const [completeActivity, setCompleteActivity] = useState<Activity | null>(null);
+  const [viewActivity, setViewActivity] = useState<ActivityWithNotes | null>(null);
+  const [completeActivity, setCompleteActivity] = useState<ActivityWithNotes | null>(null);
+  
+  // Obtendo o departamento da URL
+  const department = params.department;
   
   // Buscar dados do usuário autenticado
   const { data: user, isLoading: userLoading } = useQuery({
@@ -48,13 +59,25 @@ export default function DepartmentDashboard() {
     }
   });
   
-  // Buscar atividades para o departamento do usuário
+  // Verificar se o usuário tem permissão para acessar este departamento
+  useEffect(() => {
+    if (user && department && user.role !== department && user.role !== 'admin') {
+      toast({
+        title: "Acesso negado",
+        description: "Você não tem permissão para acessar este departamento",
+        variant: "destructive"
+      });
+      navigate(`/department/${user.role}/dashboard`);
+    }
+  }, [user, department, navigate, toast]);
+
+  // Buscar atividades para o departamento da URL
   const { data: activitiesData = [], isLoading: activitiesLoading } = useQuery({
-    queryKey: ["/api/department/activities"],
+    queryKey: ["/api/department/activities", department],
     queryFn: async () => {
-      if (!user) return [];
+      if (!department || !user) return [];
       
-      const response = await fetch(`/api/activities/department/${user.role}`, {
+      const response = await fetch(`/api/activities/department/${department}`, {
         credentials: 'include'
       });
       
@@ -62,18 +85,18 @@ export default function DepartmentDashboard() {
         throw new Error('Erro ao buscar atividades do departamento');
       }
       
-      return await response.json() as Activity[];
+      return await response.json() as ActivityWithNotes[];
     },
-    enabled: !!user
+    enabled: !!user && !!department
   });
   
   // Buscar estatísticas do departamento
   const { data: stats = { pendingCount: 0, completedCount: 0 }, isLoading: statsLoading } = useQuery({
-    queryKey: ["/api/department/stats"],
+    queryKey: ["/api/department/stats", department],
     queryFn: async () => {
-      if (!user) return { pendingCount: 0, completedCount: 0 };
+      if (!department || !user) return { pendingCount: 0, completedCount: 0 };
       
-      const response = await fetch(`/api/department/${user.role}/stats`, {
+      const response = await fetch(`/api/department/${department}/stats`, {
         credentials: 'include'
       });
       
@@ -83,7 +106,7 @@ export default function DepartmentDashboard() {
       
       return await response.json();
     },
-    enabled: !!user
+    enabled: !!user && !!department
   });
   
   // Função para formatar a data
@@ -115,8 +138,13 @@ export default function DepartmentDashboard() {
     setCompleteActivity(null);
   };
 
+  // Função para capitalizar a primeira letra
+  const capitalize = (text: string) => {
+    return text.charAt(0).toUpperCase() + text.slice(1);
+  };
+
   return (
-    <Layout title={`Dashboard - ${user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : 'Departamento'}`}>
+    <Layout title={`Dashboard - ${department ? capitalize(department) : 'Departamento'}`}>
       {userLoading || activitiesLoading ? (
         <div className="h-64 flex items-center justify-center">
           <Loader2 className="h-8 w-8 animate-spin text-primary-500" />
