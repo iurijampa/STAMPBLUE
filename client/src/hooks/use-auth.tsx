@@ -101,6 +101,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             const statsData = await statsResponse.json();
             queryClient.setQueryData(['/api/department/stats', userData.role], statsData);
           }
+          
+          // Forçar limpar e reprocessar outras consultas que possam estar em cache
+          queryClient.invalidateQueries();
+          
+          // Adicionar um pequeno atraso antes de redirecionar para garantir que os dados sejam carregados
+          await new Promise(resolve => setTimeout(resolve, 300));
+          
+          // Informar no console para debugging
+          console.log("Dados do departamento pré-carregados com sucesso:", userData.role);
         } catch (e) {
           console.error("Erro ao pré-carregar dados do departamento:", e);
         }
