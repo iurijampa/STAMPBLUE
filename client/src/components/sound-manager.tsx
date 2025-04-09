@@ -8,12 +8,12 @@ export enum SoundType {
   SUCCESS = 'success',
 }
 
-// Mapeamento de sons para URLs
+// Mapeamento de sons para URLs locais (os arquivos estão em /public/sounds)
 const SOUND_URLS: Record<SoundType, string> = {
-  [SoundType.NEW_ACTIVITY]: 'https://cdn.pixabay.com/download/audio/2022/03/24/audio_4ae8c404e7.mp3?filename=notification-sound-to-phone-153180.mp3',
-  [SoundType.RETURN_ALERT]: 'https://cdn.pixabay.com/download/audio/2021/08/04/audio_c9a498b433.mp3?filename=analog-alarm-clock-154566.mp3',
-  [SoundType.UPDATE]: 'https://cdn.pixabay.com/download/audio/2022/03/25/audio_d5fbdb1629.mp3?filename=correct-choice-138515.mp3',
-  [SoundType.SUCCESS]: 'https://cdn.pixabay.com/download/audio/2022/03/10/audio_5db56d9e76.mp3?filename=success-1-6297.mp3',
+  [SoundType.NEW_ACTIVITY]: '/sounds/notification.mp3',
+  [SoundType.RETURN_ALERT]: '/sounds/alert.mp3',
+  [SoundType.UPDATE]: '/sounds/update.mp3',
+  [SoundType.SUCCESS]: '/sounds/success.mp3',
 };
 
 // Contexto para o gerenciador de som
@@ -176,10 +176,55 @@ export const SoundToggleButton: React.FC = () => {
   );
 };
 
-// Botão para testar som - versão melhorada para mobile
-export const SoundTestButton: React.FC = () => {
-  const { playSound, isSoundEnabled } = useSoundManager();
+// Botão simples para testar um som específico
+export const SoundTestSingleButton: React.FC<{ type: SoundType; label: string }> = ({ type, label }) => {
   const [isPlaying, setIsPlaying] = useState(false);
+  
+  const handleClick = useCallback(() => {
+    setIsPlaying(true);
+    
+    try {
+      // Criar elemento de áudio usando a API nativa
+      const audio = new Audio(SOUND_URLS[type]);
+      audio.volume = 0.7;
+      
+      // Usar evento de interação do usuário (clique) para iniciar reprodução
+      const playPromise = audio.play();
+      
+      if (playPromise) {
+        playPromise.catch(e => {
+          console.warn(`Erro ao reproduzir som ${type}:`, e.message);
+        }).finally(() => {
+          setTimeout(() => setIsPlaying(false), 1000);
+        });
+      } else {
+        setTimeout(() => setIsPlaying(false), 1000);
+      }
+    } catch (error) {
+      console.error(`Erro ao testar som ${type}:`, error);
+      setIsPlaying(false);
+    }
+  }, [type]);
+  
+  return (
+    <button 
+      onClick={handleClick}
+      disabled={isPlaying}
+      className={`flex items-center justify-center p-2 mr-2 text-sm font-medium transition-colors ${
+        isPlaying 
+          ? 'bg-green-100 border-green-300 text-green-700' 
+          : 'bg-blue-100 border-blue-300 text-blue-700 hover:bg-blue-200'
+      } border rounded-md`}
+    >
+      <span className="mr-2">{isPlaying ? '🎵' : '🔊'}</span>
+      <span>{isPlaying ? 'Tocando...' : label}</span>
+    </button>
+  );
+};
+
+// Botão para testar som - versão simplificada para dispositivos móveis
+export const SoundTestButton: React.FC = () => {
+  const { isSoundEnabled } = useSoundManager();
   
   const handleClick = useCallback(() => {
     if (!isSoundEnabled) {
@@ -187,66 +232,34 @@ export const SoundTestButton: React.FC = () => {
       return;
     }
     
-    // Definir estado para mostrar feedback
-    setIsPlaying(true);
-    
     try {
-      // Método de reprodução direto para maior compatibilidade com mobile
-      const playSoundDirectly = (url: string, volume = 0.5) => {
-        const audio = new Audio(url);
-        audio.volume = volume;
-        
-        // Usar evento de interação do usuário para iniciar reprodução
-        const playPromise = audio.play();
-        
-        if (playPromise) {
-          playPromise.catch(e => {
-            console.warn('Erro ao reproduzir som direto:', e.message);
-          });
-        }
-        
-        return audio;
-      };
-      
-      // Reproduzir som em sequência usando método direto
-      console.log("Reproduzindo som NEW_ACTIVITY diretamente");
-      playSoundDirectly(SOUND_URLS[SoundType.NEW_ACTIVITY], 0.7);
-      
-      setTimeout(() => {
-        console.log("Reproduzindo som RETURN_ALERT diretamente");
-        playSoundDirectly(SOUND_URLS[SoundType.RETURN_ALERT], 0.7);
-      }, 1000);
-      
-      setTimeout(() => {
-        console.log("Reproduzindo som UPDATE diretamente");
-        playSoundDirectly(SOUND_URLS[SoundType.UPDATE], 0.7);
-      }, 2000);
-      
-      setTimeout(() => {
-        console.log("Reproduzindo som SUCCESS diretamente");
-        playSoundDirectly(SOUND_URLS[SoundType.SUCCESS], 0.7);
-        
-        // Resetar estado após 3.5 segundos (após o último som)
-        setTimeout(() => setIsPlaying(false), 500);
-      }, 3000);
+      // Abordagem extremamente simplificada - reproduzir apenas um som para teste
+      const audio = new Audio(SOUND_URLS[SoundType.NEW_ACTIVITY]);
+      audio.volume = 0.7;
+      audio.play().catch(e => console.warn('Erro ao reproduzir áudio:', e.message));
     } catch (error) {
-      console.error("Erro ao testar sons:", error);
-      setIsPlaying(false);
+      console.error("Erro ao testar som:", error);
     }
-  }, [isSoundEnabled, playSound]);
+  }, [isSoundEnabled]);
+  
+  if (!isSoundEnabled) {
+    return (
+      <button 
+        onClick={handleClick}
+        className="flex items-center justify-center p-2 text-sm font-medium transition-colors bg-red-100 border rounded-md hover:bg-red-200 border-red-300 text-red-700"
+      >
+        <span className="mr-2">🔇</span>
+        <span>Som Desativado</span>
+      </button>
+    );
+  }
   
   return (
-    <button 
-      onClick={handleClick}
-      disabled={isPlaying}
-      className={`flex items-center justify-center p-2 text-sm font-medium transition-colors ${
-        isPlaying 
-          ? 'bg-green-100 border-green-300 text-green-700' 
-          : 'bg-blue-100 border-blue-300 text-blue-700 hover:bg-blue-200'
-      } border rounded-md`}
-    >
-      <span className="mr-2">{isPlaying ? '🎵' : '🔊'}</span>
-      <span>{isPlaying ? 'Reproduzindo...' : 'Testar Sons'}</span>
-    </button>
+    <div className="flex flex-wrap gap-2 items-center">
+      <SoundTestSingleButton type={SoundType.NEW_ACTIVITY} label="Novo Pedido" />
+      <SoundTestSingleButton type={SoundType.RETURN_ALERT} label="Retorno" />
+      <SoundTestSingleButton type={SoundType.UPDATE} label="Atualização" />
+      <SoundTestSingleButton type={SoundType.SUCCESS} label="Sucesso" />
+    </div>
   );
 };
