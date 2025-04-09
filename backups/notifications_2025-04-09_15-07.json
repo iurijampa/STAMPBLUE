@@ -1,0 +1,18 @@
+[
+  {
+    "id": 40,
+    "userId": 2,
+    "activityId": 14,
+    "message": "Nova atividade: RED BULL NEW YORK THIRD 23-24",
+    "read": false,
+    "createdAt": "2025-04-09T14:46:14.337Z"
+  },
+  {
+    "id": 39,
+    "userId": 2,
+    "activityId": 13,
+    "message": "Nova atividade: CAMISA PAREDINHA 62 - DRYFIT",
+    "read": false,
+    "createdAt": "2025-04-09T13:03:41.930Z"
+  }
+]

@@ -2,7 +2,7 @@ import { useAuth } from './use-auth';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useToast } from './use-toast';
 import { queryClient } from '@/lib/queryClient';
-import { useSoundPlayer, SoundType } from '@/components/sound-player';
+import { useSoundPlayer } from '@/hooks/use-sound-player';
 import { useBrowserNotification } from './use-browser-notification';
 
 // CONFIGURAÇÃO DE EMERGÊNCIA PARA MÁXIMA PERFORMANCE
@@ -22,7 +22,7 @@ export function useWebSocket() {
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
-  const { playSound } = useSoundPlayer();
+  const { playSound, playDepartmentSound } = useSoundPlayer();
   const { isSupported, permission, requestPermission, notify } = useBrowserNotification();
   
   // Referências para controle de reconexão e ping
@@ -257,8 +257,8 @@ export function useWebSocket() {
             queryClient.invalidateQueries({ queryKey: ['/api/department/activities', user.role] });
             queryClient.invalidateQueries({ queryKey: ['/api/activities'] });
             
-            // Reproduzir som de notificação bem chamativo
-            playSound('NEW_ACTIVITY', 1.0);
+            // Reproduzir som de notificação específico para o departamento
+            playDepartmentSound(user.role);
             
             // Notificação na aba do navegador
             showBrowserNotification(
@@ -280,7 +280,7 @@ export function useWebSocket() {
             queryClient.invalidateQueries({ queryKey: ['/api/activities'] });
             
             // Reproduzir som de alerta para pedidos retornados
-            playSound('RETURN_ALERT', 1.0);
+            playDepartmentSound(user.role);
             
             // Notificação na aba do navegador
             showBrowserNotification(
@@ -303,7 +303,7 @@ export function useWebSocket() {
             queryClient.invalidateQueries({ queryKey: ['/api/department/stats', user.role] });
             
             // Som sutil de atualização
-            playSound('UPDATE', 0.7);
+            playSound('success');
           } 
           else if (data.type === 'activity_progress') {
             // Invalidar cache para atualizar lista de atividades e progresso
@@ -314,7 +314,7 @@ export function useWebSocket() {
             queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
             
             // Som de atualização
-            playSound('UPDATE', 0.8);
+            playSound('success');
             
             // Notificar admins sobre o progresso de atividades
             if (user.role === 'admin') {
@@ -448,7 +448,8 @@ export function useWebSocket() {
     showBrowserNotification, 
     refreshDataPeriodically, 
     toast, 
-    playSound, 
+    playSound,
+    playDepartmentSound,
     sendHeartbeat
   ]);
   
@@ -527,6 +528,7 @@ export function useWebSocket() {
     sendMessage,
     registerWithDepartment,
     playSound, // Exportar a função de reprodução de som para uso direto
+    playDepartmentSound, // Exportar a função de reprodução de som para departamentos
     refreshData: refreshDataPeriodically // Exportar função para atualizar dados manualmente
   };
 }

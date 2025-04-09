@@ -1,5 +1,6 @@
 import { createContext, ReactNode, useContext } from 'react';
 import { useWebSocket } from './use-websocket';
+import { useSoundPlayer } from './use-sound-player';
 
 // Criar o contexto para o WebSocket
 type WebSocketContextType = ReturnType<typeof useWebSocket>;
@@ -9,9 +10,11 @@ const WebSocketContext = createContext<WebSocketContextType | null>(null);
 // Provider para o WebSocket
 export function WebSocketProvider({ children }: { children: ReactNode }) {
   const webSocketState = useWebSocket();
+  const { soundComponent } = useSoundPlayer();
   
   return (
     <WebSocketContext.Provider value={webSocketState}>
+      {soundComponent}
       {children}
     </WebSocketContext.Provider>
   );

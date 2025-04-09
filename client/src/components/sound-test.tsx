@@ -3,7 +3,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Volume2, ChevronDown, ChevronUp } from 'lucide-react';
-import { useSoundPlayer, SoundType } from './sound-player';
+import { useSoundPlayer } from '@/hooks/use-sound-player';
+import { SoundType } from './sound-player';
 
 export default function SoundTest() {
   const [isOpen, setIsOpen] = useState(false);
@@ -12,17 +13,17 @@ export default function SoundTest() {
   const sounds: { name: string; type: SoundType; description: string }[] = [
     { 
       name: 'Notificação de Novo Pedido', 
-      type: 'NEW_ACTIVITY',
+      type: 'notification',
       description: 'Som tocado quando um novo pedido é criado ou chega ao seu setor'
     },
     { 
       name: 'Alerta de Pedido Retornado', 
-      type: 'RETURN_ALERT',
+      type: 'alert',
       description: 'Som tocado quando um pedido é retornado por outro setor'
     },
     { 
       name: 'Atualização de Status', 
-      type: 'UPDATE',
+      type: 'success',
       description: 'Som tocado quando há atualizações no sistema'
     }
   ];
