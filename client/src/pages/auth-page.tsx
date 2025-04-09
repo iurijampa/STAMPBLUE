@@ -2,54 +2,51 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { Logo, FooterCredits } from "@/components/ui/logo";
+import { useAuth } from "@/hooks/use-auth";
 
 export default function AuthPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
-  const [role, setRole] = useState("admin");
+  const [role, setRole] = useState<"admin" | "gabarito" | "impressao" | "batida" | "costura" | "embalagem" | "user">("admin");
   const [isLoading, setIsLoading] = useState(false);
   const [, navigate] = useLocation();
   const { toast } = useToast();
+  
+  // Obter métodos do hook de autenticação
+  const { login, register, user, isLoading: authLoading } = useAuth();
+  
+  // Redirecionar para o dashboard se o usuário já estiver autenticado
+  useEffect(() => {
+    if (user && !authLoading) {
+      // Se o usuário já estiver logado, redirecionar para a raiz
+      navigate("/", { replace: true });
+    }
+  }, [user, authLoading, navigate]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (isLoading) return; // Evitar múltiplos cliques
+    
     setIsLoading(true);
     
     try {
-      const response = await fetch('/api/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ username, password }),
-        credentials: 'include',
-      });
+      // Usar o método login do hook de autenticação
+      await login({ username, password });
       
-      if (!response.ok) {
-        throw new Error('Falha no login. Por favor, verifique suas credenciais.');
-      }
+      // Força navegação após login bem-sucedido
+      setTimeout(() => {
+        navigate("/", { replace: true });
+      }, 500);
       
-      const userData = await response.json();
-      
-      toast({
-        title: "Login realizado com sucesso",
-        description: `Bem-vindo, ${userData.name || userData.username}!`,
-      });
-      
-      // Redirecionar para a raiz - o componente DashboardRedirect vai encaminhar para o dashboard correto
-      navigate("/", { replace: true });
     } catch (err) {
-      toast({
-        title: "Falha no login",
-        description: err instanceof Error ? err.message : "Erro desconhecido",
-        variant: "destructive",
-      });
       console.error("Erro ao fazer login:", err);
+      // Toast de erro já é mostrado pelo hook de autenticação
     } finally {
       setIsLoading(false);
     }
@@ -57,48 +54,48 @@ export default function AuthPage() {
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (isLoading) return; // Evitar múltiplos cliques
+    
     setIsLoading(true);
     
     try {
-      const response = await fetch('/api/register', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          username, 
-          password, 
-          name, 
-          role 
-        }),
-        credentials: 'include',
+      // Usar o método register do hook de autenticação
+      // Definir departamento igual ao role para manter compatibilidade com a estrutura
+      await register({ 
+        username, 
+        password, 
+        name, 
+        role,
+        department: role 
       });
       
-      if (!response.ok) {
-        const errorMessage = await response.text();
-        throw new Error(errorMessage || 'Falha no registro. Por favor, tente novamente.');
-      }
+      // Força navegação após registro bem-sucedido
+      setTimeout(() => {
+        navigate("/", { replace: true });
+      }, 500);
       
-      const userData = await response.json();
-      
-      toast({
-        title: "Registro realizado com sucesso",
-        description: `Bem-vindo, ${userData.name || userData.username}!`,
-      });
-      
-      // Redirecionar para a raiz - o componente DashboardRedirect vai encaminhar para o dashboard correto
-      navigate("/", { replace: true });
     } catch (err) {
-      toast({
-        title: "Falha no registro",
-        description: err instanceof Error ? err.message : "Erro desconhecido",
-        variant: "destructive",
-      });
       console.error("Erro ao fazer registro:", err);
+      // Toast de erro já é mostrado pelo hook de autenticação
     } finally {
       setIsLoading(false);
     }
   };
+  
+  // Se estiver carregando o estado de autenticação, mostrar indicador
+  if (authLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full"></div>
+      </div>
+    );
+  }
+  
+  // Se o usuário já estiver autenticado, não mostrar a página de login
+  if (user) {
+    return null; // O useEffect vai redirecionar
+  }
   
   return (
     <div className="min-h-screen bg-background">

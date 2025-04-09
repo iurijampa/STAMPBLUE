@@ -24,15 +24,38 @@ export async function buscarAtividadesPorDepartamentoEmergencia(department: stri
     const progressosEAtividades = await cachedQuery(
       `activities_${department}`,
       async () => {
-        const resultado = await db.execute(sql`
-          SELECT a.*, p.id as progress_id, p.status, p.completed_by, p.completed_at, p.notes
-          FROM ${activityProgress} p
-          JOIN ${activities} a ON p.activity_id = a.id
-          WHERE p.department = ${department} AND p.status = 'pending'
-          ORDER BY CASE WHEN a.deadline IS NULL THEN 1 ELSE 0 END, a.deadline ASC
-        `);
-        
-        return resultado.rows as any[];
+        // Usando db.select() em vez de db.execute() para simplificar
+        return await db.select({
+          id: activities.id,
+          title: activities.title,
+          description: activities.description,
+          activity_status: activities.status,
+          priority: activities.priority,
+          deadline: activities.deadline,
+          image: activities.image,
+          additional_images: activities.additionalImages,
+          created_at: activities.createdAt,
+          quantity: activities.quantity,
+          clientName: activities.clientName,
+          notes: activities.notes,
+          progress_id: activityProgress.id,
+          status: activityProgress.status,
+          completed_by: activityProgress.completedBy,
+          completed_at: activityProgress.completedAt,
+          progress_notes: activityProgress.notes
+        })
+        .from(activityProgress)
+        .innerJoin(activities, eq(activityProgress.activityId, activities.id))
+        .where(
+          and(
+            eq(activityProgress.department, department as any),
+            eq(activityProgress.status, "pending")
+          )
+        )
+        .orderBy(
+          sql`CASE WHEN ${activities.deadline} IS NULL THEN 1 ELSE 0 END`,
+          activities.deadline
+        );
       },
       5000 // Cache por 5 segundos para reduzir carga no banco, mas manter dados atualizados
     );
@@ -52,16 +75,17 @@ export async function buscarAtividadesPorDepartamentoEmergencia(department: stri
       description: row.description,
       status: row.activity_status,
       priority: row.priority,
-      department: row.department,
-      category: row.category,
       deadline: row.deadline,
       image: row.image,
       additionalImages: row.additional_images,
       createdAt: row.created_at,
-      updatedAt: row.updated_at
+      clientName: row.clientName,
+      quantity: row.quantity,
+      notes: row.notes
     }));
     
     // Log para cada atividade para facilitar depuração
+    // Log simplificado para cada atividade para evitar erros de tipagem
     atividades.forEach(a => {
       console.log(`[EMERGENCIA] Atividade adicionada: ${a.id} - ${a.title}`);
     });
