@@ -238,7 +238,28 @@ export function useWebSocket() {
             queryClient.invalidateQueries({ queryKey: ['/api/department/activities', user.role] });
             queryClient.invalidateQueries({ queryKey: ['/api/activities'] });
             
-            // Emitir evento de nova atividade
+            // Tocar som de nova atividade - DIRETO
+            try {
+              const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+              const oscillator = audioContext.createOscillator();
+              const gainNode = audioContext.createGain();
+              
+              oscillator.type = 'sine';
+              oscillator.frequency.value = 880; // Tom agudo para novidades
+              gainNode.gain.value = 0.3;
+              
+              oscillator.connect(gainNode);
+              gainNode.connect(audioContext.destination);
+              
+              oscillator.start();
+              setTimeout(() => oscillator.stop(), 300);
+              
+              console.log('Som de nova atividade tocado com sucesso!');
+            } catch (error) {
+              console.error('Erro ao tocar som de nova atividade:', error);
+            }
+            
+            // Emitir evento de nova atividade para o SoundManager (backup)
             setMessageData({ type: 'sound', soundType: 'new-activity' });
             
             // Notificação na aba do navegador
@@ -260,7 +281,28 @@ export function useWebSocket() {
             queryClient.invalidateQueries({ queryKey: ['/api/department/activities', user.role] });
             queryClient.invalidateQueries({ queryKey: ['/api/activities'] });
             
-            // Emitir evento de retorno
+            // Tocar som de retorno - DIRETO
+            try {
+              const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+              const oscillator = audioContext.createOscillator();
+              const gainNode = audioContext.createGain();
+              
+              oscillator.type = 'sine';
+              oscillator.frequency.value = 330; // Tom mais grave para alertas
+              gainNode.gain.value = 0.5;
+              
+              oscillator.connect(gainNode);
+              gainNode.connect(audioContext.destination);
+              
+              oscillator.start();
+              setTimeout(() => oscillator.stop(), 500);
+              
+              console.log('Som de retorno tocado com sucesso!');
+            } catch (error) {
+              console.error('Erro ao tocar som de retorno:', error);
+            }
+            
+            // Emitir evento de retorno para o SoundManager (backup)
             setMessageData({ type: 'sound', soundType: 'return-alert' });
             
             // Notificação na aba do navegador
@@ -283,7 +325,28 @@ export function useWebSocket() {
             queryClient.invalidateQueries({ queryKey: ['/api/activities'] });
             queryClient.invalidateQueries({ queryKey: ['/api/department/stats', user.role] });
             
-            // Emitir evento de atualização
+            // Tocar som de atualização - DIRETO
+            try {
+              const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+              const oscillator = audioContext.createOscillator();
+              const gainNode = audioContext.createGain();
+              
+              oscillator.type = 'sine';
+              oscillator.frequency.value = 660; // Tom médio para atualizações
+              gainNode.gain.value = 0.3;
+              
+              oscillator.connect(gainNode);
+              gainNode.connect(audioContext.destination);
+              
+              oscillator.start();
+              setTimeout(() => oscillator.stop(), 200);
+              
+              console.log('Som de atualização tocado com sucesso!');
+            } catch (error) {
+              console.error('Erro ao tocar som de atualização:', error);
+            }
+            
+            // Emitir evento de atualização para o SoundManager (backup)
             setMessageData({ type: 'sound', soundType: 'update' });
           } 
           else if (data.type === 'activity_progress') {
@@ -294,7 +357,46 @@ export function useWebSocket() {
             queryClient.invalidateQueries({ queryKey: ['/api/department/stats', user.role] });
             queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
             
-            // Emitir evento de sucesso
+            // Tocar som de sucesso - DIRETO
+            try {
+              const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+              
+              // Primeiro tom (mais baixo)
+              const oscillator1 = audioContext.createOscillator();
+              const gainNode1 = audioContext.createGain();
+              
+              oscillator1.type = 'sine';
+              oscillator1.frequency.value = 440;
+              gainNode1.gain.value = 0.3;
+              
+              oscillator1.connect(gainNode1);
+              gainNode1.connect(audioContext.destination);
+              
+              oscillator1.start();
+              setTimeout(() => oscillator1.stop(), 150);
+              
+              // Segundo tom (mais alto após um pequeno delay)
+              setTimeout(() => {
+                const oscillator2 = audioContext.createOscillator();
+                const gainNode2 = audioContext.createGain();
+                
+                oscillator2.type = 'sine';
+                oscillator2.frequency.value = 660;
+                gainNode2.gain.value = 0.3;
+                
+                oscillator2.connect(gainNode2);
+                gainNode2.connect(audioContext.destination);
+                
+                oscillator2.start();
+                setTimeout(() => oscillator2.stop(), 200);
+              }, 200);
+              
+              console.log('Som de sucesso tocado com sucesso!');
+            } catch (error) {
+              console.error('Erro ao tocar som de sucesso:', error);
+            }
+            
+            // Emitir evento de sucesso para o SoundManager (backup)
             setMessageData({ type: 'sound', soundType: 'success' });
             
             // Notificar admins sobre o progresso de atividades
