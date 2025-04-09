@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useLocation, useParams } from "wouter";
 import { useToast } from "@/hooks/use-toast";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { User, Activity } from "@shared/schema";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2, CalendarClock, Clock, Eye, RefreshCw, RotateCcw } from "lucide-react";
@@ -107,30 +107,75 @@ export default function DepartmentDashboard() {
     enabled: !!user && !!userDepartment
   });
   
-  // Efeito para reproduzir som quando chegam novos pedidos
-  useEffect(() => {
-    // Se não temos dados ou ainda está carregando, não faça nada
-    if (!activitiesData || activitiesLoading) return;
+  // Função simplificada para tocar o som diretamente
+  const playNotificationSoundDirectly = useCallback(() => {
+    console.log('[MODO SUPERIOR] Tocando som diretamente');
     
-    // Se a contagem anterior foi registrada e agora temos mais atividades
-    if (previousActivityCountRef.current > 0 && activitiesData.length > previousActivityCountRef.current) {
-      console.log(`[som] Novas atividades detectadas! Anterior: ${previousActivityCountRef.current}, Atual: ${activitiesData.length}`);
-      
-      // Tocar som de notificação para o departamento
-      if (userDepartment) {
-        playDepartmentSound(userDepartment);
-        
-        // Também mostrar uma notificação de toast
-        toast({
-          title: "Novos pedidos recebidos!",
-          description: `${activitiesData.length - previousActivityCountRef.current} novos pedidos chegaram para seu departamento.`,
+    // Criar elemento de áudio 
+    const audio = new Audio();
+    
+    // Definir origem do som conforme departamento
+    // Som de notificação padrão
+    const notificationSound = 'data:audio/mp3;base64,//uQxAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAAKAAAGhgCFhYWFhYWFhYWFhYWFhYW6urq6urq6urq6urq6urrV1dXV1dXV1dXV1dXV1dXV7u7u7u7u7u7u7u7u7u7u//////////////////////////8AAAA5TEFNRTMuOTlyAc0AAAAAAAAAABSAJAJAQgAAgAAAAoZuYuPXAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//vAxAAABLQDe7QQAAI8gqz3PCAAAAAAACQQCBAgLBAIEBhgYEBA4OD+L/KAgKH9YcH8pz//BAIGgupeNlEfw/iCIfeUBQFn/hQoJLqXjZQ/+H+HjbFoLAWdQXLxtoQCgKAg6J//+KAgKAgKA4oCg+D4oCgL//Dg+Lg+QED+oGVCpVFtbP6ZbMyqTEFNRTMuOTkuNaqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqg==';
+    
+    audio.src = notificationSound;
+    
+    // Volume máximo 
+    audio.volume = 1.0;
+    
+    // Tentar tocar o som e tratar possíveis erros
+    const playPromise = audio.play();
+    
+    if (playPromise !== undefined) {
+      playPromise
+        .then(() => {
+          console.log('[MODO SUPERIOR] Som tocando com sucesso!');
+        })
+        .catch(error => {
+          console.error('[MODO SUPERIOR] Erro ao tocar som:', error);
+          
+          // Tentar novamente após um pequeno delay
+          setTimeout(() => {
+            audio.play().catch(e => console.error('[MODO SUPERIOR] Ainda não foi possível tocar o som:', e));
+          }, 500);
         });
-      }
     }
+  }, []);
+  
+  // MODO SUPERIOR: Detectar atividades sempre que a lista for carregada
+  useEffect(() => {
+    // Ignorar primeira carga quando não temos dados
+    if (activitiesLoading || !activitiesData) return;
     
-    // Atualizar a referência com o novo valor
-    previousActivityCountRef.current = activitiesData.length;
-  }, [activitiesData, activitiesLoading, userDepartment, playDepartmentSound, toast]);
+    // Se temos atividades, tocar som IMEDIATAMENTE
+    if (activitiesData.length > 0) {
+      console.log(`[MODO SUPERIOR] ${activitiesData.length} atividades encontradas! Tocando alerta imediatamente!`);
+      playNotificationSoundDirectly();
+      
+      // Mostrar toast de notificação
+      toast({
+        title: "Atenção! Pedidos pendentes",
+        description: `Você tem ${activitiesData.length} pedidos aguardando processamento!`,
+        variant: "destructive",
+      });
+    }
+  }, [activitiesData, activitiesLoading, playNotificationSoundDirectly, toast]);
+  
+  // Sistema de backup: tocar som a cada 30 segundos se houver pedidos
+  useEffect(() => {
+    if (!activitiesData || activitiesData.length === 0) return;
+    
+    // Configurar temporizador para tocar o som periodicamente
+    const intervalId = setInterval(() => {
+      if (activitiesData.length > 0) {
+        console.log('[MODO SUPERIOR] Tocando lembrete sobre pedidos pendentes');
+        playNotificationSoundDirectly();
+      }
+    }, 30000); // 30 segundos
+    
+    // Limpar intervalo quando componente for desmontado
+    return () => clearInterval(intervalId);
+  }, [activitiesData, playNotificationSoundDirectly]);
   
   // Recarregar os dados quando o departamento do usuário mudar
   useEffect(() => {
@@ -262,6 +307,24 @@ export default function DepartmentDashboard() {
             className="flex items-center gap-1"
           >
             Sair
+          </Button>
+          
+          {/* Botão de teste de som que toca o som diretamente */}
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={() => {
+              playNotificationSoundDirectly();
+              console.log('[TESTE MANUAL] Tocando som via botão teste');
+            }}
+            className="flex items-center gap-1"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+              <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+              <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+            </svg>
+            <span>Teste Som</span>
           </Button>
         </div>
         <Button 
