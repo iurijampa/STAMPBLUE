@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
 import { useEffect, useState, useMemo } from "react";
 import { Activity, User, Notification, DEPARTMENTS, ActivityProgress } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
@@ -172,28 +173,20 @@ export default function AdminDashboard() {
     checkAuth();
   }, [navigate]);
 
+  // Função para fazer logout usando o hook de autenticação
+  const { logout } = useAuth();
   const handleLogout = async () => {
     try {
-      const response = await fetch('/api/logout', {
-        method: 'POST',
-        credentials: 'include',
-      });
+      // Usar o método logout do hook de autenticação para garantir
+      // que o estado do React seja atualizado corretamente
+      await logout();
       
-      if (response.ok) {
-        toast({
-          title: "Logout realizado com sucesso",
-        });
-        navigate("/auth");
-      } else {
-        throw new Error('Falha ao fazer logout');
-      }
+      // A navegação acontecerá automaticamente pelo DashboardRedirect
+      // no App.tsx quando o estado de usuário for limpo
+      
     } catch (error) {
       console.error("Erro ao fazer logout:", error);
-      toast({
-        title: "Falha no logout",
-        description: error instanceof Error ? error.message : "Erro desconhecido",
-        variant: "destructive",
-      });
+      // Toast de erro já é mostrado pelo hook de autenticação
     }
   };
 
