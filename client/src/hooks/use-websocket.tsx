@@ -3,16 +3,18 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useToast } from './use-toast';
 import { queryClient } from '@/lib/queryClient';
 
-// CONFIGURAÇÃO DE EMERGÊNCIA PARA MÁXIMA PERFORMANCE
-// Intervalo para heartbeat (ping/pong) muito maior para quase eliminar sobrecarga
-const HEARTBEAT_INTERVAL = 120000; // 2 minutos
-// Intervalo para reconexão após falha - recuperação muito rápida para evitar downtime
-const INITIAL_RECONNECT_DELAY = 500; // 0.5 segundos
-const MAX_RECONNECT_DELAY = 5000; // máximo 5 segundos
-// Número reduzido de tentativas para evitar sobrecarregar rede
-const MAX_RECONNECT_ATTEMPTS = 3;
-// Tempo de pausa entre séries de tentativas (30 segundos)
-const RECONNECT_PAUSE = 30000;
+// CONFIGURAÇÃO ULTRA-OTIMIZADA PARA MÁXIMA PERFORMANCE E ESTABILIDADE
+// Intervalo para heartbeat (ping/pong) ajustado para maior eficiência
+const HEARTBEAT_INTERVAL = 90000; // 1.5 minutos - equilibra conectividade com economia de recursos
+// Estratégia de back-off exponencial para reconexão
+const INITIAL_RECONNECT_DELAY = 1000; // 1 segundo inicial
+const MAX_RECONNECT_DELAY = 30000; // máximo 30 segundos
+// Número moderado de tentativas antes de pausa
+const MAX_RECONNECT_ATTEMPTS = 5; // Aumentamos para mais tentativas com backoff
+// Tempo de pausa reduzido entre séries de tentativas (10 segundos)
+const RECONNECT_PAUSE = 10000;
+// Intervalo mínimo entre atualizações via polling para evitar sobrecarga
+const MIN_POLLING_INTERVAL = 5000; // 5 segundos
 
 export function useWebSocket() {
   const { user } = useAuth();
@@ -429,24 +431,31 @@ export function useWebSocket() {
       socket.onclose = (event) => {
         if (!isMountedRef.current) return;
         
-        console.log('MODO RÁPIDO: WebSocket desconectado, reconectando imediatamente...', event);
+        console.log('WebSocket desconectado, iniciando reconexão inteligente...', event);
         setConnected(false);
         
         // Limpar heartbeat
         clearTimers();
         
         // Iniciar atualização periódica para compensar a falta de WebSocket
-        refreshDataPeriodically();
+        // Verificar se passou tempo suficiente desde a última atualização
+        const now = Date.now();
+        const lastUpdate = lastUpdateRef.current || 0;
+        if (now - lastUpdate > MIN_POLLING_INTERVAL) {
+          refreshDataPeriodically();
+        } else {
+          console.log(`Adiando polling - última atualização há apenas ${Math.floor((now - lastUpdate)/1000)}s`);
+        }
         
-        // MODO DE EMERGÊNCIA: Reconexão extremamente agressiva
+        // Reconexão com backoff exponencial
         if (user) {
           reconnectAttemptsRef.current += 1;
           
-          // Verificar se atingimos o limite de tentativas consecutivas - mantemos mais baixo
+          // Verificar se atingimos o limite de tentativas consecutivas
           if (reconnectAttemptsRef.current > MAX_RECONNECT_ATTEMPTS) {
-            console.log(`MODO RÁPIDO: Limite de ${MAX_RECONNECT_ATTEMPTS} tentativas atingido. Pausa curta de ${RECONNECT_PAUSE/1000} segundos`);
+            console.log(`Limite de ${MAX_RECONNECT_ATTEMPTS} tentativas atingido. Pausa de ${RECONNECT_PAUSE/1000} segundos`);
             
-            // Pausa muito mais curta antes de tentar novamente
+            // Pausa antes de reiniciar o ciclo de reconexão
             reconnectTimeoutRef.current = setTimeout(() => {
               if (isMountedRef.current) {
                 // Resetar contador e tentar novamente
@@ -468,13 +477,24 @@ export function useWebSocket() {
             return;
           }
           
-          // MODO DE EMERGÊNCIA: Quase sem delay entre tentativas
-          // Delay fixo muito curto entre tentativas (200ms - quase imediato)
-          const nextDelay = 200;
+          // Calcular próximo delay com backoff exponencial
+          // Factor = 1.5 (menos agressivo que o padrão 2.0)
+          const backoffFactor = 1.5;
+          // Aplicar jitter (variação aleatória) para evitar reconexões sincronizadas
+          const jitter = Math.random() * 0.3 + 0.85; // 0.85-1.15
+          
+          let nextDelay = Math.min(
+            reconnectDelayRef.current * backoffFactor * jitter,
+            MAX_RECONNECT_DELAY
+          );
+          
+          // Arredondar para um número inteiro
+          nextDelay = Math.floor(nextDelay);
           reconnectDelayRef.current = nextDelay;
           
-          console.log(`MODO RÁPIDO: Tentando reconectar em ${nextDelay / 1000} segundos (tentativa ${reconnectAttemptsRef.current} de ${MAX_RECONNECT_ATTEMPTS})...`);
+          console.log(`Reconexão inteligente em ${(nextDelay / 1000).toFixed(1)} segundos (tentativa ${reconnectAttemptsRef.current} de ${MAX_RECONNECT_ATTEMPTS})...`);
           
+          // Agendar reconexão
           reconnectTimeoutRef.current = setTimeout(() => {
             if (isMountedRef.current) {
               connect();
@@ -517,25 +537,39 @@ export function useWebSocket() {
       // Atualizar dados imediatamente, sem esperar pelo WebSocket
       refreshDataPeriodically();
       
-      // MODO DE EMERGÊNCIA: Configurado para atualização muito mais frequente
-      // Reduzimos para 10 segundos (era 2 minutos antes) para garantir dados atualizados rapidamente
+      // Sistema de polling adaptativo - mais inteligente para economizar recursos
       const pollingInterval = setInterval(() => {
+        // Determinar se devemos fazer polling com base no estado de conexão e última atualização
         if (!connected) {
-          // Se não estiver conectado, atualizar dados via polling
-          // Verificando última atualização (5 segundos agora, era 30 antes)
+          // Se não estiver conectado, verificar tempo desde a última atualização
           const now = Date.now();
-          const lastUpdateTime = lastUpdateRef.current;
-          const timeSinceLastUpdate = lastUpdateTime ? now - lastUpdateTime : Infinity;
+          const lastUpdateTime = lastUpdateRef.current || 0;
+          const timeSinceLastUpdate = now - lastUpdateTime;
           
-          // MODO DE EMERGÊNCIA: Aumentar frequência de atualizações (5 segundos)
-          if (timeSinceLastUpdate > 5000) {
-            console.log('MODO RÁPIDO: WebSocket desconectado, atualizando via polling...');
+          // Intervalo adaptativo baseado no tempo em que a página está aberta
+          // Isso reduz a frequência de polling em páginas abertas por muito tempo
+          const pageOpenTime = now - window.performance.timing.navigationStart;
+          const pageOpenMinutes = pageOpenTime / (1000 * 60);
+          
+          // Calcular intervalo ideal entre polls
+          // Começa com MIN_POLLING_INTERVAL e cresce gradualmente até 30s
+          const idealInterval = Math.min(
+            Math.max(
+              MIN_POLLING_INTERVAL,
+              MIN_POLLING_INTERVAL + (pageOpenMinutes * 1000) // +1s por minuto que a página está aberta
+            ),
+            30000 // Máximo de 30s entre polls
+          );
+          
+          if (timeSinceLastUpdate > idealInterval) {
+            console.log(`Atualizando via polling (intervalo adaptativo: ${Math.floor(idealInterval/1000)}s)`);
             refreshDataPeriodically();
           } else {
-            console.log(`Aguardando intervalo mínimo entre atualizações (${Math.floor(timeSinceLastUpdate/1000)}s)`);
+            // Log reduzido para diminuir ruído
+            console.log(`Aguardando intervalo entre polls (${Math.floor(timeSinceLastUpdate/1000)}/${Math.floor(idealInterval/1000)}s)`);
           }
         }
-      }, 10000); // MODO DE EMERGÊNCIA: Polling a cada 10 segundos para máxima performance
+      }, 15000); // Polling base a cada 15 segundos (mais econômico)
       
       // Função de limpeza
       return () => {
