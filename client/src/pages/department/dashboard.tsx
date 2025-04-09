@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useLocation, useParams } from "wouter";
 import { useToast } from "@/hooks/use-toast";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { User, Activity } from "@shared/schema";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2, CalendarClock, Clock, Eye, RefreshCw, RotateCcw } from "lucide-react";
@@ -14,6 +14,7 @@ import Layout from "@/components/Layout";
 import ViewActivityModal from "@/components/view-activity-modal";
 import CompleteActivityModal from "@/components/complete-activity-modal";
 import ReturnActivityModal from "@/components/return-activity-modal";
+import { useSoundPlayer } from "@/hooks/use-sound-player";
 
 // Estendendo a interface Activity para incluir os campos que estamos recebendo do backend
 interface ActivityWithNotes extends Activity {
@@ -82,6 +83,12 @@ export default function DepartmentDashboard() {
   const userDepartment = user?.role !== 'admin' ? user?.role : department;
   
   // Buscar atividades para o departamento do usuário
+  // Importar o hook para reprodução de som
+  const { playSound, playDepartmentSound } = useSoundPlayer();
+  
+  // Referência para armazenar a contagem anterior de atividades
+  const previousActivityCountRef = useRef<number>(0);
+  
   const { data: activitiesData = [], isLoading: activitiesLoading, refetch: refetchActivities } = useQuery({
     queryKey: ["/api/department/activities", userDepartment],
     queryFn: async () => {
@@ -99,6 +106,31 @@ export default function DepartmentDashboard() {
     },
     enabled: !!user && !!userDepartment
   });
+  
+  // Efeito para reproduzir som quando chegam novos pedidos
+  useEffect(() => {
+    // Se não temos dados ou ainda está carregando, não faça nada
+    if (!activitiesData || activitiesLoading) return;
+    
+    // Se a contagem anterior foi registrada e agora temos mais atividades
+    if (previousActivityCountRef.current > 0 && activitiesData.length > previousActivityCountRef.current) {
+      console.log(`[som] Novas atividades detectadas! Anterior: ${previousActivityCountRef.current}, Atual: ${activitiesData.length}`);
+      
+      // Tocar som de notificação para o departamento
+      if (userDepartment) {
+        playDepartmentSound(userDepartment);
+        
+        // Também mostrar uma notificação de toast
+        toast({
+          title: "Novos pedidos recebidos!",
+          description: `${activitiesData.length - previousActivityCountRef.current} novos pedidos chegaram para seu departamento.`,
+        });
+      }
+    }
+    
+    // Atualizar a referência com o novo valor
+    previousActivityCountRef.current = activitiesData.length;
+  }, [activitiesData, activitiesLoading, userDepartment, playDepartmentSound, toast]);
   
   // Recarregar os dados quando o departamento do usuário mudar
   useEffect(() => {
