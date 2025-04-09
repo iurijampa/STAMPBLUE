@@ -20,19 +20,30 @@ export async function withPool<T>(callback: () => Promise<T>): Promise<T> {
   }
 }
 
-// Função para consultas otimizadas com cache
-export async function cachedQuery<T>(key: string, query: () => Promise<T>, ttlMs = 10000): Promise<T> {
+// MODO DE EMERGÊNCIA: Função para consultas otimizadas com cache muito maior
+export async function cachedQuery<T>(key: string, query: () => Promise<T>, ttlMs = 60000): Promise<T> {
   const cached = queryCache.get(key);
   
-  // Se temos cache válido, use-o
+  // Se temos cache válido, use-o - agora com 60 segundos de duração (6x mais que antes)
   if (cached && cached.timestamp > Date.now() - ttlMs) {
+    console.log(`MODO RÁPIDO: Usando cache para ${key} (${Math.floor((Date.now() - cached.timestamp)/1000)}s de ${ttlMs/1000}s)`);
     return cached.data;
   }
   
   // Caso contrário, execute a consulta e armazene o resultado
-  const result = await query();
-  queryCache.set(key, { data: result, timestamp: Date.now() });
-  return result;
+  console.log(`MODO RÁPIDO: Cache expirado para ${key}, buscando dados novos`);
+  try {
+    const result = await query();
+    queryCache.set(key, { data: result, timestamp: Date.now() });
+    return result;
+  } catch (error) {
+    // MODO DE EMERGÊNCIA: Se a consulta falhar e tivermos dados em cache, use-os mesmo expirados
+    if (cached) {
+      console.log(`MODO RÁPIDO: Erro ao buscar dados novos, usando cache expirado para ${key}`);
+      return cached.data;
+    }
+    throw error;
+  }
 }
 
 // Função para limpar o cache por prefixo/padrão
