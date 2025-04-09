@@ -13,6 +13,7 @@ import { AuthProvider } from "@/hooks/use-auth";
 import { useAuth } from "@/hooks/use-auth";
 import { WebSocketProvider } from "@/hooks/websocket-provider";
 import { SoundManagerProvider } from "@/components/SoundManagerSimples";
+import { WebSocketSoundBridge } from "@/components/WebSocketSoundBridge";
 
 // Componente para redirecionar com base no papel do usuário
 function DashboardRedirect() {
@@ -81,13 +82,16 @@ function DashboardRedirect() {
 
 function App() {
   // Ordem correta dos provedores:
-  // 1. SoundManagerProvider primeiro (pois WebSocketProvider depende dele)
-  // 2. AuthProvider (pois WebSocketProvider e rotas dependem dele)
-  // 3. WebSocketProvider
+  // 1. AuthProvider primeiro (pois todos os outros dependem dele)
+  // 2. WebSocketProvider segundo (pois dependem de dados de autenticação)
+  // 3. SoundManagerProvider por último (não é dependência crítica)
   return (
-    <SoundManagerProvider>
-      <AuthProvider>
-        <WebSocketProvider>
+    <AuthProvider>
+      <WebSocketProvider>
+        <SoundManagerProvider>
+          {/* Componente ponte que conecta WebSocket com SoundManager */}
+          <WebSocketSoundBridge />
+          
           <Switch>
             <Route path="/" component={DashboardRedirect} />
             <Route path="/auth" component={AuthPage} />
@@ -98,9 +102,9 @@ function App() {
             <Route component={NotFound} />
           </Switch>
           <Toaster />
-        </WebSocketProvider>
-      </AuthProvider>
-    </SoundManagerProvider>
+        </SoundManagerProvider>
+      </WebSocketProvider>
+    </AuthProvider>
   );
 }
 

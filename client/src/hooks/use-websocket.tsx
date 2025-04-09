@@ -2,7 +2,6 @@ import { useAuth } from './use-auth';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useToast } from './use-toast';
 import { queryClient } from '@/lib/queryClient';
-import { SoundType, useSoundManager } from '@/components/SoundManagerSimples';
 
 // CONFIGURAÇÃO DE EMERGÊNCIA PARA MÁXIMA PERFORMANCE
 // Intervalo para heartbeat (ping/pong) muito maior para quase eliminar sobrecarga
@@ -21,7 +20,9 @@ export function useWebSocket() {
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
-  const { playSound } = useSoundManager();
+  
+  // Criamos eventos para notificar sobre mensagens em vez de chamar diretamente
+  const [messageData, setMessageData] = useState<any>(null);
   
   // Referências para controle de reconexão e ping
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -237,8 +238,8 @@ export function useWebSocket() {
             queryClient.invalidateQueries({ queryKey: ['/api/department/activities', user.role] });
             queryClient.invalidateQueries({ queryKey: ['/api/activities'] });
             
-            // Reproduzir som de notificação bem chamativo para nova atividade
-            playSound(SoundType.NEW_ACTIVITY);
+            // Emitir evento de nova atividade
+            setMessageData({ type: 'sound', soundType: 'new-activity' });
             
             // Notificação na aba do navegador
             showBrowserNotification(
@@ -259,8 +260,8 @@ export function useWebSocket() {
             queryClient.invalidateQueries({ queryKey: ['/api/department/activities', user.role] });
             queryClient.invalidateQueries({ queryKey: ['/api/activities'] });
             
-            // Reproduzir som de alerta para pedidos retornados
-            playSound(SoundType.RETURN_ALERT);
+            // Emitir evento de retorno
+            setMessageData({ type: 'sound', soundType: 'return-alert' });
             
             // Notificação na aba do navegador
             showBrowserNotification(
@@ -282,8 +283,8 @@ export function useWebSocket() {
             queryClient.invalidateQueries({ queryKey: ['/api/activities'] });
             queryClient.invalidateQueries({ queryKey: ['/api/department/stats', user.role] });
             
-            // Som sutil de atualização
-            playSound(SoundType.UPDATE);
+            // Emitir evento de atualização
+            setMessageData({ type: 'sound', soundType: 'update' });
           } 
           else if (data.type === 'activity_progress') {
             // Invalidar cache para atualizar lista de atividades e progresso
@@ -293,8 +294,8 @@ export function useWebSocket() {
             queryClient.invalidateQueries({ queryKey: ['/api/department/stats', user.role] });
             queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
             
-            // Som de atualização
-            playSound(SoundType.SUCCESS);
+            // Emitir evento de sucesso
+            setMessageData({ type: 'sound', soundType: 'success' });
             
             // Notificar admins sobre o progresso de atividades
             if (user.role === 'admin') {
@@ -428,7 +429,7 @@ export function useWebSocket() {
     showBrowserNotification, 
     refreshDataPeriodically, 
     toast, 
-    playSound, 
+    setMessageData, 
     sendHeartbeat
   ]);
   
@@ -506,7 +507,7 @@ export function useWebSocket() {
     error,
     sendMessage,
     registerWithDepartment,
-    playSound, // Exportar a função de reprodução de som para uso direto
+    messageData, // Exportar dados de mensagem para o SoundManager
     refreshData: refreshDataPeriodically // Exportar função para atualizar dados manualmente
   };
 }

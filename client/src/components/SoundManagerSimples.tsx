@@ -67,6 +67,8 @@ type SoundManagerContextType = {
   playSound: (type: SoundType) => void;
   isSoundEnabled: boolean;
   toggleSound: () => void;
+  isMuted: boolean;
+  toggleMute: () => void;
 };
 
 const SoundManagerContext = createContext<SoundManagerContextType | null>(null);
@@ -75,10 +77,11 @@ const SoundManagerContext = createContext<SoundManagerContextType | null>(null);
 export const SoundManagerProvider: React.FC<{children: React.ReactNode}> = ({ children }) => {
   // Gerenciar estado de ativação do som
   const [isSoundEnabled, setIsSoundEnabled] = useState(true);
+  const [isMuted, setIsMuted] = useState(false);
   
   // Função simplificada para reproduzir som
   const playSound = useCallback((type: SoundType) => {
-    if (!isSoundEnabled) return;
+    if (!isSoundEnabled || isMuted) return;
     
     console.log(`Tentando reproduzir som: ${type}`);
     
@@ -105,9 +108,9 @@ export const SoundManagerProvider: React.FC<{children: React.ReactNode}> = ({ ch
       console.error(`Erro ao reproduzir som ${type}:`, error);
       return false;
     }
-  }, [isSoundEnabled]);
+  }, [isSoundEnabled, isMuted]);
   
-  // Alternar ativação/desativação do som
+  // Alternar ativação/desativação do som (configuração global)
   const toggleSound = useCallback(() => {
     setIsSoundEnabled(prev => {
       // Tocar um beep confirmando ativação
@@ -118,12 +121,19 @@ export const SoundManagerProvider: React.FC<{children: React.ReactNode}> = ({ ch
     });
   }, []);
   
+  // Alternar mudo/não-mudo (configuração temporária)
+  const toggleMute = useCallback(() => {
+    setIsMuted(prev => !prev);
+  }, []);
+  
   return (
     <SoundManagerContext.Provider
       value={{
         playSound,
         isSoundEnabled,
         toggleSound,
+        isMuted,
+        toggleMute
       }}
     >
       {children}

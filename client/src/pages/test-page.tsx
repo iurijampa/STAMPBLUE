@@ -1,9 +1,10 @@
+import SoundTestPage from '@/components/sound-test';
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { User } from "@shared/schema";
-import { Loader2 } from "lucide-react";
+import { Loader2, Menu, LogOut } from "lucide-react";
 
 export default function TestPage() {
   const { toast } = useToast();
@@ -75,25 +76,43 @@ export default function TestPage() {
   }
 
   return (
-    <div className="min-h-screen p-8">
-      <div className="max-w-5xl mx-auto bg-white rounded-lg shadow-md p-6">
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold">Página de Teste</h1>
+    <div className="container mx-auto p-4">
+      {/* Barra superior com informações do usuário */}
+      <div className="flex justify-between items-center mb-6 p-3 bg-background shadow rounded-lg">
+        <div className="flex items-center gap-2">
+          <Menu className="h-5 w-5 text-muted-foreground" />
+          <span className="font-medium">Teste de Sons</span>
+        </div>
+        {user && (
           <div className="flex items-center gap-4">
-            <p className="text-sm text-muted-foreground">
-              Usuário: <span className="font-semibold">{user?.name || user?.username}</span>
-            </p>
-            <Button variant="outline" onClick={handleLogout}>
-              Sair
+            <div className="text-sm text-right">
+              <div className="font-medium">{user.username}</div>
+              <div className="text-muted-foreground capitalize">{user.role}</div>
+            </div>
+            <Button variant="ghost" size="icon" onClick={handleLogout} title="Sair">
+              <LogOut className="h-5 w-5" />
             </Button>
           </div>
+        )}
+      </div>
+
+      {/* Título da página */}
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight mb-2">
+            Teste de Sons do Sistema
+          </h1>
+          <p className="text-muted-foreground">
+            Use esta página para testar os sons utilizados no sistema de notificações.
+          </p>
         </div>
 
-        <div className="bg-white rounded-lg p-6 border border-border">
-          <h2 className="text-xl font-bold mb-4">Informações do Usuário</h2>
-          <pre className="bg-slate-100 p-4 rounded-md overflow-auto">
-            {JSON.stringify(user, null, 2)}
-          </pre>
+        {/* Componente de teste de sons */}
+        <SoundTestPage />
+        
+        {/* Rodapé estilizado */}
+        <div className="text-center text-xs text-muted-foreground mt-8 italic">
+          Desenvolvido por Iuri
         </div>
       </div>
     </div>

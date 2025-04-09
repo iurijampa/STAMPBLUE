@@ -1,78 +1,90 @@
 import { useState } from 'react';
+import { useSoundManager, SoundType } from '@/components/SoundManagerSimples';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Volume2, ChevronDown, ChevronUp } from 'lucide-react';
-import { useSoundManager, SoundType } from './SoundManagerSimples';
+import { 
+  Card, 
+  CardContent, 
+  CardDescription, 
+  CardFooter, 
+  CardHeader, 
+  CardTitle 
+} from '@/components/ui/card';
 
-export default function SoundTest() {
-  const [isOpen, setIsOpen] = useState(false);
-  const { playSound } = useSoundManager();
-  
-  const sounds: { name: string; type: SoundType; description: string }[] = [
-    { 
-      name: 'Notificação de Novo Pedido', 
-      type: SoundType.NEW_ACTIVITY,
-      description: 'Som tocado quando um novo pedido é criado ou chega ao seu setor'
-    },
-    { 
-      name: 'Alerta de Pedido Retornado', 
-      type: SoundType.RETURN_ALERT,
-      description: 'Som tocado quando um pedido é retornado por outro setor'
-    },
-    { 
-      name: 'Atualização de Status', 
-      type: SoundType.UPDATE,
-      description: 'Som tocado quando há atualizações no sistema'
-    }
-  ];
-  
+const SoundTestPage = () => {
+  const { playSound, isMuted, toggleMute } = useSoundManager();
+  const [lastPlayed, setLastPlayed] = useState<string | null>(null);
+
+  const handlePlaySound = (soundType: SoundType, soundName: string) => {
+    playSound(soundType);
+    setLastPlayed(soundName);
+  };
+
   return (
-    <Card className="mt-6 border shadow-sm">
-      <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-        <CollapsibleTrigger asChild>
-          <CardHeader className="py-4 cursor-pointer hover:bg-muted/30">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Volume2 className="h-5 w-5 text-primary" />
-                <CardTitle className="text-lg">Teste de Sons</CardTitle>
-              </div>
-              {isOpen ? (
-                <ChevronUp className="h-5 w-5 text-muted-foreground" />
-              ) : (
-                <ChevronDown className="h-5 w-5 text-muted-foreground" />
-              )}
-            </div>
-            <CardDescription>
-              Teste os sons do sistema de notificações
-            </CardDescription>
-          </CardHeader>
-        </CollapsibleTrigger>
+    <div className="container mx-auto py-8">
+      <Card>
+        <CardHeader>
+          <CardTitle>Teste de Sons</CardTitle>
+          <CardDescription>
+            Teste os diferentes sons utilizados no sistema
+          </CardDescription>
+        </CardHeader>
         
-        <CollapsibleContent>
-          <CardContent className="pt-0 pb-4">
-            <div className="grid grid-cols-1 gap-3">
-              {sounds.map((sound) => (
-                <div key={sound.type} className="flex items-center justify-between border rounded-lg p-3">
-                  <div>
-                    <h3 className="font-medium">{sound.name}</h3>
-                    <p className="text-sm text-muted-foreground">{sound.description}</p>
-                  </div>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => playSound(sound.type)}
-                    className="flex items-center gap-1.5"
-                  >
-                    <Volume2 className="h-4 w-4" />
-                    Testar
-                  </Button>
-                </div>
-              ))}
+        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="flex flex-col space-y-4">
+            <Button 
+              onClick={() => handlePlaySound(SoundType.NEW_ACTIVITY, 'Nova Atividade')}
+              variant="outline"
+              className="justify-start"
+            >
+              Tocar Som: Nova Atividade
+            </Button>
+            
+            <Button 
+              onClick={() => handlePlaySound(SoundType.RETURN_ALERT, 'Alerta de Retorno')}
+              variant="outline"
+              className="justify-start"
+            >
+              Tocar Som: Alerta de Retorno
+            </Button>
+            
+            <Button 
+              onClick={() => handlePlaySound(SoundType.UPDATE, 'Atualização')}
+              variant="outline"
+              className="justify-start"
+            >
+              Tocar Som: Atualização
+            </Button>
+            
+            <Button 
+              onClick={() => handlePlaySound(SoundType.SUCCESS, 'Sucesso')}
+              variant="outline"
+              className="justify-start"
+            >
+              Tocar Som: Sucesso
+            </Button>
+          </div>
+          
+          <div className="flex flex-col space-y-4">
+            <div className="p-4 rounded-md bg-muted">
+              <p className="font-medium">Status:</p>
+              <p>Som: {isMuted ? 'Desativado' : 'Ativado'}</p>
+              {lastPlayed && <p>Último som tocado: {lastPlayed}</p>}
             </div>
-          </CardContent>
-        </CollapsibleContent>
-      </Collapsible>
-    </Card>
+            
+            <Button onClick={toggleMute} variant="secondary">
+              {isMuted ? 'Ativar Sons' : 'Desativar Sons'}
+            </Button>
+          </div>
+        </CardContent>
+        
+        <CardFooter className="flex justify-between">
+          <p className="text-sm text-muted-foreground">
+            Os sons são reproduzidos automaticamente durante a operação normal do sistema.
+          </p>
+        </CardFooter>
+      </Card>
+    </div>
   );
-}
+};
+
+export default SoundTestPage;
