@@ -3,26 +3,26 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Volume2, ChevronDown, ChevronUp } from 'lucide-react';
-import { useSoundPlayer, SoundType } from './sound-player';
+import { useSoundManager, SoundType } from './SoundManagerSimples';
 
 export default function SoundTest() {
   const [isOpen, setIsOpen] = useState(false);
-  const { playSound } = useSoundPlayer();
+  const { playSound } = useSoundManager();
   
   const sounds: { name: string; type: SoundType; description: string }[] = [
     { 
       name: 'Notificação de Novo Pedido', 
-      type: 'NEW_ACTIVITY',
+      type: SoundType.NEW_ACTIVITY,
       description: 'Som tocado quando um novo pedido é criado ou chega ao seu setor'
     },
     { 
       name: 'Alerta de Pedido Retornado', 
-      type: 'RETURN_ALERT',
+      type: SoundType.RETURN_ALERT,
       description: 'Som tocado quando um pedido é retornado por outro setor'
     },
     { 
       name: 'Atualização de Status', 
-      type: 'UPDATE',
+      type: SoundType.UPDATE,
       description: 'Som tocado quando há atualizações no sistema'
     }
   ];
@@ -61,7 +61,7 @@ export default function SoundTest() {
                   <Button 
                     variant="outline" 
                     size="sm"
-                    onClick={() => playSound(sound.type, 1.0)}
+                    onClick={() => playSound(sound.type)}
                     className="flex items-center gap-1.5"
                   >
                     <Volume2 className="h-4 w-4" />

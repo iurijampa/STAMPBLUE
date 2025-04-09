@@ -12,7 +12,7 @@ import DepartmentDashboard from "@/pages/department/dashboard";
 import { AuthProvider } from "@/hooks/use-auth";
 import { useAuth } from "@/hooks/use-auth";
 import { WebSocketProvider } from "@/hooks/websocket-provider";
-import { SoundManagerProvider } from "@/components/sound-manager";
+import { SoundManagerProvider } from "@/components/SoundManagerSimples";
 
 // Componente para redirecionar com base no papel do usuário
 function DashboardRedirect() {

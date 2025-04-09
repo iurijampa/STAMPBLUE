@@ -31,7 +31,7 @@ import EditActivityModal from "@/components/edit-activity-modal";
 import DeleteActivityDialog from "@/components/delete-activity-dialog";
 import ViewActivityModal from "@/components/view-activity-modal";
 import BackupManager from "@/components/backup-manager";
-import { SoundToggleButton, SoundTestButton } from "@/components/sound-manager";
+import { SoundToggleButton, SoundTestButton } from "@/components/SoundManagerSimples";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function AdminDashboard() {

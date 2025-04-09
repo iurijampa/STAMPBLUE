@@ -14,7 +14,7 @@ import Layout from "@/components/Layout";
 import ViewActivityModal from "@/components/view-activity-modal";
 import CompleteActivityModal from "@/components/complete-activity-modal";
 import ReturnActivityModal from "@/components/return-activity-modal";
-import { SoundToggleButton, SoundTestButton } from "@/components/sound-manager";
+import { SoundToggleButton, SoundTestButton } from "@/components/SoundManagerSimples";
 
 // Estendendo a interface Activity para incluir os campos que estamos recebendo do backend
 interface ActivityWithNotes extends Activity {

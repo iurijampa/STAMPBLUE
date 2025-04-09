@@ -2,7 +2,7 @@ import { useAuth } from './use-auth';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useToast } from './use-toast';
 import { queryClient } from '@/lib/queryClient';
-import { SoundType, useSoundManager } from '@/components/sound-manager';
+import { SoundType, useSoundManager } from '@/components/SoundManagerSimples';
 
 // CONFIGURAÇÃO DE EMERGÊNCIA PARA MÁXIMA PERFORMANCE
 // Intervalo para heartbeat (ping/pong) muito maior para quase eliminar sobrecarga

@@ -3,7 +3,7 @@ import App from "./App";
 import "./index.css";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "./lib/queryClient";
-import { SoundManagerProvider } from "./components/sound-manager";
+import { SoundManagerProvider } from "./components/SoundManagerSimples";
 
 // Script para ocultar o botão "Made with Replit"
 document.addEventListener("DOMContentLoaded", function() {
