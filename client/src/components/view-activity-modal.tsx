@@ -183,6 +183,14 @@ export default function ViewActivityModal({ isOpen, onClose, activity }: ViewAct
       pdf.setFont('helvetica', 'normal');
       pdf.text(` ${formatDate(activity.deadline)}`, marginLeft + 70, 48);
       
+      // Nome do cliente logo abaixo da data de entrega (movido para cá)
+      if (activity.clientName) {
+        pdf.setFont('helvetica', 'bold');
+        pdf.text('Cliente:', marginLeft, 56);
+        pdf.setFont('helvetica', 'normal');
+        pdf.text(` ${activity.clientName}`, marginLeft + 35, 56);
+      }
+      
       // Adicionar descrição e imagem lado a lado quando possível
       pdf.setFontSize(11);
       
@@ -374,13 +382,7 @@ export default function ViewActivityModal({ isOpen, onClose, activity }: ViewAct
       // Informações adicionais
       let infoY = Math.min(pageHeight - 50, startY + 110); // Garantir que não ultrapasse a página
       
-      // Informações de quantidade e outras métricas
-      pdf.setFontSize(10);
-      pdf.setFont('helvetica', 'bold');
-      pdf.text(`Quantidade: ${activity.quantity} unidade(s)`, marginLeft, infoY);
-      if (activity.clientName) {
-        pdf.text(`Cliente: ${activity.clientName}`, marginLeft + 80, infoY);
-      }
+      // Remoção da informação de quantidade conforme solicitado
       
       // Informações de retorno, se o pedido foi retornado
       if ((activity as any).wasReturned) {
