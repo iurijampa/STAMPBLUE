@@ -133,6 +133,27 @@ export default function ViewActivityModal({ isOpen, onClose, activity }: ViewAct
     resetZoom();
   };
   
+  // Função para calcular dimensões proporcionais da imagem
+  const calculateProportionalDimensions = (maxWidth: number, maxHeight: number, imgElement: HTMLImageElement): {width: number, height: number} => {
+    // Obter as dimensões originais da imagem
+    const originalWidth = imgElement.width;
+    const originalHeight = imgElement.height;
+    
+    // Calcular a proporção (aspect ratio)
+    const aspectRatio = originalWidth / originalHeight;
+    
+    let width = maxWidth;
+    let height = maxWidth / aspectRatio;
+    
+    // Verificar se a altura calculada excede o máximo permitido
+    if (height > maxHeight) {
+      height = maxHeight;
+      width = maxHeight * aspectRatio;
+    }
+    
+    return { width, height };
+  };
+  
   // Função para gerar o PDF com layout melhorado
   const handlePrintPDF = async () => {
     if (!activity) return;
@@ -220,27 +241,73 @@ export default function ViewActivityModal({ isOpen, onClose, activity }: ViewAct
             
             // Imagem à direita
             const imageX = marginLeft + textWidth + 5; // 5mm de espaço entre texto e imagem
-            const imageWidth = contentWidth * 0.38; // Imagem ocupa 38% da largura
-            const imageHeight = 80; // Altura fixa para a imagem
+            const maxImageWidth = contentWidth * 0.38; // Imagem ocupa 38% da largura
+            const maxImageHeight = 80; // Altura máxima para a imagem
             
             pdf.setFont('helvetica', 'bold');
             pdf.text('Imagem:', imageX, startY);
             
-            // Adicionar a imagem com proporção preservada
-            pdf.addImage(
-              activity.image, 
-              'JPEG', 
-              imageX, 
-              startY + 8,
-              imageWidth,
-              imageHeight,
-              undefined,
-              'FAST'
-            );
+            // Criar imagem temporária para obter dimensões originais
+            const img = new Image();
+            img.src = activity.image;
+            
+            // Esperar imagem carregar para calcular dimensões
+            await new Promise<void>((resolve) => {
+              img.onload = () => {
+                // Calcular dimensões proporcionais
+                const { width: imageWidth, height: imageHeight } = {
+                  width: maxImageWidth,
+                  height: maxImageHeight
+                };
+                
+                // Calcular a proporção (aspect ratio)
+                const aspectRatio = img.width / img.height;
+                
+                // Calcular dimensões mantendo proporção
+                let finalWidth = maxImageWidth;
+                let finalHeight = finalWidth / aspectRatio;
+                
+                // Verificar se a altura calculada excede o máximo permitido
+                if (finalHeight > maxImageHeight) {
+                  finalHeight = maxImageHeight;
+                  finalWidth = maxImageHeight * aspectRatio;
+                }
+                
+                // Adicionar a imagem com proporção preservada
+                pdf.addImage(
+                  activity.image, 
+                  'JPEG', 
+                  imageX, 
+                  startY + 8,
+                  finalWidth,
+                  finalHeight,
+                  undefined,
+                  'FAST'
+                );
+                
+                resolve();
+              };
+              
+              // Se falhar ao carregar, usar dimensões máximas
+              img.onerror = () => {
+                pdf.addImage(
+                  activity.image, 
+                  'JPEG', 
+                  imageX, 
+                  startY + 8,
+                  maxImageWidth,
+                  maxImageHeight,
+                  undefined,
+                  'FAST'
+                );
+                
+                resolve();
+              };
+            });
             
             // Atualizar a posição Y após o maior elemento (texto ou imagem)
             const textEndY = startY + 8 + (splitText.length * 5);
-            const imageEndY = startY + 8 + imageHeight;
+            const imageEndY = startY + 8 + maxImageHeight;
             let currentY = Math.max(textEndY, imageEndY) + 15;
             
             // Adicionar imagens adicionais se houver
@@ -256,23 +323,65 @@ export default function ViewActivityModal({ isOpen, onClose, activity }: ViewAct
               
               for (let i = 0; i < maxAdditionalImages; i++) {
                 try {
-                  pdf.addImage(
-                    activity.additionalImages[i],
-                    'JPEG',
-                    marginLeft + (i * (additionalImagesWidth + 5)),
-                    currentY,
-                    additionalImagesWidth,
-                    60,
-                    undefined,
-                    'FAST'
-                  );
+                  // Para cada imagem adicional, carregamos e mantemos proporção
+                  const additionalImg = new Image();
+                  additionalImg.src = activity.additionalImages[i];
+                  
+                  // Processar imagem atual
+                  await new Promise<void>((resolve) => {
+                    additionalImg.onload = () => {
+                      // Calcular a proporção (aspect ratio)
+                      const aspectRatio = additionalImg.width / additionalImg.height;
+                      
+                      // Calcular dimensões mantendo proporção
+                      let finalWidth = additionalImagesWidth;
+                      let finalHeight = finalWidth / aspectRatio;
+                      
+                      // Verificar se a altura calculada excede o máximo permitido
+                      const maxAdditionalHeight = 60;
+                      if (finalHeight > maxAdditionalHeight) {
+                        finalHeight = maxAdditionalHeight;
+                        finalWidth = maxAdditionalHeight * aspectRatio;
+                      }
+                      
+                      // Adicionar a imagem com proporção preservada
+                      pdf.addImage(
+                        activity.additionalImages[i],
+                        'JPEG',
+                        marginLeft + (i * (additionalImagesWidth + 5)),
+                        currentY,
+                        finalWidth,
+                        finalHeight,
+                        undefined,
+                        'FAST'
+                      );
+                      
+                      resolve();
+                    };
+                    
+                    // Se houver erro, usar valores padrão
+                    additionalImg.onerror = () => {
+                      pdf.addImage(
+                        activity.additionalImages[i],
+                        'JPEG',
+                        marginLeft + (i * (additionalImagesWidth + 5)),
+                        currentY,
+                        additionalImagesWidth,
+                        60,
+                        undefined,
+                        'FAST'
+                      );
+                      
+                      resolve();
+                    };
+                  });
                 } catch (additionalImgError) {
                   console.error(`Erro ao adicionar imagem adicional ${i+1}:`, additionalImgError);
                 }
               }
               
               // Se houver mais imagens, informar
-              if (activity.additionalImages.length > maxAdditionalImages) {
+              if (activity.additionalImages && activity.additionalImages.length > maxAdditionalImages) {
                 currentY += 70;
                 pdf.text(`* Há mais ${activity.additionalImages.length - maxAdditionalImages} imagens disponíveis no sistema`, marginLeft, currentY);
               }
@@ -302,16 +411,57 @@ export default function ViewActivityModal({ isOpen, onClose, activity }: ViewAct
             const maxImageWidth = contentWidth;
             const maxImageHeight = 100;
             
-            pdf.addImage(
-              activity.image, 
-              'JPEG', 
-              marginLeft, 
-              currentY,
-              maxImageWidth,
-              maxImageHeight,
-              undefined,
-              'FAST'
-            );
+            // Criar imagem temporária para obter dimensões originais
+            const img = new Image();
+            img.src = activity.image;
+            
+            // Esperar imagem carregar para calcular dimensões
+            await new Promise<void>((resolve) => {
+              img.onload = () => {
+                // Calcular a proporção (aspect ratio)
+                const aspectRatio = img.width / img.height;
+                
+                // Calcular dimensões mantendo proporção
+                let finalWidth = maxImageWidth;
+                let finalHeight = finalWidth / aspectRatio;
+                
+                // Verificar se a altura calculada excede o máximo permitido
+                if (finalHeight > maxImageHeight) {
+                  finalHeight = maxImageHeight;
+                  finalWidth = maxImageHeight * aspectRatio;
+                }
+                
+                // Adicionar a imagem com proporção preservada
+                pdf.addImage(
+                  activity.image, 
+                  'JPEG', 
+                  marginLeft, 
+                  currentY,
+                  finalWidth,
+                  finalHeight,
+                  undefined,
+                  'FAST'
+                );
+                
+                resolve();
+              };
+              
+              // Se falhar ao carregar, usar dimensões máximas
+              img.onerror = () => {
+                pdf.addImage(
+                  activity.image, 
+                  'JPEG', 
+                  marginLeft, 
+                  currentY,
+                  maxImageWidth,
+                  maxImageHeight,
+                  undefined,
+                  'FAST'
+                );
+                
+                resolve();
+              };
+            });
             
             currentY += maxImageHeight + 10;
             
@@ -328,23 +478,65 @@ export default function ViewActivityModal({ isOpen, onClose, activity }: ViewAct
               
               for (let i = 0; i < maxAdditionalImages; i++) {
                 try {
-                  pdf.addImage(
-                    activity.additionalImages[i],
-                    'JPEG',
-                    marginLeft + (i * (additionalImagesWidth + 5)),
-                    currentY,
-                    additionalImagesWidth,
-                    60,
-                    undefined,
-                    'FAST'
-                  );
+                  // Para cada imagem adicional, carregamos e mantemos proporção
+                  const additionalImg = new Image();
+                  additionalImg.src = activity.additionalImages[i];
+                  
+                  // Processar imagem atual
+                  await new Promise<void>((resolve) => {
+                    additionalImg.onload = () => {
+                      // Calcular a proporção (aspect ratio)
+                      const aspectRatio = additionalImg.width / additionalImg.height;
+                      
+                      // Calcular dimensões mantendo proporção
+                      let finalWidth = additionalImagesWidth;
+                      let finalHeight = finalWidth / aspectRatio;
+                      
+                      // Verificar se a altura calculada excede o máximo permitido
+                      const maxAdditionalHeight = 60;
+                      if (finalHeight > maxAdditionalHeight) {
+                        finalHeight = maxAdditionalHeight;
+                        finalWidth = maxAdditionalHeight * aspectRatio;
+                      }
+                      
+                      // Adicionar a imagem com proporção preservada
+                      pdf.addImage(
+                        activity.additionalImages[i],
+                        'JPEG',
+                        marginLeft + (i * (additionalImagesWidth + 5)),
+                        currentY,
+                        finalWidth,
+                        finalHeight,
+                        undefined,
+                        'FAST'
+                      );
+                      
+                      resolve();
+                    };
+                    
+                    // Se houver erro, usar valores padrão
+                    additionalImg.onerror = () => {
+                      pdf.addImage(
+                        activity.additionalImages[i],
+                        'JPEG',
+                        marginLeft + (i * (additionalImagesWidth + 5)),
+                        currentY,
+                        additionalImagesWidth,
+                        60,
+                        undefined,
+                        'FAST'
+                      );
+                      
+                      resolve();
+                    };
+                  });
                 } catch (additionalImgError) {
                   console.error(`Erro ao adicionar imagem adicional ${i+1}:`, additionalImgError);
                 }
               }
               
               // Se houver mais imagens, informar
-              if (activity.additionalImages.length > maxAdditionalImages) {
+              if (activity.additionalImages && activity.additionalImages.length > maxAdditionalImages) {
                 currentY += 70;
                 pdf.text(`* Há mais ${activity.additionalImages.length - maxAdditionalImages} imagens disponíveis no sistema`, marginLeft, currentY);
               }
