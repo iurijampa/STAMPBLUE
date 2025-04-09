@@ -31,7 +31,7 @@ import EditActivityModal from "@/components/edit-activity-modal";
 import DeleteActivityDialog from "@/components/delete-activity-dialog";
 import ViewActivityModal from "@/components/view-activity-modal";
 import BackupManager from "@/components/backup-manager";
-import SoundTest from "@/components/sound-test";
+import { SoundToggleButton, SoundTestButton } from "@/components/sound-manager";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function AdminDashboard() {
@@ -506,7 +506,10 @@ export default function AdminDashboard() {
           
           {/* Sistema de teste de sons */}
           <div>
-            <SoundTest />
+            <div className="flex gap-2 items-center justify-center">
+              <SoundToggleButton />
+              <SoundTestButton />
+            </div>
           </div>
         </div>
       </div>

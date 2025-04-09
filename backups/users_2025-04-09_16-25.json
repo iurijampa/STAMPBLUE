@@ -1,13 +1,5 @@
 [
   {
-    "id": 1,
-    "username": "admin",
-    "password": "308f7c9e5a689b319a92f3b3b16459e2258f2bcd5bda8a76558bef08368c9978659bc4f6c42f5020a88a1defcbf87630e97892b1fcebba1995d2d64da186d169.e6fb91889da134f77368bb82aca0d945",
-    "name": "Administrador",
-    "role": "admin",
-    "department": "admin"
-  },
-  {
     "id": 2,
     "username": "gabarito",
     "password": "7ac145e400ca9d85720efd78edcb4dd6921c64b67573933e300cf9f621696ce3fef79612282ae6ae003129a0463445e173064c531b599774fd6dbcdaf510d830.1d4b70beb94c2a7297db6ff68f6889ac",
@@ -46,5 +38,13 @@
     "name": "Embalagem",
     "role": "embalagem",
     "department": "embalagem"
+  },
+  {
+    "id": 1,
+    "username": "admin",
+    "password": "a3d39ed687c5fe5adb89a44a5854360ce21090759422ce9ab7b16267bb10d79d79e0ea4786212ae8d448933094e956f55196c163c77da543d83f2fba97707e30.d0de977b128cb91aba4c42902cf83869",
+    "name": "Administrador",
+    "role": "admin",
+    "department": "admin"
   }
 ]
