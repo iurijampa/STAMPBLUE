@@ -178,11 +178,37 @@ export default function DepartmentDashboard() {
     }
   }, []);
 
+  // Referência para armazenar o hash dos IDs de atividades para comparação precisa
+  const prevActivitiesHashRef = useRef<string>("");
+  
+  // Função para gerar um hash das atividades baseado em IDs
+  const generateActivitiesHash = (activities: ActivityWithNotes[]) => {
+    // Ordenar IDs para garantir consistência, mesmo se a ordem mudar
+    const sortedIds = activities.map(a => a.id).sort((a, b) => a - b);
+    return sortedIds.join(',');
+  };
+
   // Verificar se há novas atividades e tocar som se houver
   useEffect(() => {
-    // Só tocamos se já tínhamos carregado antes (prevActivitiesCountRef > 0) e temos novas atividades
-    if (activitiesData && activitiesData.length > prevActivitiesCountRef.current && prevActivitiesCountRef.current > 0) {
-      console.log(`🔔 NOVAS ATIVIDADES DETECTADAS! Anterior: ${prevActivitiesCountRef.current}, Atual: ${activitiesData.length}`);
+    // Não fazer nada se não temos dados ainda
+    if (!activitiesData || activitiesData.length === 0) return;
+    
+    // Gerar hash atual das atividades
+    const currentHash = generateActivitiesHash(activitiesData);
+    
+    // Se é a primeira carga de atividades, apenas atualizar a referência sem tocar som
+    if (prevActivitiesCountRef.current === 0 || prevActivitiesHashRef.current === "") {
+      prevActivitiesCountRef.current = activitiesData.length;
+      prevActivitiesHashRef.current = currentHash;
+      console.log(`Configurando hash inicial: ${currentHash} com ${prevActivitiesCountRef.current} atividades`);
+      return;
+    }
+    
+    // Só tocamos som se: contagem aumentou E o hash mudou (indica novas atividades reais)
+    if (activitiesData.length > prevActivitiesCountRef.current && currentHash !== prevActivitiesHashRef.current) {
+      console.log(`🔔 NOVAS ATIVIDADES CONFIRMADAS! Anterior: ${prevActivitiesCountRef.current}, Atual: ${activitiesData.length}`);
+      console.log(`Hash anterior: ${prevActivitiesHashRef.current}`);
+      console.log(`Hash atual: ${currentHash}`);
       
       // Tocar som imediatamente usando todas as abordagens disponíveis
       try {
@@ -212,7 +238,7 @@ export default function DepartmentDashboard() {
         // Mostrar notificação na tela também
         toast({
           title: "🔔 Novas atividades chegaram!",
-          description: `Você tem ${activitiesData.length - prevActivitiesCountRef.current} nova(s) atividade(s) para processar.`,
+          description: `Você tem novas atividades para processar.`,
           variant: "default",
         });
       } catch (error) {
@@ -236,9 +262,23 @@ export default function DepartmentDashboard() {
         console.log("Atualizando atividades periodicamente...");
         refetchActivities().then(response => {
           const newActivities = response?.data;
-          // Se temos novas atividades e o número aumentou, tocar som
-          if (newActivities && newActivities.length > prevActivitiesCountRef.current && prevActivitiesCountRef.current > 0) {
-            console.log(`🔔 NOVAS ATIVIDADES VIA POLLING! Anterior: ${prevActivitiesCountRef.current}, Atual: ${newActivities.length}`);
+          
+          // Não fazer nada se não recebemos dados válidos
+          if (!newActivities || newActivities.length === 0) return;
+          
+          // Gerar hash atual das atividades
+          const currentHash = generateActivitiesHash(newActivities);
+          
+          // Verificar REALMENTE se temos novas atividades (hash mudou E contagem aumentou)
+          if (newActivities && 
+              newActivities.length > prevActivitiesCountRef.current && 
+              prevActivitiesCountRef.current > 0 && 
+              currentHash !== prevActivitiesHashRef.current) {
+            
+            console.log(`🔔 NOVAS ATIVIDADES CONFIRMADAS VIA POLLING!`);
+            console.log(`Anterior: ${prevActivitiesCountRef.current}, Atual: ${newActivities.length}`);
+            console.log(`Hash anterior: ${prevActivitiesHashRef.current}`);
+            console.log(`Hash atual: ${currentHash}`);
             
             // Tentar tocar som de várias maneiras para garantir que funcione
             try {
@@ -249,6 +289,9 @@ export default function DepartmentDashboard() {
               if ((window as any).modoDeusSom) {
                 (window as any).modoDeusSom('new-activity');
               }
+              
+              // Atualizar o hash para a próxima comparação
+              prevActivitiesHashRef.current = currentHash;
               
               // 3. Tentar via função global legada
               if ((window as any).tocarSomTeste) {
@@ -261,7 +304,7 @@ export default function DepartmentDashboard() {
               // Mostrar notificação na tela também
               toast({
                 title: "Novas atividades chegaram!",
-                description: `Você tem ${newActivities.length - prevActivitiesCountRef.current} nova(s) atividade(s) para processar.`,
+                description: `Você tem novas atividades para processar.`,
                 variant: "default",
               });
             } catch (error) {
