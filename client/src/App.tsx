@@ -90,8 +90,9 @@ function App() {
     <AuthProvider>
       <WebSocketProvider>
         <SoundManagerProvider>
-          {/* Componente principal de som - apenas este é necessário */}
+          {/* Componentes de som */}
           <SimpleSoundPlayer />
+          <SoundTestToque />
           
           <Switch>
             <Route path="/" component={DashboardRedirect} />
