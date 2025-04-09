@@ -805,25 +805,70 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
   
   // WebSocket server para atualizações em tempo real
-  const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
+  // Configuração otimizada para melhor performance
+  const wss = new WebSocketServer({ 
+    server: httpServer, 
+    path: '/ws',
+    // Configurações para melhorar a estabilidade e performance
+    clientTracking: true,
+    // Definindo o tamanho máximo da mensagem para evitar ataques DoS
+    maxPayload: 1024 * 50 // 50KB
+  });
   
-  // Armazenar conexões WebSocket por departamento
-  const connections: Record<string, WebSocket[]> = {
-    'admin': [],
-    'gabarito': [],
-    'impressao': [],
-    'batida': [],
-    'costura': [],
-    'embalagem': []
+  // Armazenar conexões WebSocket por departamento usando Set para melhor performance
+  // Set é mais eficiente para inserção/remoção frequente do que Array
+  const connections: Record<string, Set<WebSocket>> = {
+    'admin': new Set<WebSocket>(),
+    'gabarito': new Set<WebSocket>(),
+    'impressao': new Set<WebSocket>(),
+    'batida': new Set<WebSocket>(),
+    'costura': new Set<WebSocket>(),
+    'embalagem': new Set<WebSocket>()
   };
+  
+  // Verificar e logar estatísticas de conexão a cada 30 segundos
+  const connectionCheckInterval = setInterval(() => {
+    let totalConnections = 0;
+    Object.entries(connections).forEach(([dept, conns]) => {
+      totalConnections += conns.size;
+    });
+    
+    console.log(`[websocket] Total de conexões ativas: ${totalConnections}`);
+  }, 30000);
+  
+  // Limpar recursos quando o servidor for encerrado
+  process.on('SIGINT', () => {
+    console.log('[websocket] Encerrando servidor WebSocket...');
+    clearInterval(connectionCheckInterval);
+    
+    // Fechar todas as conexões ativas
+    Object.entries(connections).forEach(([dept, conns]) => {
+      conns.forEach(ws => {
+        try {
+          ws.close(1000, 'Servidor encerrando');
+        } catch (error) {
+          console.error(`[websocket] Erro ao fechar conexão do ${dept}:`, error);
+        }
+      });
+      conns.clear();
+    });
+    
+    // Fechar o servidor WebSocket
+    wss.close();
+    console.log('[websocket] Servidor WebSocket encerrado.');
+  });
   
   // Função para enviar atualizações para um departamento específico
   function notifyDepartment(department: string, data: any) {
     // Enviar para todas as conexões do departamento
     if (connections[department]) {
       connections[department].forEach(ws => {
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify(data));
+        try {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify(data));
+          }
+        } catch (error) {
+          console.error(`[websocket] Erro ao enviar mensagem para ${department}:`, error);
         }
       });
     }
@@ -831,10 +876,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Função para enviar atualizações para todos
   function notifyAll(data: any) {
-    Object.values(connections).flat().forEach(ws => {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify(data));
-      }
+    // Para cada departamento
+    Object.entries(connections).forEach(([dept, conns]) => {
+      // Para cada conexão no departamento
+      conns.forEach(ws => {
+        try {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify(data));
+          }
+        } catch (error) {
+          console.error(`[websocket] Erro ao enviar mensagem para todos (${dept}):`, error);
+        }
+      });
     });
   }
   
@@ -854,7 +907,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         // Responder a ping com pong para manter a conexão ativa
         if (data.type === 'ping') {
-          ws.send(JSON.stringify({ type: 'pong' }));
+          // Enviando de volta o timestamp original para medir latência, se disponível
+          ws.send(JSON.stringify({ 
+            type: 'pong', 
+            timestamp: data.timestamp || Date.now(),
+            server_time: Date.now()
+          }));
           return;
         }
         
@@ -862,21 +920,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (data.type === 'register' && data.department) {
           // Verificar se o departamento é válido
           if (connections[data.department]) {
-            // Remover esta conexão de qualquer outro departamento
+            // Remover esta conexão de qualquer outro departamento primeiro
             Object.keys(connections).forEach(dept => {
-              connections[dept] = connections[dept].filter(conn => conn !== ws);
+              connections[dept].delete(ws);
             });
             
             // Adicionar a conexão ao departamento correto
-            connections[data.department].push(ws);
+            connections[data.department].add(ws);
             console.log(`[websocket] Cliente registrado no departamento: ${data.department}`);
             
             // Enviar confirmação para o cliente
-            ws.send(JSON.stringify({ 
-              type: 'register_confirm', 
-              department: data.department,
-              message: `Conectado ao departamento ${data.department}` 
-            }));
+            try {
+              ws.send(JSON.stringify({ 
+                type: 'register_confirm', 
+                department: data.department,
+                message: `Conectado ao departamento ${data.department}` 
+              }));
+            } catch (error) {
+              console.error(`[websocket] Erro ao enviar confirmação para ${data.department}:`, error);
+            }
           }
         }
       } catch (error) {
@@ -887,8 +949,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // Limpar conexões quando cliente desconectar
     ws.on('close', () => {
       console.log('[websocket] Cliente desconectado');
+      
+      // Remover conexão de todos os departamentos
       Object.keys(connections).forEach(dept => {
-        connections[dept] = connections[dept].filter(conn => conn !== ws);
+        if (connections[dept].has(ws)) {
+          connections[dept].delete(ws);
+          console.log(`[websocket] Conexão removida do departamento: ${dept}`);
+        }
       });
     });
   });

@@ -5,11 +5,17 @@ import { queryClient } from '@/lib/queryClient';
 import { useSoundPlayer, SoundType } from '@/components/sound-player';
 import { useBrowserNotification } from './use-browser-notification';
 
-// Intervalo para heartbeat (ping/pong) para manter a conexão ativa - 30 segundos
-const HEARTBEAT_INTERVAL = 30000;
-// Intervalo para reconexão após falha - começa em 2 segundos e dobra até um máximo de 30 segundos
-const INITIAL_RECONNECT_DELAY = 2000;
-const MAX_RECONNECT_DELAY = 30000;
+// Intervalo para heartbeat (ping/pong) para manter a conexão ativa - 45 segundos
+// Aumentado para reduzir sobrecarga de comunicação
+const HEARTBEAT_INTERVAL = 45000;
+// Intervalo para reconexão após falha - começa em 3 segundos e dobra até um máximo de 20 segundos
+// Reduzindo a frequência de tentativas mas mantendo capacidade de recuperação
+const INITIAL_RECONNECT_DELAY = 3000;
+const MAX_RECONNECT_DELAY = 20000;
+// Número máximo de tentativas consecutivas de reconexão antes de pausar
+const MAX_RECONNECT_ATTEMPTS = 5;
+// Tempo de pausa entre séries de tentativas (2 minutos)
+const RECONNECT_PAUSE = 120000;
 
 export function useWebSocket() {
   const { user } = useAuth();
@@ -45,10 +51,27 @@ export function useWebSocket() {
   }, [isSupported, permission, requestPermission]);
   
   // Atualizar dados quando o WebSocket não está disponível
+  // Referência para armazenar o timestamp da última atualização de dados
+  const lastUpdateRef = useRef<number | null>(null);
+  
   const refreshDataPeriodically = useCallback(async () => {
     if (!user) return;
     
     try {
+      // Registrar quando a última atualização ocorreu
+      const now = Date.now();
+      const lastUpdateTime = lastUpdateRef.current;
+      
+      // Só atualizar se tiver passado pelo menos 10 segundos desde a última atualização
+      // Isso evita múltiplas atualizações simultâneas em curto período
+      if (lastUpdateTime && now - lastUpdateTime < 10000) {
+        console.log('Ignorando atualização frequente - última há', Math.floor((now - lastUpdateTime)/1000), 'segundos');
+        return;
+      }
+      
+      console.log(`Atualizando dados para ${user.role} via polling...`);
+      lastUpdateRef.current = now;
+      
       // Atualizar atividades e estatísticas do departamento via polling quando o WebSocket não funciona
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['/api/department/activities', user.role] }),
@@ -60,29 +83,57 @@ export function useWebSocket() {
     }
   }, [user]);
   
-  // Enviar heartbeat para manter a conexão ativa
+  // Enviar heartbeat otimizado para manter a conexão ativa
   const sendHeartbeat = useCallback(() => {
-    if (socketRef.current?.readyState === WebSocket.OPEN) {
-      // Se ainda estamos esperando uma resposta do ping anterior, a conexão pode estar inativa
-      if (pendingPongRef.current) {
-        console.log('Não recebemos resposta do ping anterior, reconectando...');
-        if (socketRef.current) {
-          socketRef.current.close();
-        }
-        return;
-      }
+    // Verificar se a conexão está aberta antes de tentar enviar
+    if (socketRef.current?.readyState !== WebSocket.OPEN) {
+      console.log('WebSocket não está aberto para enviar heartbeat');
+      return;
+    }
+    
+    // Se ainda estamos esperando uma resposta do ping anterior, a conexão pode estar inativa
+    if (pendingPongRef.current) {
+      console.log('Ainda aguardando resposta do ping anterior. A conexão pode estar inativa');
       
+      // Resetar o estado e fechar a conexão atual para forçar reconexão
+      pendingPongRef.current = false;
+      if (socketRef.current) {
+        try {
+          socketRef.current.close(1000, "Ping timeout");
+        } catch (e) {
+          console.error("Erro ao fechar conexão após timeout de ping:", e);
+        }
+      }
+      return;
+    }
+    
+    try {
       // Enviar ping e aguardar resposta
-      socketRef.current.send(JSON.stringify({ type: 'ping' }));
+      socketRef.current.send(JSON.stringify({ type: 'ping', timestamp: Date.now() }));
       pendingPongRef.current = true;
       
-      // Timeout para verificar se recebemos resposta do ping
-      setTimeout(() => {
-        if (pendingPongRef.current && socketRef.current) {
-          console.log('Timeout de ping/pong, reconectando...');
-          socketRef.current.close();
+      // Timeout mais curto para verificar se recebemos resposta do ping
+      const timeoutId = setTimeout(() => {
+        if (!isMountedRef.current) return;
+        
+        if (pendingPongRef.current) {
+          console.log('Timeout de ping/pong (10s), reconectando...');
+          pendingPongRef.current = false;
+          
+          if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+            try {
+              socketRef.current.close(1000, "Ping timeout");
+            } catch (e) {
+              console.error("Erro ao fechar conexão após timeout de ping:", e);
+            }
+          }
         }
-      }, 5000);
+      }, 10000); // 10 segundos de timeout
+      
+      return () => clearTimeout(timeoutId);
+    } catch (error) {
+      console.error("Erro ao enviar ping:", error);
+      pendingPongRef.current = false;
     }
   }, []);
   
@@ -322,18 +373,36 @@ export function useWebSocket() {
         // Iniciar atualização periódica para compensar a falta de WebSocket
         refreshDataPeriodically();
         
-        // Tentar reconectar com backoff exponencial
+        // Tentar reconectar com backoff exponencial e limites
         if (user) {
           reconnectAttemptsRef.current += 1;
           
-          // Calcular o próximo atraso (dobrar o atraso a cada tentativa)
+          // Verificar se atingimos o limite de tentativas consecutivas
+          if (reconnectAttemptsRef.current > MAX_RECONNECT_ATTEMPTS) {
+            console.log(`Limite de ${MAX_RECONNECT_ATTEMPTS} tentativas atingido. Pausando por ${RECONNECT_PAUSE/1000} segundos`);
+            
+            // Após muitas tentativas, pausar por um tempo maior para evitar 
+            // sobrecarga de rede e então reiniciar o contador
+            reconnectTimeoutRef.current = setTimeout(() => {
+              if (isMountedRef.current) {
+                // Resetar contador e delay para começar uma nova série de tentativas
+                reconnectAttemptsRef.current = 0;
+                reconnectDelayRef.current = INITIAL_RECONNECT_DELAY;
+                connect();
+              }
+            }, RECONNECT_PAUSE);
+            
+            return;
+          }
+          
+          // Calcular o próximo atraso (aumentar o atraso gradualmente)
           const nextDelay = Math.min(
-            reconnectDelayRef.current * Math.pow(1.5, Math.min(reconnectAttemptsRef.current - 1, 5)),
+            reconnectDelayRef.current * Math.pow(1.3, Math.min(reconnectAttemptsRef.current - 1, 4)),
             MAX_RECONNECT_DELAY
           );
           reconnectDelayRef.current = nextDelay;
           
-          console.log(`Tentando reconectar em ${nextDelay / 1000} segundos (tentativa ${reconnectAttemptsRef.current})...`);
+          console.log(`Tentando reconectar em ${nextDelay / 1000} segundos (tentativa ${reconnectAttemptsRef.current} de ${MAX_RECONNECT_ATTEMPTS})...`);
           
           reconnectTimeoutRef.current = setTimeout(() => {
             if (isMountedRef.current) {
@@ -377,12 +446,25 @@ export function useWebSocket() {
       // Atualizar dados imediatamente, sem esperar pelo WebSocket
       refreshDataPeriodically();
       
-      // Configurar um intervalo para atualizar dados periodicamente, independente do WebSocket
+      // Configurar um intervalo para atualizar dados periodicamente quando o WebSocket não estiver conectado
+      // Usando um intervalo maior (2 minutos) para reduzir a carga no servidor
       const pollingInterval = setInterval(() => {
         if (!connected) {
-          refreshDataPeriodically();
+          // Se não estiver conectado, atualizar dados via polling
+          // Mas só se o último update foi há mais de 30 segundos
+          const now = Date.now();
+          const lastUpdateTime = lastUpdateRef.current;
+          const timeSinceLastUpdate = lastUpdateTime ? now - lastUpdateTime : Infinity;
+          
+          // Se passaram mais de 30 segundos desde a última atualização, buscar novos dados
+          if (timeSinceLastUpdate > 30000) {
+            console.log('WebSocket desconectado, atualizando via polling...');
+            refreshDataPeriodically();
+          } else {
+            console.log(`WebSocket desconectado, mas última atualização foi recente (${Math.floor(timeSinceLastUpdate/1000)}s). Aguardando...`);
+          }
         }
-      }, 30000); // Atualizar a cada 30 segundos se o WebSocket não estiver conectado
+      }, 120000); // Atualizar a cada 2 minutos se o WebSocket não estiver conectado
       
       // Função de limpeza
       return () => {
