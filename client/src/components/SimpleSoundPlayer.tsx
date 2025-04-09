@@ -8,41 +8,32 @@ export function AudioPermissionButton() {
     return localStorage.getItem('soundPermissionGranted') === 'true';
   });
   
-  // Função para solicitar permissão de áudio explicitamente
+  // Função para solicitar permissão de áudio - otimizada
   const requestPermission = () => {
     try {
-      // Criar contexto de áudio temporário e tocar som de teste
+      // Tentar criar um AudioContext (mais compatível com mobile)
       const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
       if (AudioContext) {
         const context = new AudioContext();
+        
+        // Marcar permissão como concedida imediatamente
+        localStorage.setItem('soundPermissionGranted', 'true');
+        setGranted(true);
+        
+        // Tocar um beep curto apenas para confirmar que o som funciona
         const oscillator = context.createOscillator();
-        const gainNode = context.createGain();
-        
-        oscillator.type = 'sine';
-        oscillator.frequency.value = 440; // Nota A, 440Hz
-        gainNode.gain.value = 0.1; // Volume baixo
-        
-        oscillator.connect(gainNode);
-        gainNode.connect(context.destination);
-        
-        // Tocar som muito breve
+        oscillator.connect(context.destination);
+        oscillator.frequency.value = 440; // Nota A, mais amigável
         oscillator.start();
+        
+        // Parar o som rapidamente e liberar recursos
         setTimeout(() => {
           oscillator.stop();
-          setTimeout(() => context.close(), 100);
-          
-          // Marcar permissão como concedida
-          localStorage.setItem('soundPermissionGranted', 'true');
-          setGranted(true);
-          console.log("🔊 Permissão de áudio concedida!");
-          
-          // Tocar um som de teste para confirmar
-          const testSound = new Audio();
-          testSound.src = '/notification-sound.mp3';
-          testSound.volume = 0.3;
-          testSound.play().catch(e => console.error("Ainda sem permissão:", e));
-          
-        }, 200);
+          context.close();
+        }, 150);
+        
+        // Exibir confirmação visual ao usuário
+        console.log("✅ Permissão de áudio concedida!");
       }
     } catch (error) {
       console.error("Erro ao solicitar permissão de áudio:", error);
@@ -67,7 +58,8 @@ export function AudioPermissionButton() {
 
 // Componente responsável por ouvir os eventos do WebSocket e tocar os sons correspondentes
 export default function SimpleSoundPlayer() {
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  // Cache de áudio para evitar recarregar os mesmos sons
+  const audioCache = useRef<Record<string, HTMLAudioElement>>({});
   const { messageData } = useWebSocketContext();
   
   // Função para verificar permissão de áudio
@@ -75,150 +67,132 @@ export default function SimpleSoundPlayer() {
     return localStorage.getItem('soundPermissionGranted') === 'true';
   };
   
-  // Inicialização do componente
+  // Inicialização do componente - otimizada para carregar sons apenas uma vez
   useEffect(() => {
-    // Criar elemento de áudio oculto (isso ajuda em alguns navegadores)
-    audioRef.current = new Audio();
-    audioRef.current.volume = 0.5;
+    // Pré-carregar sons para melhor desempenho
+    const preloadSounds = () => {
+      // Lista de sons que serão pré-carregados
+      const sounds = {
+        'notification': '/notification-sound.mp3',
+        'alert': '/alert-sound.mp3',
+        'update': '/update-sound.mp3'
+      };
+      
+      // Carregar cada som no cache
+      Object.entries(sounds).forEach(([key, path]) => {
+        const audio = new Audio();
+        audio.src = path;
+        audio.load(); // Carregar o som sem reproduzir
+        audioCache.current[key] = audio;
+      });
+    };
     
-    // Função global para tocar sons diretamente
+    // Tentar pré-carregar sons
+    try {
+      preloadSounds();
+    } catch (e) {
+      console.warn("Não foi possível pré-carregar sons:", e);
+    }
+    
+    // Versão minimalista da função global para compatibilidade
     (window as any).tocarSomTeste = (tipo: string) => {
-      console.log(`Solicitação para tocar som de teste: ${tipo}`);
       playSound(tipo);
     };
     
-    // Função global MODO DEUS que ignora todas as verificações de permissão
+    // Versão MODO DEUS simplificada - usa osciladores diretamente
     (window as any).modoDeusSom = (tipo: string) => {
-      console.log(`🔊 MODO DEUS: Tocando som ${tipo} diretamente`);
       try {
         const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-        if (!AudioContext) {
-          console.error("API Web Audio não suportada");
-          return false;
-        }
+        if (!AudioContext) return false;
         
         const context = new AudioContext();
         const oscillator = context.createOscillator();
-        const gainNode = context.createGain();
-        
-        // Configurações de som diferentes para cada tipo
-        switch (tipo) {
-          case 'new-activity':
-            oscillator.frequency.value = 880; // Tom mais alto
-            gainNode.gain.value = 0.3;
-            break;
-          case 'return-alert':
-            oscillator.frequency.value = 330; // Tom mais grave
-            gainNode.gain.value = 0.4;
-            break;
-          default:
-            oscillator.frequency.value = 440; // Tom médio
-            gainNode.gain.value = 0.3;
-        }
-        
-        oscillator.type = 'sine';
-        oscillator.connect(gainNode);
-        gainNode.connect(context.destination);
+        oscillator.frequency.value = tipo === 'new-activity' ? 880 : 440;
+        oscillator.connect(context.destination);
         
         oscillator.start();
         setTimeout(() => {
           oscillator.stop();
-          setTimeout(() => context.close(), 100);
-        }, 300);
+          context.close();
+        }, 150);
         
         return true;
       } catch (e) {
-        console.error("MODO DEUS FALHOU:", e);
         return false;
       }
     };
     
     return () => {
-      audioRef.current = null;
-      // Remover funções globais
+      // Limpar cache e remover funções globais
+      audioCache.current = {};
       delete (window as any).tocarSomTeste;
       delete (window as any).modoDeusSom;
     };
   }, []);
   
-  // Tocar um som específico
+  // Tocar um som específico - otimizado para desempenho
   const playSound = (type: string) => {
-    // Retornar silenciosamente se não temos permissão
-    if (!checkAudioPermission()) {
-      console.log("⚠️ Sem permissão para reproduzir áudio. O usuário precisa interagir primeiro.");
-      return;
-    }
+    if (!checkAudioPermission()) return;
     
     try {
-      // Selecionar arquivo de som de acordo com o tipo
-      let soundPath = '';
+      // Mapear tipo para chave de som
+      let soundKey = 'notification';
       
       switch (type) {
-        case 'new-activity':
-          soundPath = '/notification-sound.mp3';
-          console.log("🔔 Tocando som de nova atividade");
+        case 'new-activity': 
+          soundKey = 'notification';
           break;
-        case 'return-alert':
-          soundPath = '/alert-sound.mp3';
-          console.log("⚠️ Tocando som de alerta de retorno");
+        case 'return-alert': 
+          soundKey = 'alert';
           break;
         case 'update':
-        case 'success':
-          soundPath = '/update-sound.mp3';
-          console.log("✅ Tocando som de atualização/sucesso");
+        case 'success': 
+          soundKey = 'update';
           break;
-        default:
-          // Usar som padrão para outros tipos
-          soundPath = '/notification-sound.mp3';
-          console.log(`🔔 Tocando som padrão para tipo: ${type}`);
       }
       
-      // Método alternativo #1 - Criar novo elemento de áudio a cada vez
-      const sound = new Audio(soundPath);
-      sound.volume = 0.5;
+      // Usar som do cache se disponível, ou criar novo
+      const sound = audioCache.current[soundKey] || new Audio(`/${soundKey}-sound.mp3`);
+      sound.volume = 0.3; // Volume mais baixo para não ser intrusivo
       
-      // Método que funciona mais amplamente em dispositivos móveis
-      sound.play().catch(err => {
-        console.error('Erro ao reproduzir som:', err);
-        
-        // Última tentativa - chamar função global
+      // Reproduzir o som
+      sound.currentTime = 0; // Reiniciar o som para poder ser tocado novamente
+      sound.play().catch(() => {
+        // Plano B: usar oscilador (funciona mesmo quando o navegador bloqueia áudio)
         try {
-          if ((window as any).playSoundAlert) {
-            (window as any).playSoundAlert(type);
+          const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+          if (AudioContext) {
+            const context = new AudioContext();
+            const oscillator = context.createOscillator();
+            oscillator.type = 'sine';
+            oscillator.frequency.value = type === 'new-activity' ? 880 : 440;
+            oscillator.connect(context.destination);
+            oscillator.start();
+            setTimeout(() => {
+              oscillator.stop();
+              context.close();
+            }, 150);
           }
         } catch (e) {
-          console.error('Falha total ao tentar reproduzir som:', e);
+          // Silenciosamente falhar
         }
       });
-      
     } catch (error) {
-      console.error('Erro ao tentar reproduzir som:', error);
+      // Silenciosamente falhar - não logar erros para reduzir ruído na console
     }
   };
   
-  // Responder aos eventos do WebSocket
+  // Responder aos eventos do WebSocket - simplificado
   useEffect(() => {
     if (!messageData) return;
     
-    if (messageData.type === 'sound') {
-      // Tipo especial 'check_activities' é usado para verificar se há novas atividades, sem tocar som diretamente
-      if (messageData.soundType === 'check_activities') {
-        console.log("🔎 Verificando se há novas atividades após atualização de dados...");
-        // Não tocamos som aqui, apenas marcamos que houve uma atualização
-        // O componente de dashboard vai detectar as mudanças e tocar som se necessário
-      } else {
-        // Para outros tipos, tocar o som normalmente
-        playSound(messageData.soundType);
-      }
+    if (messageData.type === 'sound' && messageData.soundType !== 'check_activities') {
+      playSound(messageData.soundType);
     }
     
-    // Responder ao evento de atualização de dados (polling) 
-    if (messageData.type === 'data_refreshed') {
-      console.log("📊 Dados atualizados via polling:", new Date(messageData.timestamp).toLocaleTimeString());
-      // Não fazemos nada aqui, apenas marcamos que houve uma atualização
-    }
+    // Não precisamos de mais logs para atualização de dados
   }, [messageData]);
   
-  // Renderiza o botão de permissão de áudio
+  // Renderiza apenas o botão de permissão
   return <AudioPermissionButton />;
 }

@@ -137,54 +137,65 @@ export default function DepartmentDashboard() {
   // Referência para o som de notificação
   const notificationSoundRef = useRef<HTMLAudioElement | null>(null);
 
-  // Função para reproduzir som imediatamente - MODO DEUS!
-  const playBeepSound = useCallback((shouldActuallyPlaySound = true) => {
-    // Se não devemos realmente tocar o som, apenas retorne silenciosamente
-    if (!shouldActuallyPlaySound) {
+  // Função para reproduzir som otimizada (mais leve e confiável)
+  const playBeepSound = useCallback(() => {
+    // Verificar se o navegador suporta áudio
+    if (!window.AudioContext && !(window as any).webkitAudioContext) {
       return false;
     }
     
-    console.log("Tentando tocar som MODO DEUS...");
+    // Verificar se o usuário já concedeu permissão para áudio
+    const soundPermissionGranted = localStorage.getItem('soundPermissionGranted') === 'true';
+    if (!soundPermissionGranted) {
+      // Se não temos permissão, tentar solicitar silenciosamente
+      try {
+        const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+        const tempContext = new AudioContext();
+        tempContext.close();
+        localStorage.setItem('soundPermissionGranted', 'true');
+      } catch (e) {
+        // Ignora silenciosamente
+      }
+    }
     
     try {
-      // Criar contexto de áudio - funciona bem em dispositivos móveis
-      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioContext) {
-        console.error("API Web Audio não suportada neste navegador");
-        return false;
+      // Método simplificado: usar Audio API padrão em vez de Web Audio API
+      // Isso é mais compatível com todos os navegadores, incluindo mobile
+      const audio = new Audio();
+      audio.src = '/sounds/notification.mp3';  // Caminho para o som de notificação
+      
+      // Definir volume para não ser intrusivo
+      audio.volume = 0.3;
+      
+      // Tentar reproduzir o som
+      const playPromise = audio.play();
+      
+      // Lidar com o caso de o navegador recusar a reprodução
+      if (playPromise !== undefined) {
+        playPromise.catch(() => {
+          // Plano B: tentar com Web Audio API se o método simples falhar
+          try {
+            const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+            const context = new AudioContext();
+            const oscillator = context.createOscillator();
+            
+            oscillator.type = 'sine';
+            oscillator.frequency.value = 880;
+            oscillator.connect(context.destination);
+            
+            oscillator.start();
+            setTimeout(() => {
+              oscillator.stop();
+              context.close();
+            }, 200);
+          } catch (err) {
+            // Silenciosamente ignorar se falhar
+          }
+        });
       }
       
-      const context = new AudioContext();
-      const oscillator = context.createOscillator();
-      const gainNode = context.createGain();
-      
-      // Configurar som (beep agudo para notificação)
-      oscillator.type = 'sine';
-      oscillator.frequency.value = 880; // Frequência mais alta = tom mais agudo
-      gainNode.gain.value = 0.3; // Volume mais baixo para não ser intrusivo
-      
-      // Conectar os nós de áudio
-      oscillator.connect(gainNode);
-      gainNode.connect(context.destination);
-      
-      // Iniciar oscilador e interrompê-lo após um curto período
-      oscillator.start();
-      
-      // Tocar por apenas 300ms
-      setTimeout(() => {
-        oscillator.stop();
-        // Fechar contexto após uso para liberar recursos
-        setTimeout(() => {
-          if (context.state !== 'closed') {
-            context.close();
-          }
-        }, 100);
-      }, 300);
-      
-      console.log("🔊 Som reproduzido com sucesso! (MODO DEUS)");
       return true;
     } catch (error) {
-      console.error("Erro ao reproduzir som:", error);
       return false;
     }
   }, []);
@@ -280,69 +291,55 @@ export default function DepartmentDashboard() {
     prevActivitiesCountRef.current = activitiesData?.length || 0;
   }, [activitiesData, playBeepSound, toast]);
   
-  // Configurando atualização periódica para contornar problemas de WebSocket
+  // Configurando atualização periódica otimizada (polling eficiente)
   useEffect(() => {
     if (userDepartment && user) {
-      // Carregar dados imediatamente ao montar o componente
+      // Carregar dados imediatamente ao montar o componente (apenas uma vez)
       refetchActivities();
       
-      // Configurar atualização periódica a cada 10 segundos para garantir dados atualizados
-      // independentemente do estado do WebSocket
+      // Configurar atualização periódica mais eficiente (a cada 15 segundos)
       const intervalId = setInterval(() => {
-        console.log("Atualizando atividades periodicamente...");
+        // Verificar se a aba está ativa - se não estiver, diminuir a frequência
+        const isTabActive = document.visibilityState === 'visible';
+        
+        // Se a aba não estiver ativa, reduzimos as requisições - não precisamos executar
+        if (!isTabActive) return;
+        
+        // Fetch com menos logging para reduzir ruído na console
         refetchActivities().then(response => {
           const newActivities = response?.data;
           
           // Não fazer nada se não recebemos dados válidos
           if (!newActivities || newActivities.length === 0) return;
           
-          // Gerar hash atual das atividades
+          // Gerar hash atual das atividades (mais eficiente)
           const currentHash = generateActivitiesHash(newActivities);
           
-          // Verificar REALMENTE se temos novas atividades (hash mudou E contagem aumentou)
-          if (newActivities && 
-              newActivities.length > prevActivitiesCountRef.current && 
+          // Verificar apenas se temos novas atividades por hash
+          if (newActivities.length > prevActivitiesCountRef.current && 
               prevActivitiesCountRef.current > 0 && 
               currentHash !== prevActivitiesHashRef.current) {
             
-            console.log(`🔔 NOVAS ATIVIDADES CONFIRMADAS VIA POLLING!`);
-            console.log(`Anterior: ${prevActivitiesCountRef.current}, Atual: ${newActivities.length}`);
-            console.log(`Hash anterior: ${prevActivitiesHashRef.current}`);
-            console.log(`Hash atual: ${currentHash}`);
+            // Tocar som apenas uma vez de forma simplificada
+            playBeepSound();
             
-            // Tentar tocar som de várias maneiras para garantir que funcione
-            try {
-              // 1. Tentar via API Web Audio
-              playBeepSound();
-              
-              // 2. Tentar via função global "MODO DEUS"
-              if ((window as any).modoDeusSom) {
-                (window as any).modoDeusSom('new-activity');
-              }
-              
-              // Atualizar o hash para a próxima comparação
-              prevActivitiesHashRef.current = currentHash;
-              
-              // 3. Tentar via função global legada
-              if ((window as any).tocarSomTeste) {
-                (window as any).tocarSomTeste('new-activity');
-              }
-              
-              // Atualizar a contagem de atividades
-              prevActivitiesCountRef.current = newActivities.length;
-              
-              // Mostrar notificação na tela também
-              toast({
-                title: "Novas atividades chegaram!",
-                description: `Você tem novas atividades para processar.`,
-                variant: "default",
-              });
-            } catch (error) {
-              console.error("Falha ao tentar tocar som:", error);
-            }
+            // Atualizar hash e contagem imediatamente para evitar tocar som múltiplas vezes
+            prevActivitiesHashRef.current = currentHash;
+            prevActivitiesCountRef.current = newActivities.length;
+            
+            // Mostrar notificação uma única vez
+            toast({
+              title: "Novas atividades chegaram!",
+              description: `Você tem novas atividades para processar.`,
+              variant: "default",
+            });
+          } else {
+            // Mesmo sem novas atividades, atualizar contagens para evitar erros
+            prevActivitiesCountRef.current = newActivities.length;
+            prevActivitiesHashRef.current = currentHash;
           }
         });
-      }, 10000); // 10 segundos
+      }, 15000); // 15 segundos (menos frequente para reduzir carga)
       
       // Limpar intervalo ao desmontar
       return () => clearInterval(intervalId);
@@ -545,21 +542,11 @@ export default function DepartmentDashboard() {
         </div>
       ) : (
         <>
-          {/* Carregamento de estatísticas com esqueleto */}
+          {/* Carregamento de estatísticas com esqueleto - Simplificado */}
           {statsLoading ? (
             <StatsSkeleton />
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-lg font-semibold">Atividades Pendentes</CardTitle>
-                  <CardDescription>Atividades aguardando seu departamento</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-3xl font-bold">{stats.pendingCount || 0}</p>
-                </CardContent>
-              </Card>
-              
+            <div className="grid grid-cols-1 md:grid-cols-1 gap-6 mb-8">
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-lg font-semibold">Atividades Concluídas</CardTitle>

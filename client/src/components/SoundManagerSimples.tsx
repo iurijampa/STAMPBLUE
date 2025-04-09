@@ -1,6 +1,6 @@
-import React, { createContext, useCallback, useContext, useState } from 'react';
+import React, { createContext, useCallback, useContext, useRef, useState } from 'react';
 
-// Enumeração para tipos de som
+// Enumeração para tipos de som 
 export enum SoundType {
   NEW_ACTIVITY = 'new-activity', 
   RETURN_ALERT = 'return-alert',
@@ -8,33 +8,46 @@ export enum SoundType {
   SUCCESS = 'success',
 }
 
-// Função para criar sons usando a API Web Audio (mais compatível com dispositivos móveis)
-const createAudioContext = () => {
-  try {
-    // Usar AudioContext para maior compatibilidade
-    const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-    return new AudioContext();
-  } catch (e) {
-    console.error("Web Audio API não suportada neste navegador", e);
-    return null;
-  }
+// Mapeamento de tipos de som para frequências - mais eficiente
+const SOUND_CONFIGS = {
+  [SoundType.NEW_ACTIVITY]: { frequency: 880, duration: 150, volume: 0.3 },
+  [SoundType.RETURN_ALERT]: { frequency: 330, duration: 200, volume: 0.4 },
+  [SoundType.UPDATE]: { frequency: 660, duration: 100, volume: 0.3 },
+  [SoundType.SUCCESS]: { frequency: 440, duration: 100, volume: 0.3 }
 };
 
-// Função para reproduzir um beep simples
-const playBeep = (frequency = 440, duration = 300, volume = 0.5) => {
+// Contexto de áudio compartilhado para evitar criação constante
+let sharedAudioContext: AudioContext | null = null;
+
+// Função para obter o contexto de áudio compartilhado
+const getSharedAudioContext = () => {
+  if (sharedAudioContext === null || sharedAudioContext.state === 'closed') {
+    try {
+      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+      sharedAudioContext = new AudioContext();
+    } catch (e) {
+      // Silenciosamente falhar, sem logar erros na console
+      return null;
+    }
+  }
+  return sharedAudioContext;
+};
+
+// Função otimizada para reproduzir um beep simples
+const playBeep = (frequency = 440, duration = 100, volume = 0.3) => {
   try {
-    const audioContext = createAudioContext();
-    if (!audioContext) return;
+    const audioContext = getSharedAudioContext();
+    if (!audioContext) return false;
     
     // Criar oscilador para gerar som
     const oscillator = audioContext.createOscillator();
     const gainNode = audioContext.createGain();
     
-    // Configurar oscilador para som tipo "beep"
+    // Configurar oscilador para som tipo "beep" - mais curto
     oscillator.type = 'sine';
     oscillator.frequency.value = frequency;
     
-    // Configurar volume
+    // Configurar volume mais baixo para não ser intrusivo
     gainNode.gain.value = volume;
     
     // Conectar nós de áudio
@@ -44,20 +57,17 @@ const playBeep = (frequency = 440, duration = 300, volume = 0.5) => {
     // Iniciar oscilador
     oscillator.start();
     
-    // Parar após duração especificada
+    // Parar após duração especificada - mais curta para melhor desempenho
     setTimeout(() => {
       oscillator.stop();
-      // Fechar contexto após uso para liberar recursos
-      setTimeout(() => {
-        if (audioContext.state !== 'closed') {
-          audioContext.close();
-        }
-      }, 100);
+      
+      // Não fechar o contexto compartilhado após cada uso
+      // Isso evita sobrecarga de criação/destruição de contextos
     }, duration);
     
     return true;
   } catch (error) {
-    console.error("Erro ao reproduzir beep:", error);
+    // Silenciosamente falhar
     return false;
   }
 };
@@ -73,55 +83,58 @@ type SoundManagerContextType = {
 
 const SoundManagerContext = createContext<SoundManagerContextType | null>(null);
 
-// Componente de provedor para gerenciar sons
+// Componente de provedor para gerenciar sons - otimizado
 export const SoundManagerProvider: React.FC<{children: React.ReactNode}> = ({ children }) => {
-  // Gerenciar estado de ativação do som
-  const [isSoundEnabled, setIsSoundEnabled] = useState(true);
+  // Configuração de som persistente via localStorage
+  const [isSoundEnabled, setIsSoundEnabled] = useState(() => {
+    return localStorage.getItem('soundEnabled') !== 'false'; // Padrão: true
+  });
   const [isMuted, setIsMuted] = useState(false);
   
-  // Função simplificada para reproduzir som
+  // Cache de timestamps para evitar tocar sons muito próximos (anti-spam)
+  const lastPlayedRef = useRef<Record<SoundType, number>>({} as Record<SoundType, number>);
+  
+  // Função simplificada e otimizada para reproduzir som
   const playSound = useCallback((type: SoundType) => {
     if (!isSoundEnabled || isMuted) return;
     
-    console.log(`Tentando reproduzir som: ${type}`);
+    // Evitar spam de sons - intervalo mínimo de 300ms entre sons do mesmo tipo
+    const now = Date.now();
+    const lastPlayed = lastPlayedRef.current[type] || 0;
+    if (now - lastPlayed < 300) return;
     
-    try {
-      switch (type) {
-        case SoundType.NEW_ACTIVITY:
-          // Tom agudo para novidades
-          return playBeep(880, 300, 0.3);
-        case SoundType.RETURN_ALERT:
-          // Tom mais grave para alertas
-          return playBeep(330, 500, 0.5);
-        case SoundType.UPDATE:
-          // Tom médio para atualizações
-          return playBeep(660, 200, 0.3);
-        case SoundType.SUCCESS:
-          // Dois tons ascendentes para sucesso
-          playBeep(440, 150, 0.3);
-          setTimeout(() => playBeep(660, 200, 0.3), 200);
-          return true;
-        default:
-          return playBeep(440, 300, 0.3);
-      }
-    } catch (error) {
-      console.error(`Erro ao reproduzir som ${type}:`, error);
-      return false;
+    lastPlayedRef.current[type] = now;
+    
+    // Obter configuração para o tipo de som
+    const config = SOUND_CONFIGS[type] || SOUND_CONFIGS[SoundType.NEW_ACTIVITY];
+    
+    // Tocar som
+    if (type === SoundType.SUCCESS) {
+      // Caso especial para som de sucesso (dois tons)
+      playBeep(440, 100, 0.3);
+      setTimeout(() => playBeep(660, 100, 0.3), 150);
+    } else {
+      playBeep(config.frequency, config.duration, config.volume);
     }
   }, [isSoundEnabled, isMuted]);
   
-  // Alternar ativação/desativação do som (configuração global)
+  // Alternar ativação/desativação do som com persistência
   const toggleSound = useCallback(() => {
     setIsSoundEnabled(prev => {
-      // Tocar um beep confirmando ativação
-      if (!prev) {
-        setTimeout(() => playBeep(880, 100, 0.2), 100);
+      const newValue = !prev;
+      // Persistir configuração no localStorage
+      localStorage.setItem('soundEnabled', newValue.toString());
+      
+      // Tocar um beep de confirmação se estiver ativando o som
+      if (newValue) {
+        setTimeout(() => playBeep(880, 100, 0.2), 50);
       }
-      return !prev;
+      
+      return newValue;
     });
   }, []);
   
-  // Alternar mudo/não-mudo (configuração temporária)
+  // Alternar mudo/não-mudo (temporário, sem persistência)
   const toggleMute = useCallback(() => {
     setIsMuted(prev => !prev);
   }, []);
@@ -141,7 +154,7 @@ export const SoundManagerProvider: React.FC<{children: React.ReactNode}> = ({ ch
   );
 };
 
-// Hook para usar o gerenciador de som
+// Hook otimizado para usar o gerenciador de som
 export const useSoundManager = () => {
   const context = useContext(SoundManagerContext);
   if (!context) {
@@ -150,38 +163,28 @@ export const useSoundManager = () => {
   return context;
 };
 
-// Botão para alternar som ligado/desligado
+// Botão compacto para alternar som ligado/desligado
 export const SoundToggleButton: React.FC = () => {
   const { isSoundEnabled, toggleSound } = useSoundManager();
   
   return (
     <button 
       onClick={toggleSound}
-      className="flex items-center justify-center p-2 text-sm font-medium transition-colors bg-transparent border rounded-md hover:bg-muted border-input"
+      className="flex items-center justify-center p-2 text-sm font-medium transition-colors bg-transparent border rounded-md hover:bg-slate-100 border-input"
     >
-      {isSoundEnabled ? (
-        <>
-          <span className="mr-2">🔊</span>
-          <span>Som Ligado</span>
-        </>
-      ) : (
-        <>
-          <span className="mr-2">🔇</span>
-          <span>Som Desligado</span>
-        </>
-      )}
+      {isSoundEnabled ? "🔊" : "🔇"}
     </button>
   );
 };
 
-// Botão simples para testar um som específico
+// Botão simples para testar um som específico - otimizado
 export const SoundTestSingleButton: React.FC<{ type: SoundType; label: string }> = ({ type, label }) => {
   const { playSound, isSoundEnabled } = useSoundManager();
   const [isPlaying, setIsPlaying] = useState(false);
   
   const handleClick = useCallback(() => {
     if (!isSoundEnabled) {
-      alert("O som está desativado! Clique no botão 'Som Desligado' para ativar.");
+      alert("Som desativado");
       return;
     }
     
@@ -189,7 +192,7 @@ export const SoundTestSingleButton: React.FC<{ type: SoundType; label: string }>
     playSound(type);
     
     // Resetar estado após um pequeno atraso
-    setTimeout(() => setIsPlaying(false), 500);
+    setTimeout(() => setIsPlaying(false), 300);
   }, [type, playSound, isSoundEnabled]);
   
   return (
@@ -202,33 +205,30 @@ export const SoundTestSingleButton: React.FC<{ type: SoundType; label: string }>
           : 'bg-blue-100 border-blue-300 text-blue-700 hover:bg-blue-200'
       } border rounded-md`}
     >
-      <span className="mr-2">{isPlaying ? '🎵' : '🔊'}</span>
-      <span>{isPlaying ? 'Tocando...' : label}</span>
+      <span>{isPlaying ? '🎵' : '🔊'}</span>
     </button>
   );
 };
 
-// Botão para testar todos os sons
+// Botão compacto para testar todos os sons - otimizado
 export const SoundTestButton: React.FC = () => {
   const { isSoundEnabled } = useSoundManager();
   
   if (!isSoundEnabled) {
     return (
       <button 
-        onClick={() => alert("O som está desativado! Clique no botão 'Som Desligado' para ativar.")}
+        onClick={() => alert("Som desativado")}
         className="flex items-center justify-center p-2 text-sm font-medium transition-colors bg-red-100 border rounded-md hover:bg-red-200 border-red-300 text-red-700"
       >
-        <span className="mr-2">🔇</span>
-        <span>Som Desativado</span>
+        <span>🔇</span>
       </button>
     );
   }
   
   return (
     <div className="flex flex-wrap gap-2 items-center">
-      <SoundTestSingleButton type={SoundType.NEW_ACTIVITY} label="Novo Pedido" />
+      <SoundTestSingleButton type={SoundType.NEW_ACTIVITY} label="Novo" />
       <SoundTestSingleButton type={SoundType.RETURN_ALERT} label="Retorno" />
-      <SoundTestSingleButton type={SoundType.UPDATE} label="Atualização" />
       <SoundTestSingleButton type={SoundType.SUCCESS} label="Sucesso" />
     </div>
   );
