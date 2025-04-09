@@ -2,8 +2,7 @@ import { useAuth } from './use-auth';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useToast } from './use-toast';
 import { queryClient } from '@/lib/queryClient';
-import { useSoundPlayer, SoundType } from '@/components/sound-player';
-import { useBrowserNotification } from './use-browser-notification';
+import { useSoundNotification } from './use-sound-notification';
 
 // CONFIGURAÇÃO DE EMERGÊNCIA PARA MÁXIMA PERFORMANCE
 // Intervalo para heartbeat (ping/pong) muito maior para quase eliminar sobrecarga
@@ -22,8 +21,7 @@ export function useWebSocket() {
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
-  const { playSound } = useSoundPlayer();
-  const { isSupported, permission, requestPermission, notify } = useBrowserNotification();
+  const playSound = useSoundNotification();
   
   // Referências para controle de reconexão e ping
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -35,19 +33,12 @@ export function useWebSocket() {
   // Flag para controlar se o componente está montado
   const isMountedRef = useRef(true);
   
-  // Solicitar permissão para notificações do navegador quando o componente for montado
+  // Definir quando o componente está desmontado
   useEffect(() => {
-    if (isSupported && permission !== 'granted') {
-      const askForPermission = async () => {
-        await requestPermission();
-      };
-      askForPermission();
-    }
-    
     return () => {
       isMountedRef.current = false;
     };
-  }, [isSupported, permission, requestPermission]);
+  }, []);
   
   // Atualizar dados quando o WebSocket não está disponível
   // Referência para armazenar o timestamp da última atualização de dados
@@ -156,22 +147,11 @@ export function useWebSocket() {
     return false;
   }, [sendMessage]);
   
-  // Mostrar notificação na aba do navegador
-  const showBrowserNotification = useCallback((title: string, body: string, tag?: string) => {
-    // Só mostrar notificação se a página não estiver em foco e permissão estiver concedida
-    if (isSupported && permission === 'granted' && !document.hasFocus()) {
-      notify({
-        title,
-        body,
-        tag,
-        icon: '/logo-stamp-blue.png',
-        onClick: () => {
-          // Forçar uma atualização dos dados quando o usuário clica na notificação
-          refreshDataPeriodically();
-        }
-      });
-    }
-  }, [isSupported, permission, notify, refreshDataPeriodically]);
+  // Mostrar notificação na aba do navegador - só um stub para manter compatibilidade
+  const showBrowserNotification = useCallback((_title: string, _body: string, _tag?: string) => {
+    // Função vazia para compatibilidade
+    return;
+  }, []);
   
   // Limpar intervalos e timeouts para evitar vazamentos de memória
   const clearTimers = useCallback(() => {
@@ -258,7 +238,7 @@ export function useWebSocket() {
             queryClient.invalidateQueries({ queryKey: ['/api/activities'] });
             
             // Reproduzir som de notificação bem chamativo
-            playSound('NEW_ACTIVITY', 1.0);
+            playSound();
             
             // Notificação na aba do navegador
             showBrowserNotification(
@@ -280,7 +260,7 @@ export function useWebSocket() {
             queryClient.invalidateQueries({ queryKey: ['/api/activities'] });
             
             // Reproduzir som de alerta para pedidos retornados
-            playSound('RETURN_ALERT', 1.0);
+            playSound();
             
             // Notificação na aba do navegador
             showBrowserNotification(
@@ -303,7 +283,7 @@ export function useWebSocket() {
             queryClient.invalidateQueries({ queryKey: ['/api/department/stats', user.role] });
             
             // Som sutil de atualização
-            playSound('UPDATE', 0.7);
+            playSound();
           } 
           else if (data.type === 'activity_progress') {
             // Invalidar cache para atualizar lista de atividades e progresso
@@ -314,7 +294,7 @@ export function useWebSocket() {
             queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
             
             // Som de atualização
-            playSound('UPDATE', 0.8);
+            playSound();
             
             // Notificar admins sobre o progresso de atividades
             if (user.role === 'admin') {
