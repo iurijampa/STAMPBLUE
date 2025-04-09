@@ -238,28 +238,19 @@ export function useWebSocket() {
             queryClient.invalidateQueries({ queryKey: ['/api/department/activities', user.role] });
             queryClient.invalidateQueries({ queryKey: ['/api/activities'] });
             
-            // Tocar som de nova atividade - DIRETO
+            // Tocar som usando Audio API diretamente (método extremamente simples)
             try {
-              const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-              const oscillator = audioContext.createOscillator();
-              const gainNode = audioContext.createGain();
-              
-              oscillator.type = 'sine';
-              oscillator.frequency.value = 880; // Tom agudo para novidades
-              gainNode.gain.value = 0.3;
-              
-              oscillator.connect(gainNode);
-              gainNode.connect(audioContext.destination);
-              
-              oscillator.start();
-              setTimeout(() => oscillator.stop(), 300);
-              
+              const audio = new Audio('/notification-sound.mp3');
+              audio.volume = 0.5;
+              audio.play().catch(err => {
+                console.error('Erro ao tocar notificação:', err);
+              });
               console.log('Som de nova atividade tocado com sucesso!');
             } catch (error) {
               console.error('Erro ao tocar som de nova atividade:', error);
             }
             
-            // Emitir evento de nova atividade para o SoundManager (backup)
+            // Emitir evento de nova atividade para o componente SimpleSoundPlayer (reforço)
             setMessageData({ type: 'sound', soundType: 'new-activity' });
             
             // Notificação na aba do navegador
@@ -281,28 +272,19 @@ export function useWebSocket() {
             queryClient.invalidateQueries({ queryKey: ['/api/department/activities', user.role] });
             queryClient.invalidateQueries({ queryKey: ['/api/activities'] });
             
-            // Tocar som de retorno - DIRETO
+            // Tocar som de alerta usando Audio API diretamente (método extremamente simples)
             try {
-              const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-              const oscillator = audioContext.createOscillator();
-              const gainNode = audioContext.createGain();
-              
-              oscillator.type = 'sine';
-              oscillator.frequency.value = 330; // Tom mais grave para alertas
-              gainNode.gain.value = 0.5;
-              
-              oscillator.connect(gainNode);
-              gainNode.connect(audioContext.destination);
-              
-              oscillator.start();
-              setTimeout(() => oscillator.stop(), 500);
-              
+              const audio = new Audio('/alert-sound.mp3');
+              audio.volume = 0.6;
+              audio.play().catch(err => {
+                console.error('Erro ao tocar alerta:', err);
+              });
               console.log('Som de retorno tocado com sucesso!');
             } catch (error) {
               console.error('Erro ao tocar som de retorno:', error);
             }
             
-            // Emitir evento de retorno para o SoundManager (backup)
+            // Emitir evento de retorno para o componente SimpleSoundPlayer (reforço)
             setMessageData({ type: 'sound', soundType: 'return-alert' });
             
             // Notificação na aba do navegador
@@ -325,28 +307,19 @@ export function useWebSocket() {
             queryClient.invalidateQueries({ queryKey: ['/api/activities'] });
             queryClient.invalidateQueries({ queryKey: ['/api/department/stats', user.role] });
             
-            // Tocar som de atualização - DIRETO
+            // Tocar som de atualização usando Audio API diretamente (método extremamente simples)
             try {
-              const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-              const oscillator = audioContext.createOscillator();
-              const gainNode = audioContext.createGain();
-              
-              oscillator.type = 'sine';
-              oscillator.frequency.value = 660; // Tom médio para atualizações
-              gainNode.gain.value = 0.3;
-              
-              oscillator.connect(gainNode);
-              gainNode.connect(audioContext.destination);
-              
-              oscillator.start();
-              setTimeout(() => oscillator.stop(), 200);
-              
+              const audio = new Audio('/update-sound.mp3');
+              audio.volume = 0.4;
+              audio.play().catch(err => {
+                console.error('Erro ao tocar atualização:', err);
+              });
               console.log('Som de atualização tocado com sucesso!');
             } catch (error) {
               console.error('Erro ao tocar som de atualização:', error);
             }
             
-            // Emitir evento de atualização para o SoundManager (backup)
+            // Emitir evento de atualização para o componente SimpleSoundPlayer (reforço)
             setMessageData({ type: 'sound', soundType: 'update' });
           } 
           else if (data.type === 'activity_progress') {
@@ -357,38 +330,21 @@ export function useWebSocket() {
             queryClient.invalidateQueries({ queryKey: ['/api/department/stats', user.role] });
             queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
             
-            // Tocar som de sucesso - DIRETO
+            // Tocar som de sucesso usando Audio API diretamente (método extremamente simples)
             try {
-              const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+              const audio = new Audio('/notification-sound.mp3');
+              audio.volume = 0.5;
+              audio.play().catch(err => {
+                console.error('Erro ao tocar sucesso:', err);
+              });
               
-              // Primeiro tom (mais baixo)
-              const oscillator1 = audioContext.createOscillator();
-              const gainNode1 = audioContext.createGain();
-              
-              oscillator1.type = 'sine';
-              oscillator1.frequency.value = 440;
-              gainNode1.gain.value = 0.3;
-              
-              oscillator1.connect(gainNode1);
-              gainNode1.connect(audioContext.destination);
-              
-              oscillator1.start();
-              setTimeout(() => oscillator1.stop(), 150);
-              
-              // Segundo tom (mais alto após um pequeno delay)
+              // Tocar um segundo som depois de um pequeno atraso
               setTimeout(() => {
-                const oscillator2 = audioContext.createOscillator();
-                const gainNode2 = audioContext.createGain();
-                
-                oscillator2.type = 'sine';
-                oscillator2.frequency.value = 660;
-                gainNode2.gain.value = 0.3;
-                
-                oscillator2.connect(gainNode2);
-                gainNode2.connect(audioContext.destination);
-                
-                oscillator2.start();
-                setTimeout(() => oscillator2.stop(), 200);
+                const audio2 = new Audio('/update-sound.mp3');
+                audio2.volume = 0.4;
+                audio2.play().catch(err => {
+                  console.error('Erro ao tocar segundo som de sucesso:', err);
+                });
               }, 200);
               
               console.log('Som de sucesso tocado com sucesso!');
@@ -396,7 +352,7 @@ export function useWebSocket() {
               console.error('Erro ao tocar som de sucesso:', error);
             }
             
-            // Emitir evento de sucesso para o SoundManager (backup)
+            // Emitir evento de sucesso para o componente SimpleSoundPlayer (reforço)
             setMessageData({ type: 'sound', soundType: 'success' });
             
             // Notificar admins sobre o progresso de atividades
