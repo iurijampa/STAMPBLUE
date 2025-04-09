@@ -310,7 +310,7 @@ export default function DepartmentDashboard() {
             Sair
           </Button>
           
-          {/* Botão de Som MODO DEUS */}
+          {/* Botão de Som MODO DEUS - apenas este é necessário para ativação */}
           <Button 
             variant="outline"
             size="sm"
@@ -318,7 +318,7 @@ export default function DepartmentDashboard() {
             className="flex items-center px-3 py-1 bg-blue-100 text-blue-800 hover:bg-blue-200 border-blue-300 animate-pulse"
           >
             <span className="mr-1">🔊</span>
-            <span>Ativar Notificações Sonoras</span>
+            <span>Ativar Som</span>
           </Button>
         </div>
         <Button 

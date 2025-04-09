@@ -49,20 +49,9 @@ export function AudioPermissionButton() {
     }
   };
   
-  // Não mostrar nada se já tem permissão
-  if (granted) return null;
-  
-  return (
-    <div className="fixed bottom-4 right-4 z-50">
-      <Button
-        onClick={requestPermission}
-        className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white animate-pulse"
-      >
-        <span>🔊</span>
-        <span>Ativar Notificações Sonoras</span>
-      </Button>
-    </div>
-  );
+  // Não mostrar nada (nem mesmo o botão flutuante)
+  // pois já temos botão de ativação específico em cada dashboard
+  return null;
 }
 
 // Componente responsável por ouvir os eventos do WebSocket e tocar os sons correspondentes
