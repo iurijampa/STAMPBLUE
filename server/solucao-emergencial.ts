@@ -96,6 +96,29 @@ export async function criarProgressoProximoDepartamentoEmergencia(
     
     if (progressoExistente.length > 0) {
       console.log(`[EMERGENCIA] Já existe um registro de progresso para ${proximoDepartamento}`);
+      
+      // Se o registro já existe, precisamos verificar seu status e atualizá-lo para "pending" caso esteja como "completed"
+      // Isso garante que quando um item retornado e depois enviado novamente, volta a aparecer para o próximo departamento
+      if (progressoExistente[0].status === "completed") {
+        console.log(`[EMERGENCIA] O progresso existente está como "completed", atualizando para "pending"`);
+        
+        // Atualizar o registro existente para "pending"
+        const [progressoAtualizado] = await db
+          .update(activityProgress)
+          .set({
+            status: "pending",
+            completedBy: null,
+            completedAt: null,
+            notes: null,
+            returnedBy: null,
+            returnedAt: null
+          })
+          .where(eq(activityProgress.id, progressoExistente[0].id))
+          .returning();
+          
+        return progressoAtualizado;
+      }
+      
       return progressoExistente[0];
     }
     

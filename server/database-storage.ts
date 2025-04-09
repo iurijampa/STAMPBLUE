@@ -467,9 +467,24 @@ export class DatabaseStorage implements IStorage {
       .returning();
     
     // Limpar o cache dos departamentos afetados
+    // Quando retornamos uma atividade, precisamos limpar o cache de ambos os departamentos
     clearCacheByPattern(`activities_by_dept_${currentDepartment}`);
     clearCacheByPattern(`activities_by_dept_${previousProgress.department}`);
+    
+    // Também precisamos limpar o cache de atividades concluídas e estatísticas
+    clearCacheByPattern(`completed_activities_dept_${currentDepartment}`);
+    clearCacheByPattern(`completed_activities_dept_${previousProgress.department}`);
     clearCacheByPattern('activity_stats');
+    
+    // Se houver próximo departamento na sequência, limpar seu cache também
+    // Isso é necessário para que quando o departamento anterior enviar a atividade de volta, 
+    // o próximo departamento atualize corretamente
+    const deptIndex = DEPARTMENTS.indexOf(currentDepartment as any);
+    if (deptIndex >= 0 && deptIndex < DEPARTMENTS.length - 1) {
+      const nextDept = DEPARTMENTS[deptIndex + 1];
+      clearCacheByPattern(`activities_by_dept_${nextDept}`);
+      clearCacheByPattern(`completed_activities_dept_${nextDept}`);
+    }
     
     return {
       previousProgress: updatedPreviousProgress,

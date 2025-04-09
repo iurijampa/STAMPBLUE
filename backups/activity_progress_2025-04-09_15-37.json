@@ -1,0 +1,68 @@
+[
+  {
+    "id": 24,
+    "activityId": 13,
+    "department": "gabarito",
+    "status": "pending",
+    "completedBy": null,
+    "completedAt": null,
+    "notes": null,
+    "returnedBy": null,
+    "returnedAt": null
+  },
+  {
+    "id": 25,
+    "activityId": 14,
+    "department": "gabarito",
+    "status": "pending",
+    "completedBy": null,
+    "completedAt": null,
+    "notes": null,
+    "returnedBy": null,
+    "returnedAt": null
+  },
+  {
+    "id": 36,
+    "activityId": 22,
+    "department": "gabarito",
+    "status": "pending",
+    "completedBy": null,
+    "completedAt": null,
+    "notes": null,
+    "returnedBy": null,
+    "returnedAt": null
+  },
+  {
+    "id": 37,
+    "activityId": 23,
+    "department": "gabarito",
+    "status": "pending",
+    "completedBy": null,
+    "completedAt": null,
+    "notes": null,
+    "returnedBy": null,
+    "returnedAt": null
+  },
+  {
+    "id": 38,
+    "activityId": 24,
+    "department": "gabarito",
+    "status": "completed",
+    "completedBy": "X",
+    "completedAt": "2025-04-09T15:36:32.529Z",
+    "notes": "DSFSEFS",
+    "returnedBy": null,
+    "returnedAt": null
+  },
+  {
+    "id": 39,
+    "activityId": 24,
+    "department": "impressao",
+    "status": "pending",
+    "completedBy": null,
+    "completedAt": null,
+    "notes": null,
+    "returnedBy": null,
+    "returnedAt": null
+  }
+]
