@@ -201,7 +201,21 @@ export default function SimpleSoundPlayer() {
     if (!messageData) return;
     
     if (messageData.type === 'sound') {
-      playSound(messageData.soundType);
+      // Tipo especial 'check_activities' é usado para verificar se há novas atividades, sem tocar som diretamente
+      if (messageData.soundType === 'check_activities') {
+        console.log("🔎 Verificando se há novas atividades após atualização de dados...");
+        // Não tocamos som aqui, apenas marcamos que houve uma atualização
+        // O componente de dashboard vai detectar as mudanças e tocar som se necessário
+      } else {
+        // Para outros tipos, tocar o som normalmente
+        playSound(messageData.soundType);
+      }
+    }
+    
+    // Responder ao evento de atualização de dados (polling) 
+    if (messageData.type === 'data_refreshed') {
+      console.log("📊 Dados atualizados via polling:", new Date(messageData.timestamp).toLocaleTimeString());
+      // Não fazemos nada aqui, apenas marcamos que houve uma atualização
     }
   }, [messageData]);
   

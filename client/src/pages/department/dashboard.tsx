@@ -154,33 +154,122 @@ export default function DepartmentDashboard() {
     }
   }, []);
 
+  // Inicialização para verificar permissão de áudio (será executado apenas uma vez)
+  useEffect(() => {
+    // Tentar obter permissão de áudio assim que o componente montar
+    try {
+      // Criar contexto de áudio e fechar imediatamente (isso já solicita permissão)
+      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioContext) {
+        const context = new AudioContext();
+        setTimeout(() => context.close(), 100);
+        console.log("Permissão de áudio solicitada na inicialização");
+        
+        // Vamos salvar a permissão no localStorage para usar depois
+        localStorage.setItem('soundPermissionGranted', 'true');
+      }
+    } catch (e) {
+      console.error("Falha ao inicializar áudio:", e);
+    }
+  }, []);
+
   // Verificar se há novas atividades e tocar som se houver
   useEffect(() => {
     // Só tocamos se já tínhamos carregado antes (prevActivitiesCountRef > 0) e temos novas atividades
     if (activitiesData && activitiesData.length > prevActivitiesCountRef.current && prevActivitiesCountRef.current > 0) {
       console.log(`🔔 NOVAS ATIVIDADES DETECTADAS! Anterior: ${prevActivitiesCountRef.current}, Atual: ${activitiesData.length}`);
       
-      // Tocar som imediatamente
-      playBeepSound();
-      
-      // Mostrar notificação na tela também
-      toast({
-        title: "Novas atividades chegaram!",
-        description: `Você tem ${activitiesData.length - prevActivitiesCountRef.current} nova(s) atividade(s) para processar.`,
-        variant: "default",
-      });
+      // Tocar som imediatamente usando todas as abordagens disponíveis
+      try {
+        // 1. Nossa função principal
+        playBeepSound();
+        
+        // 2. Tentar via função global "MODO DEUS"
+        if ((window as any).modoDeusSom) {
+          (window as any).modoDeusSom('new-activity');
+        }
+        
+        // 3. Tentar via função global legada
+        if ((window as any).tocarSomTeste) {
+          (window as any).tocarSomTeste('new-activity');
+        }
+        
+        // 4. Último recurso: API de áudio nativa
+        try {
+          const audio = new Audio();
+          audio.src = '/notification-sound.mp3';
+          audio.volume = 0.5;
+          audio.play().catch(e => console.log("Erro ao tocar áudio nativo:", e));
+        } catch (e) {
+          console.error("Abordagem de áudio nativo falhou:", e);
+        }
+        
+        // Mostrar notificação na tela também
+        toast({
+          title: "🔔 Novas atividades chegaram!",
+          description: `Você tem ${activitiesData.length - prevActivitiesCountRef.current} nova(s) atividade(s) para processar.`,
+          variant: "default",
+        });
+      } catch (error) {
+        console.error("Todas as tentativas de tocar som falharam:", error);
+      }
     }
     
     // Atualizar a contagem de atividades para a próxima comparação
     prevActivitiesCountRef.current = activitiesData?.length || 0;
   }, [activitiesData, playBeepSound, toast]);
   
-  // Recarregar os dados quando o departamento do usuário mudar
+  // Configurando atualização periódica para contornar problemas de WebSocket
   useEffect(() => {
     if (userDepartment && user) {
+      // Carregar dados imediatamente ao montar o componente
       refetchActivities();
+      
+      // Configurar atualização periódica a cada 10 segundos para garantir dados atualizados
+      // independentemente do estado do WebSocket
+      const intervalId = setInterval(() => {
+        console.log("Atualizando atividades periodicamente...");
+        refetchActivities().then(response => {
+          const newActivities = response?.data;
+          // Se temos novas atividades e o número aumentou, tocar som
+          if (newActivities && newActivities.length > prevActivitiesCountRef.current && prevActivitiesCountRef.current > 0) {
+            console.log(`🔔 NOVAS ATIVIDADES VIA POLLING! Anterior: ${prevActivitiesCountRef.current}, Atual: ${newActivities.length}`);
+            
+            // Tentar tocar som de várias maneiras para garantir que funcione
+            try {
+              // 1. Tentar via API Web Audio
+              playBeepSound();
+              
+              // 2. Tentar via função global "MODO DEUS"
+              if ((window as any).modoDeusSom) {
+                (window as any).modoDeusSom('new-activity');
+              }
+              
+              // 3. Tentar via função global legada
+              if ((window as any).tocarSomTeste) {
+                (window as any).tocarSomTeste('new-activity');
+              }
+              
+              // Atualizar a contagem de atividades
+              prevActivitiesCountRef.current = newActivities.length;
+              
+              // Mostrar notificação na tela também
+              toast({
+                title: "Novas atividades chegaram!",
+                description: `Você tem ${newActivities.length - prevActivitiesCountRef.current} nova(s) atividade(s) para processar.`,
+                variant: "default",
+              });
+            } catch (error) {
+              console.error("Falha ao tentar tocar som:", error);
+            }
+          }
+        });
+      }, 10000); // 10 segundos
+      
+      // Limpar intervalo ao desmontar
+      return () => clearInterval(intervalId);
     }
-  }, [userDepartment, user, refetchActivities]);
+  }, [userDepartment, user, refetchActivities, playBeepSound, toast]);
   
   // Buscar estatísticas do departamento
   const { data: stats = { pendingCount: 0, completedCount: 0 }, isLoading: statsLoading, refetch: refetchStats } = useQuery({

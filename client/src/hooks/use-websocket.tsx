@@ -69,10 +69,26 @@ export function useWebSocket() {
         queryClient.invalidateQueries({ queryKey: ['/api/department/stats', user.role] }),
         queryClient.invalidateQueries({ queryKey: ['/api/activities'] })
       ]);
+      
+      // Após atualizar os dados, notificar os componentes que possam estar interessados
+      // Isso simula o recebimento de uma mensagem WebSocket
+      setMessageData({ type: 'data_refreshed', timestamp: Date.now() });
+      
+      // Após 500ms, verificar se houve mudanças nos dados e notificar
+      setTimeout(() => {
+        // Enviar um evento de som para garantir que o sistema verifique por novas atividades
+        setMessageData({ type: 'sound', soundType: 'check_activities' });
+      }, 500);
+      
     } catch (err) {
       console.error('Erro ao atualizar dados:', err);
     }
   }, [user]);
+  
+  // Função para forçar atualização de dados diretamente (sem esperar pelo WebSocket)
+  const updateDataFromServer = useCallback(() => {
+    refreshDataPeriodically();
+  }, [refreshDataPeriodically]);
   
   // Enviar heartbeat otimizado para manter a conexão ativa
   const sendHeartbeat = useCallback(() => {
