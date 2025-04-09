@@ -41,12 +41,8 @@ export default function AuthPage() {
         description: `Bem-vindo, ${userData.name || userData.username}!`,
       });
       
-      // Redirecionar para o dashboard apropriado
-      if (userData.role === 'admin') {
-        navigate("/admin/dashboard");
-      } else {
-        navigate(`/department/${userData.role}/dashboard`);
-      }
+      // Redirecionar para a raiz - o componente DashboardRedirect vai encaminhar para o dashboard correto
+      navigate("/", { replace: true });
     } catch (err) {
       toast({
         title: "Falha no login",
@@ -90,12 +86,8 @@ export default function AuthPage() {
         description: `Bem-vindo, ${userData.name || userData.username}!`,
       });
       
-      // Redirecionar para o dashboard apropriado
-      if (userData.role === 'admin') {
-        navigate("/admin/dashboard");
-      } else {
-        navigate(`/department/${userData.role}/dashboard`);
-      }
+      // Redirecionar para a raiz - o componente DashboardRedirect vai encaminhar para o dashboard correto
+      navigate("/", { replace: true });
     } catch (err) {
       toast({
         title: "Falha no registro",

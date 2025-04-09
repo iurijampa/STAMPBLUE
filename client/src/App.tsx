@@ -61,6 +61,7 @@ function DashboardRedirect() {
     }
   }, [user, isLoading, queryClient]);
   
+  // Mostrar carregamento enquanto aguarda dados do usuário
   if (isLoading || isDataLoading) {
     return <div className="flex min-h-screen items-center justify-center">
       <div className="flex flex-col items-center gap-2">
@@ -70,15 +71,20 @@ function DashboardRedirect() {
     </div>;
   }
   
+  // Usuário não autenticado: redirecionar para página de login
   if (!user) {
+    console.log("Usuário não autenticado. Redirecionando para /auth");
     return <Redirect to="/auth" />;
   }
   
+  // Usuário administrador: redirecionar para dashboard admin
   if (user.role === 'admin') {
+    console.log("Usuário admin. Redirecionando para /admin/dashboard");
     return <Redirect to="/admin/dashboard" />;
   }
   
-  // Modificado para usar a URL correta do departamento do usuário
+  // Usuário de departamento: redirecionar para dashboard específico do departamento
+  console.log(`Usuário de departamento ${user.role}. Redirecionando para /department/${user.role}/dashboard`);
   return <Redirect to={`/department/${user.role}/dashboard`} />;
 }
 

@@ -70,12 +70,22 @@ export default function DepartmentDashboard() {
   
   // Sempre verificar se o usuário está no dashboard correto de seu departamento
   useEffect(() => {
-    if (user && user.role !== 'admin') {
+    if (user) {
+      // Se o usuário é admin, ele não deveria estar aqui
+      if (user.role === 'admin') {
+        console.log('Usuário admin detectado no dashboard de departamento. Redirecionando para o admin dashboard.');
+        navigate('/admin/dashboard', { replace: true });
+        return;
+      }
+      
       // Se o usuário não é admin e o departamento na URL não corresponde ao seu, redirecione
       if (department !== user.role) {
         console.log(`Correção de departamento: redirecionando de ${department} para ${user.role}`);
         navigate(`/department/${user.role}/dashboard`, { replace: true });
+        return;
       }
+      
+      console.log(`Usuário ${user.username} (${user.role}) verificado no dashboard correto: ${department}`);
     }
   }, [user, department, navigate]);
 
