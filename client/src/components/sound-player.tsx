@@ -1,98 +1,106 @@
 import { useEffect, useRef } from 'react';
 
-// Tipos de sons disponíveis para notificações
-export type SoundType = 'notification' | 'alert' | 'success';
-
-interface SoundPlayerProps {
-  type: SoundType;
-  play: boolean;
-  onPlay?: () => void;
-}
-
-// URLs para os arquivos de som (usando sons nativos do browser como fallback)
-const soundUrls: Record<SoundType, string> = {
-  notification: 'data:audio/mp3;base64,//uQxAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAAKAAAGhgCFhYWFhYWFhYWFhYWFhYW6urq6urq6urq6urq6urrV1dXV1dXV1dXV1dXV1dXV7u7u7u7u7u7u7u7u7u7u//////////////////////////8AAAA5TEFNRTMuOTlyAc0AAAAAAAAAABSAJAJAQgAAgAAAAoZuYuPXAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//vAxAAABLQDe7QQAAI8gqz3PCAAAAAAACQQCBAgLBAIEBhgYEBA4OD+L/KAgKH9YcH8pz//BAIGgupeNlEfw/iCIfeUBQFn/hQoJLqXjZQ/+H+HjbFoLAWdQXLxtoQCgKAg6J//+KAgKAgKA4oCg+D4oCgL//Dg+Lg+QED+oGVCpVFtbP6ZbMyqTEFNRTMuOTkuNaqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqg==',
-  alert: 'data:audio/mp3;base64,//uQxAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAALAAAJQQAvLy8vLy8vLy8vLy8vLy9LS0tLS0tLS0tLS0tLS0tLZmZmZmZmZmZmZmZmZmZmZoCAgICAgICAgICAgICAgICamZmZmZmZmZmZmZmZmZm0tLS0tLS0tLS0tLS0tLS0z8/Pz8/Pz8/Pz8/Pz8/P49/f39/f39/f39/f39/f3/////////////////////////////////8AAAA8TEFNRTMuOTlyBK8AAAAAAAAAAABSIJAJAiYAAAAAAAkAAABCAAAAAAAJQQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
-  success: 'data:audio/mp3;base64,//uQxAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAAJAAAGhgBVVVVVVVVVVVVVVVVVVVV2dnZ2dnZ2dnZ2dnZ2dnZ2lpaWlpaWlpaWlpaWlpaWlre3t7e3t7e3t7e3t7e3t9fX19fX19fX19fX19fX1/////////////////////////////////8AAAA5TEFNRTMuOTlyAc0AAAAAAAAAABSAJAJAQgAAgAAABoZXA9eCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//tQxAAABHwFX7QEACCFoOx3gIAAAAABBo2JR6Q0A9kWRv4gzZdALBxwDT8Mz9yZP5/3zzl//85E28QGTB4YEuHhGf5M/y8IgQyC56MZiGYeEZ/k3///4cICB5+GZ+5N/8+eQIZBo9GM/yZn4R//5cICBcIzEMw8If/yb//zcR//5nY+f//EPn+oKL/1tdyqTEFNRTMuOTkuNaqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq'
+// Sons disponíveis
+const SOUNDS = {
+  // Som de notificação chamativo para novos pedidos
+  NEW_ACTIVITY: '/notification-sound.mp3',
+  // Som de alerta para pedidos retornados
+  RETURN_ALERT: '/alert-sound.mp3',
+  // Som mais sutil para outras atualizações
+  UPDATE: '/update-sound.mp3'
 };
 
-export const SoundPlayer: React.FC<SoundPlayerProps> = ({
-  type,
-  play,
-  onPlay
-}) => {
+export type SoundType = keyof typeof SOUNDS;
+
+interface SoundPlayerProps {
+  sound: SoundType;
+  play: boolean;
+  volume?: number;
+  onEnd?: () => void;
+}
+
+export function SoundPlayer({ sound, play, volume = 1.0, onEnd }: SoundPlayerProps) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   
   useEffect(() => {
-    if (play && audioRef.current) {
-      // Tentativa de tocar o som
-      audioRef.current.currentTime = 0;
-      const playPromise = audioRef.current.play();
+    // Criar elemento de áudio se ainda não existir
+    if (!audioRef.current) {
+      audioRef.current = new Audio(SOUNDS[sound]);
+      audioRef.current.volume = Math.min(1, Math.max(0, volume)); // Garantir que o volume está entre 0 e 1
       
-      // Tratar a promessa para evitar erros no console
-      if (playPromise !== undefined) {
-        playPromise
-          .then(() => {
-            if (onPlay) onPlay();
-          })
-          .catch(error => {
-            console.warn('Reprodução de áudio falhou:', error);
-          });
+      if (onEnd) {
+        audioRef.current.addEventListener('ended', onEnd);
       }
     }
-  }, [play, onPlay]);
+    
+    // Reproduzir o som quando play for true
+    if (play && audioRef.current) {
+      // Reiniciar a reprodução se já estiver tocando
+      audioRef.current.currentTime = 0;
+      
+      // Reproduzir o som
+      audioRef.current.play().catch(err => {
+        console.error('Erro ao reproduzir som:', err);
+      });
+    }
+    
+    // Limpar na desmontagem
+    return () => {
+      if (audioRef.current && onEnd) {
+        audioRef.current.removeEventListener('ended', onEnd);
+      }
+    };
+  }, [sound, play, volume, onEnd]);
   
-  return (
-    <audio 
-      ref={audioRef}
-      src={soundUrls[type]}
-      preload="auto"
-      style={{ display: 'none' }}
-    />
-  );
-};
-
-// Componente para tocar sons específicos por departamento
-interface DepartmentSoundPlayerProps {
-  department: string;
-  play: boolean;
-  onPlay?: () => void;
+  // Este componente não renderiza nada visualmente
+  return null;
 }
 
-export const DepartmentSoundPlayer: React.FC<DepartmentSoundPlayerProps> = ({
-  department,
-  play,
-  onPlay
-}) => {
-  // Definir tipos de som diferentes para cada departamento
-  // para que os usuários possam distinguir as notificações pelo som
-  let soundType: SoundType = 'notification';
+// Hook para facilitar a reprodução de sons em qualquer componente
+export function useSoundPlayer() {
+  const audioRefs = useRef<Record<SoundType, HTMLAudioElement | null>>({
+    NEW_ACTIVITY: null,
+    RETURN_ALERT: null,
+    UPDATE: null
+  });
   
-  switch (department) {
-    case 'admin':
-      soundType = 'alert';
-      break;
-    case 'gabarito':
-      soundType = 'notification';
-      break;
-    case 'impressao':
-      soundType = 'success';
-      break;
-    case 'batida':
-      soundType = 'notification';
-      break;
-    case 'costura':
-      soundType = 'success';
-      break;
-    case 'embalagem':
-      soundType = 'alert';
-      break;
-    default:
-      soundType = 'notification';
-  }
+  // Pré-carregar todos os sons para evitar atrasos ao reproduzir
+  useEffect(() => {
+    // Criar e pré-carregar os elementos de áudio
+    Object.entries(SOUNDS).forEach(([key, src]) => {
+      const soundType = key as SoundType;
+      if (!audioRefs.current[soundType]) {
+        const audio = new Audio(src);
+        audio.preload = 'auto';
+        audioRefs.current[soundType] = audio;
+        
+        // Iniciar o carregamento do arquivo
+        audio.load();
+      }
+    });
+    
+    // Limpar na desmontagem
+    return () => {
+      Object.values(audioRefs.current).forEach(audio => {
+        if (audio) {
+          audio.pause();
+          audio.src = '';
+        }
+      });
+    };
+  }, []);
   
-  console.log(`[som] Tocando som tipo ${soundType} para o departamento ${department}`);
-  return <SoundPlayer type={soundType} play={play} onPlay={onPlay} />;
-};
-
-export default SoundPlayer;
+  // Função para reproduzir um som específico
+  const playSound = (sound: SoundType, volume = 1.0) => {
+    const audio = audioRefs.current[sound];
+    if (audio) {
+      audio.volume = Math.min(1, Math.max(0, volume));
+      audio.currentTime = 0;
+      audio.play().catch(err => {
+        console.error(`Erro ao reproduzir som ${sound}:`, err);
+      });
+    }
+  };
+  
+  return { playSound };
+}
