@@ -14,6 +14,7 @@ import Layout from "@/components/Layout";
 import ViewActivityModal from "@/components/view-activity-modal";
 import CompleteActivityModal from "@/components/complete-activity-modal";
 import ReturnActivityModal from "@/components/return-activity-modal";
+import { ActivitySkeleton, StatsSkeleton } from "@/components/activity-skeleton";
 import { SoundToggleButton, SoundTestButton } from "@/components/SoundManagerSimples";
 
 // Estendendo a interface Activity para incluir os campos que estamos recebendo do backend
@@ -85,23 +86,42 @@ export default function DepartmentDashboard() {
   // Referência para armazenar o número atual de atividades
   const prevActivitiesCountRef = useRef(0);
   
-  // Buscar atividades para o departamento do usuário
+  // Buscar atividades para o departamento do usuário - OTIMIZADO
   const { data: activitiesData = [], isLoading: activitiesLoading, refetch: refetchActivities } = useQuery({
     queryKey: ["/api/department/activities", userDepartment],
     queryFn: async () => {
       if (!userDepartment || !user) return [];
       
-      const response = await fetch(`/api/activities/department/${userDepartment}`, {
-        credentials: 'include'
-      });
+      console.log(`Buscando atividades para ${userDepartment}...`);
+      const startTime = performance.now();
       
-      if (!response.ok) {
-        throw new Error('Erro ao buscar atividades do departamento');
+      try {
+        const response = await fetch(`/api/activities/department/${userDepartment}`, {
+          credentials: 'include',
+          // Adicionar cabeçalho para evitar cache do navegador
+          headers: {
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache'
+          }
+        });
+        
+        if (!response.ok) {
+          throw new Error('Erro ao buscar atividades do departamento');
+        }
+        
+        const data = await response.json() as ActivityWithNotes[];
+        const endTime = performance.now();
+        console.log(`Atividades carregadas em ${(endTime - startTime).toFixed(2)}ms. Total: ${data.length}`);
+        
+        return data;
+      } catch (error) {
+        console.error("Falha ao carregar atividades:", error);
+        throw error;
       }
-      
-      return await response.json() as ActivityWithNotes[];
     },
-    enabled: !!user && !!userDepartment
+    enabled: !!user && !!userDepartment,
+    staleTime: 30000, // Manter dados em cache por 30 segundos
+    refetchOnWindowFocus: false // Evitar refetch ao focar a janela
   });
   
   // Referência para o som de notificação
@@ -509,33 +529,38 @@ export default function DepartmentDashboard() {
         </Button>
       </div>
       
-      {userLoading || activitiesLoading ? (
+      {userLoading ? (
         <div className="h-64 flex items-center justify-center">
           <Loader2 className="h-8 w-8 animate-spin text-primary-500" />
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-lg font-semibold">Atividades Pendentes</CardTitle>
-                <CardDescription>Atividades aguardando seu departamento</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-3xl font-bold">{stats.pendingCount || 0}</p>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-lg font-semibold">Atividades Concluídas</CardTitle>
-                <CardDescription>Atividades finalizadas pelo seu departamento</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-3xl font-bold">{stats.completedCount || 0}</p>
-              </CardContent>
-            </Card>
-          </div>
+          {/* Carregamento de estatísticas com esqueleto */}
+          {statsLoading ? (
+            <StatsSkeleton />
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-lg font-semibold">Atividades Pendentes</CardTitle>
+                  <CardDescription>Atividades aguardando seu departamento</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-3xl font-bold">{stats.pendingCount || 0}</p>
+                </CardContent>
+              </Card>
+              
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-lg font-semibold">Atividades Concluídas</CardTitle>
+                  <CardDescription>Atividades finalizadas pelo seu departamento</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-3xl font-bold">{stats.completedCount || 0}</p>
+                </CardContent>
+              </Card>
+            </div>
+          )}
           
           <Card>
             <CardHeader>
@@ -545,7 +570,10 @@ export default function DepartmentDashboard() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {activitiesData && activitiesData.length > 0 ? (
+              {/* Carregamento de atividades com esqueleto */}
+              {activitiesLoading ? (
+                <ActivitySkeleton />
+              ) : activitiesData && activitiesData.length > 0 ? (
                 <div className="space-y-4">
                   {/* Ordena atividades por data de entrega */}
                   {[...activitiesData]
