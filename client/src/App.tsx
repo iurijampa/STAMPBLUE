@@ -13,7 +13,8 @@ import { AuthProvider } from "@/hooks/use-auth";
 import { useAuth } from "@/hooks/use-auth";
 import { WebSocketProvider } from "@/hooks/websocket-provider";
 import { SoundManagerProvider } from "@/components/SoundManagerSimples";
-import { SimpleSoundPlayer } from "@/components/SimpleSoundPlayer";
+import SimpleSoundPlayer from "@/components/SimpleSoundPlayer";
+import SoundTestToque from "@/components/SoundTestToque";
 
 // Componente para redirecionar com base no papel do usuário
 function DashboardRedirect() {
@@ -89,8 +90,9 @@ function App() {
     <AuthProvider>
       <WebSocketProvider>
         <SoundManagerProvider>
-          {/* Player de som simples que toca sons através do WebSocket */}
+          {/* Componentes de som */}
           <SimpleSoundPlayer />
+          <SoundTestToque />
           
           <Switch>
             <Route path="/" component={DashboardRedirect} />

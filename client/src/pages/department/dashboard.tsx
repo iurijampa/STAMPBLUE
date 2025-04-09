@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useLocation, useParams } from "wouter";
 import { useToast } from "@/hooks/use-toast";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import { User, Activity } from "@shared/schema";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2, CalendarClock, Clock, Eye, RefreshCw, RotateCcw } from "lucide-react";
@@ -82,6 +82,9 @@ export default function DepartmentDashboard() {
   // (a menos que seja um admin, que pode visualizar qualquer departamento)
   const userDepartment = user?.role !== 'admin' ? user?.role : department;
   
+  // Referência para armazenar o número atual de atividades
+  const prevActivitiesCountRef = useRef(0);
+  
   // Buscar atividades para o departamento do usuário
   const { data: activitiesData = [], isLoading: activitiesLoading, refetch: refetchActivities } = useQuery({
     queryKey: ["/api/department/activities", userDepartment],
@@ -100,6 +103,77 @@ export default function DepartmentDashboard() {
     },
     enabled: !!user && !!userDepartment
   });
+  
+  // Referência para o som de notificação
+  const notificationSoundRef = useRef<HTMLAudioElement | null>(null);
+
+  // Função para reproduzir som imediatamente - MODO DEUS!
+  const playBeepSound = useCallback(() => {
+    console.log("Tentando tocar som MODO DEUS...");
+    
+    try {
+      // Criar contexto de áudio - funciona bem em dispositivos móveis
+      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContext) {
+        console.error("API Web Audio não suportada neste navegador");
+        return;
+      }
+      
+      const context = new AudioContext();
+      const oscillator = context.createOscillator();
+      const gainNode = context.createGain();
+      
+      // Configurar som (beep agudo para notificação)
+      oscillator.type = 'sine';
+      oscillator.frequency.value = 880; // Frequência mais alta = tom mais agudo
+      gainNode.gain.value = 0.3; // Volume mais baixo para não ser intrusivo
+      
+      // Conectar os nós de áudio
+      oscillator.connect(gainNode);
+      gainNode.connect(context.destination);
+      
+      // Iniciar oscilador e interrompê-lo após um curto período
+      oscillator.start();
+      
+      // Tocar por apenas 300ms
+      setTimeout(() => {
+        oscillator.stop();
+        // Fechar contexto após uso para liberar recursos
+        setTimeout(() => {
+          if (context.state !== 'closed') {
+            context.close();
+          }
+        }, 100);
+      }, 300);
+      
+      console.log("🔊 Som reproduzido com sucesso! (MODO DEUS)");
+      return true;
+    } catch (error) {
+      console.error("Erro ao reproduzir som:", error);
+      return false;
+    }
+  }, []);
+
+  // Verificar se há novas atividades e tocar som se houver
+  useEffect(() => {
+    // Só tocamos se já tínhamos carregado antes (prevActivitiesCountRef > 0) e temos novas atividades
+    if (activitiesData && activitiesData.length > prevActivitiesCountRef.current && prevActivitiesCountRef.current > 0) {
+      console.log(`🔔 NOVAS ATIVIDADES DETECTADAS! Anterior: ${prevActivitiesCountRef.current}, Atual: ${activitiesData.length}`);
+      
+      // Tocar som imediatamente
+      playBeepSound();
+      
+      // Mostrar notificação na tela também
+      toast({
+        title: "Novas atividades chegaram!",
+        description: `Você tem ${activitiesData.length - prevActivitiesCountRef.current} nova(s) atividade(s) para processar.`,
+        variant: "default",
+      });
+    }
+    
+    // Atualizar a contagem de atividades para a próxima comparação
+    prevActivitiesCountRef.current = activitiesData?.length || 0;
+  }, [activitiesData, playBeepSound, toast]);
   
   // Recarregar os dados quando o departamento do usuário mudar
   useEffect(() => {
@@ -187,6 +261,9 @@ export default function DepartmentDashboard() {
 
   // Função para atualizar manualmente a página (F5)
   const handleRefresh = () => {
+    // Tentar tocar um som de teste quando o usuário atualiza manualmente
+    playBeepSound();
+    
     // Recarregar a página completamente (como o F5)
     window.location.reload();
   };
@@ -233,9 +310,16 @@ export default function DepartmentDashboard() {
             Sair
           </Button>
           
-          {/* Botões de Som */}
-          <SoundToggleButton />
-          <SoundTestButton />
+          {/* Botão de Som MODO DEUS */}
+          <Button 
+            variant="outline"
+            size="sm"
+            onClick={playBeepSound}
+            className="flex items-center px-3 py-1 bg-blue-100 text-blue-800 hover:bg-blue-200 border-blue-300 animate-pulse"
+          >
+            <span className="mr-1">🔊</span>
+            <span>Ativar Notificações Sonoras</span>
+          </Button>
         </div>
         <Button 
           variant="outline" 
