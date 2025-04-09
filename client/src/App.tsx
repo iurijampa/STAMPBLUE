@@ -15,6 +15,7 @@ import { WebSocketProvider } from "@/hooks/websocket-provider";
 import { SoundManagerProvider } from "@/components/SoundManagerSimples";
 import SimpleSoundPlayer from "@/components/SimpleSoundPlayer";
 import SoundTestToque from "@/components/SoundTestToque";
+import SoundAutoInitializer from "@/components/SoundAutoInitializer";
 
 // Componente para redirecionar com base no papel do usuário
 function DashboardRedirect() {
@@ -93,6 +94,7 @@ function App() {
           {/* Componentes de som */}
           <SimpleSoundPlayer />
           <SoundTestToque />
+          <SoundAutoInitializer />
           
           <Switch>
             <Route path="/" component={DashboardRedirect} />
