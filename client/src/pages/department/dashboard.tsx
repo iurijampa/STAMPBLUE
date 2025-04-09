@@ -108,7 +108,12 @@ export default function DepartmentDashboard() {
   const notificationSoundRef = useRef<HTMLAudioElement | null>(null);
 
   // Função para reproduzir som imediatamente - MODO DEUS!
-  const playBeepSound = useCallback(() => {
+  const playBeepSound = useCallback((shouldActuallyPlaySound = true) => {
+    // Se não devemos realmente tocar o som, apenas retorne silenciosamente
+    if (!shouldActuallyPlaySound) {
+      return false;
+    }
+    
     console.log("Tentando tocar som MODO DEUS...");
     
     try {
@@ -116,7 +121,7 @@ export default function DepartmentDashboard() {
       const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
       if (!AudioContext) {
         console.error("API Web Audio não suportada neste navegador");
-        return;
+        return false;
       }
       
       const context = new AudioContext();
@@ -350,8 +355,8 @@ export default function DepartmentDashboard() {
 
   // Função para atualizar manualmente a página (F5)
   const handleRefresh = () => {
-    // Tentar tocar um som de teste quando o usuário atualiza manualmente
-    playBeepSound();
+    // Não tocar som ao atualizar manualmente - só recarregar a página
+    // Removido: playBeepSound();
     
     // Recarregar a página completamente (como o F5)
     window.location.reload();
@@ -399,11 +404,34 @@ export default function DepartmentDashboard() {
             Sair
           </Button>
           
-          {/* Botão de Som MODO DEUS */}
+          {/* Botão de Som MODO DEUS - sem reproduzir som ao ser clicado */}
           <Button 
             variant="outline"
             size="sm"
-            onClick={playBeepSound}
+            onClick={() => {
+              // Solicitar permissão para áudio sem reproduzir som
+              try {
+                // Criar contexto de áudio e fechar imediatamente (isso já solicita permissão)
+                const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+                if (AudioContext) {
+                  const context = new AudioContext();
+                  setTimeout(() => context.close(), 100);
+                  console.log("✅ Permissão para som solicitada e concedida");
+                  
+                  // Salvar a permissão no localStorage para uso futuro
+                  localStorage.setItem('soundPermissionGranted', 'true');
+                  
+                  // Mostrar toast de confirmação
+                  toast({
+                    title: "Notificações sonoras ativadas",
+                    description: "Você receberá alertas sonoros quando novos pedidos chegarem.",
+                    variant: "default"
+                  });
+                }
+              } catch (error) {
+                console.error("Erro ao solicitar permissão de áudio:", error);
+              }
+            }}
             className="flex items-center px-3 py-1 bg-blue-100 text-blue-800 hover:bg-blue-200 border-blue-300 animate-pulse"
           >
             <span className="mr-1">🔊</span>
