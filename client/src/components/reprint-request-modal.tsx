@@ -1,12 +1,11 @@
 import { useState } from "react";
-import { Activity, type InsertReprintRequest } from "@shared/schema";
+import { Activity } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { useAuth } from "@/hooks/use-auth";
 
 import {
   Dialog,
@@ -45,8 +44,8 @@ const reprintRequestFormSchema = z.object({
   details: z.string().optional(),
   quantity: z.number().min(1, "Quantidade deve ser pelo menos 1"),
   priority: z.enum(["low", "normal", "high", "urgent"]),
-  fromDepartment: z.string().default("batida"),
-  toDepartment: z.string().default("impressao"),
+  fromDepartment: z.string(),
+  toDepartment: z.string(),
 });
 
 type ReprintRequestFormValues = z.infer<typeof reprintRequestFormSchema>;
@@ -60,7 +59,6 @@ interface ReprintRequestModalProps {
 
 export default function ReprintRequestModal({ isOpen, onClose, activity, onSuccess }: ReprintRequestModalProps) {
   const { toast } = useToast();
-  const { user } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Definir valores padrão para o formulário
@@ -86,48 +84,40 @@ export default function ReprintRequestModal({ isOpen, onClose, activity, onSucce
     enabled: !activity, // Só busca se não tiver atividade específica
   });
 
-  // Mutação para criar solicitação de reimpressão
-  const createMutation = useMutation({
-    mutationFn: async (data: ReprintRequestFormValues) => {
-      const response = await apiRequest("POST", "/api/reprint-requests", data);
+  // Função para lidar com o envio do formulário
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    
+    try {
+      setIsSubmitting(true);
+      
+      // Obter valores do formulário
+      const formValues = form.getValues();
+      
+      // Garantir que os departamentos estão definidos
+      const dataToSubmit = {
+        ...formValues,
+        fromDepartment: "batida",
+        toDepartment: "impressao"
+      };
+      
+      console.log("Enviando solicitação:", dataToSubmit);
+      
+      // Fazer a requisição diretamente em vez de usar a mutação
+      const response = await fetch("/api/reprint-requests", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(dataToSubmit),
+      });
       
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.message || "Erro ao enviar solicitação");
       }
       
-      return await response.json();
-    },
-    onSuccess: () => {
-      setIsSubmitting(false);
-      onSuccess();
-      onClose();
-    },
-    onError: (error: Error) => {
-      setIsSubmitting(false);
-      toast({
-        title: "Erro ao enviar solicitação",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  // Função para lidar com o envio do formulário
-  const onSubmit = async (values: ReprintRequestFormValues) => {
-    try {
-      // Garantir que os departamentos estão definidos
-      const dataToSubmit = {
-        ...values,
-        fromDepartment: "batida",
-        toDepartment: "impressao"
-      };
-      
-      console.log("Enviando solicitação:", dataToSubmit);
-      setIsSubmitting(true);
-      
-      // Usar mutateAsync para aguardar a conclusão
-      const result = await createMutation.mutateAsync(dataToSubmit);
+      const result = await response.json();
       console.log("Solicitação enviada com sucesso!", result);
       
       // Invalidar a lista de solicitações para atualizar automaticamente
@@ -152,7 +142,7 @@ export default function ReprintRequestModal({ isOpen, onClose, activity, onSucce
         variant: "destructive",
       });
     }
-  };
+  }
 
   // Renderizar opções de prioridade
   const priorityOptions = [
@@ -173,7 +163,7 @@ export default function ReprintRequestModal({ isOpen, onClose, activity, onSucce
         </DialogHeader>
         
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+          <form onSubmit={handleSubmit} className="space-y-5">
             {!activity && (
               <FormField
                 control={form.control}
