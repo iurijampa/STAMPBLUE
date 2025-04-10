@@ -899,11 +899,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const notes = "SOLICITAÇÃO DE REIMPRESSÃO INDEPENDENTE - De: Batida - Origem: " + 
                   (req.user?.username || "sistema") + " - Solicitado por: " + requestedBy;
       
+      // Para evitar problemas de tipo, garantimos que createdBy seja um número
+      let createdById: number = 1;
+      if (req.user && req.user.id) {
+        if (typeof req.user.id === 'number') {
+          createdById = req.user.id;
+        } else if (typeof req.user.id === 'string') {
+          createdById = parseInt(req.user.id);
+        } else {
+          // Se req.user.id não for nem número nem string, usar valor padrão
+          createdById = 1;
+        }
+      }
+      
       const temporaryActivity = await storage.createActivity({
         title,
         description: req.body.description || "Solicitação de reimpressão independente",
         priority: priority || "normal",
-        createdBy: (req.user?.id ? parseInt(req.user.id.toString()) : 1),
+        createdBy: createdById.toString(), // Convertendo explicitamente para string para evitar incompatibilidade de tipo
         image: imageUrl || "",
         quantity: parseInt(quantity) || 1,
         notes: notes,

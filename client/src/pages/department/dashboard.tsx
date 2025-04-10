@@ -23,15 +23,30 @@ import { ActivitySkeleton, StatsSkeleton } from "@/components/activity-skeleton"
 import { SoundToggleButton, SoundTestButton } from "@/components/SoundManagerSimples";
 
 // Estendendo a interface Activity para incluir os campos que estamos recebendo do backend
-interface ActivityWithNotes extends Activity {
-  previousNotes?: string | null;
-  previousDepartment?: string | null;
-  previousCompletedBy?: string | null;
+interface ActivityWithNotes {
+  id: number;
+  status: "pending" | "in_progress" | "completed";
+  title: string;
+  description: string;
+  image: string | null;
+  additionalImages: string[] | null;
+  quantity: number | null;
+  clientName: string | null;
+  priority: string | null;
+  createdBy: string | null;
+  createdAt: Date;
+  deadline: Date | null;
+  notes: string | null;
+  isReprintRequest: boolean | null;
+  // Campos adicionais que vêm do backend
+  previousNotes: string | null;
+  previousDepartment: string | null;
+  previousCompletedBy: string | null;
   // Campos para informações de retorno
-  wasReturned?: boolean;
-  returnedBy?: string | null;
-  returnNotes?: string | null;
-  returnedAt?: Date | null;
+  wasReturned: boolean;
+  returnedBy: string | null;
+  returnNotes: string | null;
+  returnedAt: Date | null;
 }
 
 export default function DepartmentDashboard() {
