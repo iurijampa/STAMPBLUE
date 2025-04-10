@@ -1,4 +1,6 @@
-import type { Express, Request, Response } from "express";
+import express, { type Express, Request, Response } from "express";
+import path from "path";
+import { fileURLToPath } from 'url';
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth } from "./auth";
@@ -14,7 +16,6 @@ import {
 } from "@shared/schema";
 import { fromZodError } from "zod-validation-error";
 import fs from 'fs';
-import path from 'path';
 import { db } from "./db";
 import { createBackup } from "./backup";
 import { and, eq, sql } from "drizzle-orm";
@@ -41,6 +42,12 @@ function isAdmin(req: Request, res: Response, next: Function) {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Obter o diretório atual em módulos ESM
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = path.dirname(__filename);
+  
+  // Configurar rota para servir os arquivos de upload
+  app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
   // Setup authentication routes
   setupAuth(app);
 

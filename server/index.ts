@@ -1,11 +1,32 @@
 import express, { type Request, Response, NextFunction } from "express";
+import fileUpload from "express-fileupload";
+import path from "path";
+import fs from "fs";
+import { fileURLToPath } from 'url';
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { scheduleBackups } from "./backup";
 
+// Obter o diretório atual em módulos ESM
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Criar diretório para uploads, se não existir
+const uploadsDir = path.join(__dirname, '..', 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+  console.log(`Diretório de uploads criado em: ${uploadsDir}`);
+}
+
 const app = express();
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: false, limit: '50mb' }));
+app.use(fileUpload({
+  limits: { fileSize: 10 * 1024 * 1024 }, // Limite de 10MB
+  useTempFiles: true,
+  tempFileDir: '/tmp/',
+  createParentPath: true
+}));
 
 app.use((req, res, next) => {
   const start = Date.now();

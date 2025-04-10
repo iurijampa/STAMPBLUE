@@ -742,19 +742,11 @@ export default function DepartmentDashboard() {
                   variant="default" 
                   className="flex items-center bg-blue-600 hover:bg-blue-700"
                   onClick={() => {
-                    // Selecionar o primeiro item da lista ou exibir mensagem
-                    if (activitiesData && activitiesData.length > 0) {
-                      setReprintActivity(activitiesData[0]);
-                    } else {
-                      toast({
-                        title: "Nenhuma atividade disponível",
-                        description: "Não há atividades disponíveis para solicitar reimpressão.",
-                        variant: "destructive"
-                      });
-                    }
+                    // Abrir modal de reimpressão independente
+                    setShowIndependentReprintModal(true);
                   }}
                 >
-                  <Printer className="h-4 w-4 mr-2" />
+                  <Plus className="h-4 w-4 mr-2" />
                   Nova Solicitação
                 </Button>
               </div>
@@ -870,6 +862,16 @@ export default function DepartmentDashboard() {
             isOpen={!!reprintActivity}
             onClose={() => setReprintActivity(null)}
             activity={reprintActivity}
+          />
+
+          {/* Modal de solicitação de reimpressão independente */}
+          <IndependentReprintModal 
+            isOpen={showIndependentReprintModal}
+            onClose={() => setShowIndependentReprintModal(false)}
+            onSuccess={() => {
+              // Atualizar a lista de solicitações após enviar uma nova
+              setTimeout(() => window.location.reload(), 500);
+            }}
           />
         </>
       )}

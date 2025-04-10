@@ -41,16 +41,18 @@ export const activities = pgTable("activities", {
   id: serial("id").primaryKey(),
   title: text("title").notNull(),
   description: text("description").notNull(),
-  image: text("image").notNull(), // Mantemos a imagem principal para compatibilidade
+  image: text("image"), // Imagem principal pode ser null agora para solicitações de reimpressão
   additionalImages: text("additional_images").array(), // Array para armazenar múltiplas imagens
-  quantity: integer("quantity").notNull(),
+  quantity: integer("quantity").default(1),
   clientName: text("client_name"),
   priority: text("priority").default("normal"),
   deadline: timestamp("deadline"),
   notes: text("notes"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-  createdBy: integer("created_by").notNull(),
+  createdBy: text("created_by"), // Alterado para text para aceitar nome de usuário
   status: activityStatusEnum("status").notNull().default('in_progress'),
+  previousDepartment: text("previous_department"), // Adicionado para controle de origem
+  isReprintRequest: boolean("is_reprint_request").default(false), // Flag para identificar solicitações independentes
 });
 
 // Criamos o esquema base e depois sobrescrevemos o deadline para aceitar string ISO
