@@ -590,18 +590,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
+      // Log para debug
+      console.log("Recebido pedido de reimpressão:", req.body);
+      
+      // Verificar se o activityId foi fornecido
+      if (!req.body.activityId || typeof req.body.activityId !== 'number') {
+        return res.status(400).json({ 
+          message: "ID da atividade inválido ou não informado", 
+          receivedType: typeof req.body.activityId,
+          receivedValue: req.body.activityId 
+        });
+      }
+      
+      // Verificar primeiro se a atividade existe
+      const activityId = parseInt(req.body.activityId.toString(), 10);
+      const activity = await storage.getActivity(activityId);
+      
+      if (!activity) {
+        console.log(`Atividade ${activityId} não encontrada no banco de dados`);
+        return res.status(404).json({ 
+          message: "Atividade não encontrada",
+          requestedId: activityId
+        });
+      }
+      
+      console.log(`Atividade ${activityId} encontrada: ${activity.title}`);
+      
       // Validar os dados
       const validatedData = insertReprintRequestSchema.parse({
         ...req.body,
+        activityId: activityId, // Garantir que estamos usando o ID verificado
         fromDepartment: "batida",
         toDepartment: "impressao", // Sempre envia para impressão
       });
-      
-      // Verificar se a atividade existe
-      const activity = await storage.getActivity(validatedData.activityId);
-      if (!activity) {
-        return res.status(404).json({ message: "Atividade não encontrada" });
-      }
       
       // Criar a solicitação
       const reprintRequest = await storage.createReprintRequest(validatedData);

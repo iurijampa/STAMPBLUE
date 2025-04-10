@@ -103,19 +103,24 @@ export default function ReprintRequestModal({ isOpen, onClose, activity, onSucce
       const formValues = form.getValues();
       
       // Garantir que a atividade está definida corretamente
-      if (activity && (!formValues.activityId || formValues.activityId === 0)) {
-        formValues.activityId = activity.id;
+      let activityId = formValues.activityId;
+      
+      if (activity) {
+        activityId = activity.id;
+        console.log("Usando ID da atividade do prop:", activityId);
+      } else {
+        console.log("Usando ID da atividade do formulário:", activityId);
       }
 
       // Validar se a atividade existe
-      if (!formValues.activityId || formValues.activityId === 0) {
+      if (!activityId || activityId === 0) {
         throw new Error("Selecione um pedido válido");
       }
       
       // Garantir que os departamentos estão definidos
       const dataToSubmit = {
         ...formValues,
-        activityId: formValues.activityId,
+        activityId: activityId,
         fromDepartment: "batida",
         toDepartment: "impressao"
       };
