@@ -2,7 +2,8 @@ import {
   User, InsertUser, 
   Activity, InsertActivity, 
   ActivityProgress, InsertActivityProgress, 
-  Notification, InsertNotification
+  Notification, InsertNotification,
+  ReprintRequest, InsertReprintRequest
 } from "@shared/schema";
 
 // Storage interface
@@ -49,6 +50,20 @@ export interface IStorage {
   getNotification(id: number): Promise<Notification | undefined>;
   getNotificationsByUser(userId: number): Promise<Notification[]>;
   markNotificationAsRead(id: number): Promise<Notification>;
+  
+  // Reprint Requests
+  createReprintRequest(request: InsertReprintRequest): Promise<ReprintRequest>;
+  getReprintRequest(id: number): Promise<ReprintRequest | undefined>;
+  getReprintRequestsByActivity(activityId: number): Promise<ReprintRequest[]>;
+  getReprintRequestsByStatus(status: string): Promise<ReprintRequest[]>;
+  getReprintRequestsForDepartment(department: string): Promise<ReprintRequest[]>;
+  getReprintRequestsFromDepartment(department: string): Promise<ReprintRequest[]>;
+  updateReprintRequestStatus(
+    id: number, 
+    status: string, 
+    processedBy?: string, 
+    responseNotes?: string
+  ): Promise<ReprintRequest>;
   
   // Session store
   sessionStore: any;

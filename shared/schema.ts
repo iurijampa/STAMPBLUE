@@ -106,6 +106,41 @@ export const insertNotificationSchema = createInsertSchema(notifications).pick({
   message: true,
 });
 
+// Solicitações de reimpressão
+export const reprintStatusEnum = pgEnum('reprint_status', ['pending', 'in_progress', 'completed', 'rejected']);
+
+export const reprintRequests = pgTable("reprint_requests", {
+  id: serial("id").primaryKey(),
+  activityId: integer("activity_id").notNull(),
+  requestedBy: text("requested_by").notNull(), // Nome do funcionário que solicitou
+  requestedAt: timestamp("requested_at").notNull().defaultNow(),
+  // Departamento que solicitou (normalmente 'batida')
+  fromDepartment: roleEnum("from_department").notNull(),
+  // Departamento para onde vai a solicitação (normalmente 'impressao')
+  toDepartment: roleEnum("to_department").notNull(),
+  // Descrição do problema e da peça que precisa ser reimpressa
+  description: text("description").notNull(),
+  // Quantidade de peças que precisam ser reimpressas
+  quantity: integer("quantity").notNull().default(1),
+  // Status da solicitação
+  status: reprintStatusEnum("status").notNull().default('pending'),
+  // Quem atendeu a solicitação
+  processedBy: text("processed_by"),
+  // Quando foi atendida
+  processedAt: timestamp("processed_at"),
+  // Observações de quem atendeu a solicitação
+  responseNotes: text("response_notes"),
+});
+
+export const insertReprintRequestSchema = createInsertSchema(reprintRequests).pick({
+  activityId: true,
+  requestedBy: true,
+  fromDepartment: true,
+  toDepartment: true,
+  description: true,
+  quantity: true,
+});
+
 // Export types
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -115,3 +150,5 @@ export type ActivityProgress = typeof activityProgress.$inferSelect;
 export type InsertActivityProgress = z.infer<typeof insertActivityProgressSchema>;
 export type Notification = typeof notifications.$inferSelect;
 export type InsertNotification = z.infer<typeof insertNotificationSchema>;
+export type ReprintRequest = typeof reprintRequests.$inferSelect;
+export type InsertReprintRequest = z.infer<typeof insertReprintRequestSchema>;
