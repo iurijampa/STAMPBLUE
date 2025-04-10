@@ -1,119 +1,76 @@
-import SoundTestPage from '@/components/sound-test';
-import { Button } from "@/components/ui/button";
-import { useToast } from "@/hooks/use-toast";
-import { useEffect, useState } from "react";
-import { useLocation } from "wouter";
-import { User } from "@shared/schema";
-import { Loader2, Menu, LogOut } from "lucide-react";
+import React, { useState } from "react";
+import SolucaoReimpressao from "@/components/solucao-reimpressao";
+import ListaReimpressaoSimples from "@/components/lista-reimpressao-simples";
+import ReimpressaoProcessamento from "@/components/reimpressao-processamento";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function TestPage() {
-  const { toast } = useToast();
-  const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [, navigate] = useLocation();
+  // Usar um ID fixo para teste
+  const testeActivityId = 49; // ID de uma atividade que existe no sistema
+  const testeActivityTitle = "CHAVEIRO INOVAÇÃO";
+  const [atualizacaoPendente, setAtualizacaoPendente] = useState(false);
 
-  useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const response = await fetch('/api/user', {
-          credentials: 'include'
-        });
-        
-        if (response.status === 401) {
-          navigate("/auth");
-          return;
-        }
-        
-        if (response.ok) {
-          const userData = await response.json();
-          setUser(userData);
-        } else {
-          navigate("/auth");
-        }
-      } catch (err) {
-        console.error("Erro ao verificar autenticação:", err);
-        navigate("/auth");
-      } finally {
-        setIsLoading(false);
-      }
-    };
+  const handleSolicitacaoCriada = () => {
+    // Indicar que uma nova solicitação foi criada
+    setAtualizacaoPendente(true);
     
-    checkAuth();
-  }, [navigate]);
-  
-  const handleLogout = async () => {
-    try {
-      const response = await fetch('/api/logout', {
-        method: 'POST',
-        credentials: 'include',
-      });
-      
-      if (response.ok) {
-        toast({
-          title: "Logout realizado com sucesso",
-        });
-        navigate("/auth");
-      } else {
-        throw new Error('Falha ao fazer logout');
-      }
-    } catch (error) {
-      console.error("Erro ao fazer logout:", error);
-      toast({
-        title: "Falha no logout",
-        description: error instanceof Error ? error.message : "Erro desconhecido",
-        variant: "destructive",
-      });
-    }
+    // Aguardar um pouco e resetar o estado
+    setTimeout(() => {
+      setAtualizacaoPendente(false);
+    }, 5000);
   };
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin mr-2" />
-        <p>Carregando...</p>
-      </div>
-    );
-  }
-
   return (
-    <div className="container mx-auto p-4">
-      {/* Barra superior com informações do usuário */}
-      <div className="flex justify-between items-center mb-6 p-3 bg-background shadow rounded-lg">
-        <div className="flex items-center gap-2">
-          <Menu className="h-5 w-5 text-muted-foreground" />
-          <span className="font-medium">Teste de Sons</span>
-        </div>
-        {user && (
-          <div className="flex items-center gap-4">
-            <div className="text-sm text-right">
-              <div className="font-medium">{user.username}</div>
-              <div className="text-muted-foreground capitalize">{user.role}</div>
-            </div>
-            <Button variant="ghost" size="icon" onClick={handleLogout} title="Sair">
-              <LogOut className="h-5 w-5" />
-            </Button>
-          </div>
-        )}
-      </div>
-
-      {/* Título da página */}
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight mb-2">
-            Teste de Sons do Sistema
-          </h1>
-          <p className="text-muted-foreground">
-            Use esta página para testar os sons utilizados no sistema de notificações.
+    <div className="container py-8">
+      <h1 className="text-3xl font-bold mb-6">Solução Simplificada - Reimpressão</h1>
+      
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle className="text-2xl">Instruções</CardTitle>
+          <CardDescription>
+            Esta é uma solução simplificada para o problema de reimpressão
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p className="mb-4">
+            <strong>Como funciona:</strong> Esta versão ultrasimplificada armazena os dados na memória
+            do servidor em vez de usar o banco de dados, contornando qualquer problema com o ORM ou PostgreSQL.
           </p>
-        </div>
-
-        {/* Componente de teste de sons */}
-        <SoundTestPage />
-        
-        {/* Rodapé estilizado */}
-        <div className="text-center text-xs text-muted-foreground mt-8 italic">
-          Desenvolvido por Iuri
-        </div>
+          <ul className="list-disc pl-6 space-y-2">
+            <li>Na aba <strong>CRIAR SOLICITAÇÃO</strong>: Preencha o formulário para criar uma solicitação de reimpressão</li>
+            <li>Na aba <strong>LISTAR SOLICITAÇÕES</strong>: Veja todas as solicitações de reimpressão do sistema</li>
+            <li>Os dados são armazenados em memória e persistem até o servidor ser reiniciado</li>
+            <li>Esta solução contorna completamente os problemas de banco de dados</li>
+          </ul>
+          
+          {atualizacaoPendente && (
+            <div className="mt-4 p-3 bg-blue-50 text-blue-700 rounded border border-blue-200">
+              ⚠️ Solicitação criada com sucesso! Vá para a aba "LISTAR SOLICITAÇÕES" para verificar
+            </div>
+          )}
+        </CardContent>
+      </Card>
+      
+      <div className="mt-8">
+        <Tabs defaultValue="criar">
+          <TabsList className="mb-6">
+            <TabsTrigger value="criar">CRIAR SOLICITAÇÃO</TabsTrigger>
+            <TabsTrigger value="listar">LISTAR SOLICITAÇÕES</TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="criar">
+            <SolucaoReimpressao 
+              activityId={testeActivityId} 
+              activityTitle={testeActivityTitle}
+              onSuccess={handleSolicitacaoCriada}
+            />
+          </TabsContent>
+          
+          <TabsContent value="listar">
+            <ListaReimpressaoSimples />
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );

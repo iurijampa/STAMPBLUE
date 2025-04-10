@@ -577,8 +577,73 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Reprint Requests
-  // Rota para criar uma solicitação de reimpressão usando módulo EMERGENCIAL
+  // SISTEMA ULTRA SIMPLIFICADO DE REIMPRESSÃO
+  let solicitacoesReimpressao: any[] = [];
+  
+  // Rota simples para criar solicitação
+  app.post("/api/reimpressao-simples", isAuthenticated, (req, res) => {
+    try {
+      console.log("🆘 RECEBENDO SOLICITAÇÃO SIMPLES:", req.body);
+      
+      const { activityId, requestedBy, reason, details, quantity } = req.body;
+      
+      // Validação básica
+      if (!activityId || !requestedBy || !reason) {
+        return res.status(400).json({
+          success: false,
+          message: "Campos obrigatórios faltando (activityId, requestedBy, reason)",
+        });
+      }
+      
+      // Criar nova solicitação
+      const novaSolicitacao = {
+        id: Date.now(),
+        activityId: Number(activityId),
+        requestedBy: String(requestedBy).trim(),
+        reason: String(reason).trim(),
+        details: details ? String(details).trim() : "",
+        quantity: Number(quantity) || 1,
+        status: "pendente",
+        createdAt: new Date().toISOString(),
+        fromDepartment: "batida",
+        toDepartment: "impressao"
+      };
+      
+      // Adicionar à lista em memória
+      solicitacoesReimpressao.push(novaSolicitacao);
+      console.log("🆘 SOLICITAÇÃO CRIADA:", novaSolicitacao);
+      console.log("🆘 TOTAL DE SOLICITAÇÕES:", solicitacoesReimpressao.length);
+      
+      return res.status(201).json({
+        success: true,
+        message: "Solicitação criada com sucesso!",
+        data: novaSolicitacao
+      });
+    } catch (error) {
+      console.error("🆘 ERRO AO PROCESSAR SOLICITAÇÃO:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Erro ao processar solicitação",
+        error: error instanceof Error ? error.message : "Erro desconhecido"
+      });
+    }
+  });
+  
+  // Rota para listar solicitações
+  app.get("/api/reimpressao-simples/listar", isAuthenticated, (req, res) => {
+    try {
+      console.log("🆘 LISTANDO SOLICITAÇÕES. Total:", solicitacoesReimpressao.length);
+      return res.json(solicitacoesReimpressao);
+    } catch (error) {
+      console.error("🆘 ERRO AO LISTAR SOLICITAÇÕES:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Erro ao listar solicitações"
+      });
+    }
+  });
+  
+  // Rota original de reimpressão - DESATIVADA
   app.post("/api/reprint-requests", isAuthenticated, async (req, res) => {
     try {
       console.log("[MODO SUPER DEUS 9000] Inicializando protocolo de emergência...");
