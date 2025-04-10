@@ -918,6 +918,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         priority: priority || "normal",
         createdBy: createdById.toString(), // Convertendo explicitamente para string para evitar incompatibilidade de tipo
         image: imageUrl || "",
+        additionalImages: [], // Adicionando campo obrigatório
+        deadline: null, // Adicionando campo obrigatório
         quantity: parseInt(quantity) || 1,
         notes: notes,
         clientName: "Reimpressão"
