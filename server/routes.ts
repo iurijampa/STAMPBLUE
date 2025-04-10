@@ -26,9 +26,19 @@ import {
 
 // Middleware to check if the user is authenticated
 function isAuthenticated(req: Request, res: Response, next: Function) {
+  // Permitir acesso às páginas de teste e rotas de reimpressão sem autenticação
+  if (req.path.startsWith('/api/reimpressao-ultrabasico') || 
+      req.path.startsWith('/api/reimpressao-simples') ||
+      req.path === '/test' || 
+      req.path === '/teste') {
+    console.log(`[AUTH] Bypass de autenticação permitido para: ${req.path}`);
+    return next();
+  }
+  
   if (req.isAuthenticated()) {
     return next();
   }
+  
   res.status(401).json({ message: "Não autorizado" });
 }
 
