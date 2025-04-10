@@ -44,6 +44,8 @@ const reprintRequestFormSchema = z.object({
   details: z.string().optional(),
   quantity: z.number().min(1, "Quantidade deve ser pelo menos 1"),
   priority: z.enum(["low", "normal", "high", "urgent"]),
+  fromDepartment: z.string().default("batida"),
+  toDepartment: z.string().default("impressao"),
 });
 
 type ReprintRequestFormValues = z.infer<typeof reprintRequestFormSchema>;
@@ -67,6 +69,8 @@ export default function ReprintRequestModal({ isOpen, onClose, activity, onSucce
     details: "",
     quantity: 1,
     priority: "normal",
+    fromDepartment: "batida",
+    toDepartment: "impressao",
   };
 
   const form = useForm<ReprintRequestFormValues>({
@@ -151,7 +155,7 @@ export default function ReprintRequestModal({ isOpen, onClose, activity, onSucce
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {activities?.map((act) => (
+                        {activities && activities.length > 0 && activities.map((act: Activity) => (
                           <SelectItem key={act.id} value={act.id.toString()}>
                             {act.title}
                           </SelectItem>
