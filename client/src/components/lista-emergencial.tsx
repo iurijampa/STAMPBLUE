@@ -20,6 +20,8 @@ import {
 interface Solicitacao {
   id: number;
   activityId: number;
+  activityTitle?: string; // Título da atividade
+  activityImage?: string; // URL da imagem da atividade
   requestedBy: string;
   reason: string;
   details?: string;
@@ -36,6 +38,7 @@ interface Activity {
   id: number;
   title: string;
   client: string;
+  image?: string; // URL da imagem da atividade
 }
 
 interface ListaEmergencialProps {
@@ -192,9 +195,21 @@ export default function ListaEmergencial({ department, activities, refreshInterv
   const { pendentes, concluidas, rejeitadas } = filtrarSolicitacoes();
   
   // Obter título da atividade pelo ID
-  const getActivityTitle = (activityId: number) => {
+  const getActivityTitle = (activityId: number, activityTitle?: string) => {
+    // Se já temos o título na solicitação, usar esse
+    if (activityTitle) return activityTitle;
+    // Caso contrário, procurar na lista de atividades
     const activity = activities.find(a => a.id === activityId);
     return activity ? activity.title : `Pedido #${activityId}`;
+  };
+  
+  // Obter imagem da atividade
+  const getActivityImage = (activityId: number, activityImage?: string) => {
+    // Se já temos a imagem na solicitação, usar essa
+    if (activityImage) return activityImage;
+    // Caso contrário, procurar na lista de atividades
+    const activity = activities.find(a => a.id === activityId);
+    return activity?.image || null;
   };
   
   // Formatar data
@@ -277,13 +292,26 @@ export default function ListaEmergencial({ department, activities, refreshInterv
                   {pendentes.map(solicitacao => (
                     <div key={solicitacao.id} className="p-4 hover:bg-slate-50 dark:hover:bg-slate-900/10">
                       <div className="flex justify-between items-start mb-2">
-                        <div>
-                          <h3 className="font-medium">
-                            {getActivityTitle(solicitacao.activityId)}
-                          </h3>
-                          <p className="text-sm text-muted-foreground">
-                            Solicitado por: <span className="font-medium">{solicitacao.requestedBy}</span>
-                          </p>
+                        <div className="flex items-start gap-3">
+                          {/* Imagem da atividade como miniatura */}
+                          {getActivityImage(solicitacao.activityId, solicitacao.activityImage) && (
+                            <div className="flex-shrink-0 w-12 h-12 rounded-md overflow-hidden border">
+                              <img 
+                                src={getActivityImage(solicitacao.activityId, solicitacao.activityImage)} 
+                                alt="Miniatura do pedido" 
+                                className="w-full h-full object-cover"
+                                onError={(e) => (e.currentTarget.style.display = 'none')}
+                              />
+                            </div>
+                          )}
+                          <div>
+                            <h3 className="font-medium">
+                              {getActivityTitle(solicitacao.activityId, solicitacao.activityTitle)}
+                            </h3>
+                            <p className="text-sm text-muted-foreground">
+                              Solicitado por: <span className="font-medium">{solicitacao.requestedBy}</span>
+                            </p>
+                          </div>
                         </div>
                         <Badge variant="outline" className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200">
                           Pendente
@@ -329,13 +357,26 @@ export default function ListaEmergencial({ department, activities, refreshInterv
                   {concluidas.map(solicitacao => (
                     <div key={solicitacao.id} className="p-4 hover:bg-slate-50 dark:hover:bg-slate-900/10">
                       <div className="flex justify-between items-start mb-2">
-                        <div>
-                          <h3 className="font-medium">
-                            {getActivityTitle(solicitacao.activityId)}
-                          </h3>
-                          <p className="text-sm text-muted-foreground">
-                            Solicitado por: <span className="font-medium">{solicitacao.requestedBy}</span>
-                          </p>
+                        <div className="flex items-start gap-3">
+                          {/* Imagem da atividade como miniatura */}
+                          {getActivityImage(solicitacao.activityId, solicitacao.activityImage) && (
+                            <div className="flex-shrink-0 w-12 h-12 rounded-md overflow-hidden border">
+                              <img 
+                                src={getActivityImage(solicitacao.activityId, solicitacao.activityImage)} 
+                                alt="Miniatura do pedido" 
+                                className="w-full h-full object-cover"
+                                onError={(e) => (e.currentTarget.style.display = 'none')}
+                              />
+                            </div>
+                          )}
+                          <div>
+                            <h3 className="font-medium">
+                              {getActivityTitle(solicitacao.activityId, solicitacao.activityTitle)}
+                            </h3>
+                            <p className="text-sm text-muted-foreground">
+                              Solicitado por: <span className="font-medium">{solicitacao.requestedBy}</span>
+                            </p>
+                          </div>
                         </div>
                         <Badge variant="outline" className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200">
                           Concluída
@@ -374,13 +415,26 @@ export default function ListaEmergencial({ department, activities, refreshInterv
                   {rejeitadas.map(solicitacao => (
                     <div key={solicitacao.id} className="p-4 hover:bg-slate-50 dark:hover:bg-slate-900/10">
                       <div className="flex justify-between items-start mb-2">
-                        <div>
-                          <h3 className="font-medium">
-                            {getActivityTitle(solicitacao.activityId)}
-                          </h3>
-                          <p className="text-sm text-muted-foreground">
-                            Solicitado por: <span className="font-medium">{solicitacao.requestedBy}</span>
-                          </p>
+                        <div className="flex items-start gap-3">
+                          {/* Imagem da atividade como miniatura */}
+                          {getActivityImage(solicitacao.activityId, solicitacao.activityImage) && (
+                            <div className="flex-shrink-0 w-12 h-12 rounded-md overflow-hidden border">
+                              <img 
+                                src={getActivityImage(solicitacao.activityId, solicitacao.activityImage)} 
+                                alt="Miniatura do pedido" 
+                                className="w-full h-full object-cover"
+                                onError={(e) => (e.currentTarget.style.display = 'none')}
+                              />
+                            </div>
+                          )}
+                          <div>
+                            <h3 className="font-medium">
+                              {getActivityTitle(solicitacao.activityId, solicitacao.activityTitle)}
+                            </h3>
+                            <p className="text-sm text-muted-foreground">
+                              Solicitado por: <span className="font-medium">{solicitacao.requestedBy}</span>
+                            </p>
+                          </div>
                         </div>
                         <Badge variant="outline" className="bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-200">
                           Rejeitada

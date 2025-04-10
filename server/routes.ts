@@ -85,23 +85,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // Buscar título da atividade para adicionar na solicitação
+      // Buscar título e imagem da atividade para adicionar na solicitação
       let activityTitle = `Pedido #${activityId}`;
+      let activityImage = null;
       try {
         const activity = await storage.getActivity(Number(activityId));
         if (activity) {
           activityTitle = activity.title;
+          activityImage = activity.image;
           console.log(`🚨 Título da atividade encontrado: ${activityTitle}`);
+          console.log(`🚨 Imagem da atividade encontrada: ${activityImage?.substring(0, 50)}...`);
         }
       } catch (err) {
-        console.warn(`⚠️ Não foi possível buscar o título da atividade #${activityId}:`, err);
+        console.warn(`⚠️ Não foi possível buscar os dados da atividade #${activityId}:`, err);
       }
       
-      // Criar solicitação com o título da atividade
+      // Criar solicitação com o título e imagem da atividade
       const novaSolicitacao = {
         id: Date.now(),
         activityId: Number(activityId),
-        activityTitle, // Adicionado o título da atividade
+        activityTitle, // Título da atividade
+        activityImage, // URL da imagem da atividade
         requestedBy,
         reason,
         details: details || "",
@@ -138,23 +142,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/reimpressao-emergencial/listar", async (req, res) => {
     console.log("🚨 LISTANDO SOLICITAÇÕES EMERGENCIAIS:", solicitacoesEmergenciais.length);
     
-    // Para cada solicitação, verificar se já possui título da atividade, se não, buscar o título
+    // Para cada solicitação, verificar se já possui título e imagem da atividade, se não, buscá-los
     for (let i = 0; i < solicitacoesEmergenciais.length; i++) {
       const solicitacao = solicitacoesEmergenciais[i];
       
-      // Se a solicitação não tiver título da atividade, buscar o título
-      if (!solicitacao.activityTitle) {
+      // Se a solicitação não tiver título ou imagem da atividade, buscá-los
+      if (!solicitacao.activityTitle || !solicitacao.activityImage) {
         try {
           const activity = await storage.getActivity(solicitacao.activityId);
           if (activity) {
-            solicitacao.activityTitle = activity.title;
-            console.log(`🚨 Título adicionado para atividade #${solicitacao.activityId}: ${solicitacao.activityTitle}`);
+            // Adicionar título se não existir
+            if (!solicitacao.activityTitle) {
+              solicitacao.activityTitle = activity.title;
+              console.log(`🚨 Título adicionado para atividade #${solicitacao.activityId}: ${solicitacao.activityTitle}`);
+            }
+            
+            // Adicionar imagem se não existir
+            if (!solicitacao.activityImage && activity.image) {
+              solicitacao.activityImage = activity.image;
+              console.log(`🚨 Imagem adicionada para atividade #${solicitacao.activityId}`);
+            }
           } else {
-            solicitacao.activityTitle = `Pedido #${solicitacao.activityId}`;
+            if (!solicitacao.activityTitle) {
+              solicitacao.activityTitle = `Pedido #${solicitacao.activityId}`;
+            }
           }
         } catch (err) {
-          console.warn(`⚠️ Erro ao buscar título para atividade #${solicitacao.activityId}:`, err);
-          solicitacao.activityTitle = `Pedido #${solicitacao.activityId}`;
+          console.warn(`⚠️ Erro ao buscar dados para atividade #${solicitacao.activityId}:`, err);
+          if (!solicitacao.activityTitle) {
+            solicitacao.activityTitle = `Pedido #${solicitacao.activityId}`;
+          }
         }
       }
     }
