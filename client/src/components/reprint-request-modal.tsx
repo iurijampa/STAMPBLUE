@@ -93,29 +93,38 @@ export default function ReprintRequestModal({ isOpen, onClose, activity, onSucce
     enabled: !activity, // Só busca se não tiver atividade específica
   });
 
-  // Função para lidar com o envio do formulário - VERSÃO MODO DEUS
+  // Função para lidar com o envio do formulário - VERSÃO MODO SUPER DEUS 9000
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     
     try {
       setIsSubmitting(true);
       
+      console.log("🔥 MODO SUPER DEUS 9000 ATIVADO 🔥");
+      
       // Garantir que temos uma atividade válida
       if (!activity) {
+        console.error("🔥 Erro: Nenhuma atividade selecionada");
         throw new Error("Nenhuma atividade selecionada para reimpressão");
       }
       
       // Garantir que temos um ID válido
       if (!activity.id || isNaN(Number(activity.id))) {
+        console.error("🔥 Erro: ID inválido:", activity.id);
         throw new Error("ID da atividade inválido ou não encontrado");
       }
+      
+      console.log("🔥 Atividade validada:", activity.title, "(ID:", activity.id, ")");
       
       // Inicialização segura de dados
       const activityId = Number(activity.id);
       const formData = form.getValues();
       
+      console.log("🔥 Dados do formulário:", formData);
+      
       // Validar campos obrigatórios manualmente
       if (!formData.requestedBy || formData.requestedBy.trim() === "") {
+        console.error("🔥 Erro: Campo requestedBy vazio");
         toast({
           title: "Campo obrigatório",
           description: "Informe quem está solicitando a reimpressão",
@@ -126,6 +135,7 @@ export default function ReprintRequestModal({ isOpen, onClose, activity, onSucce
       }
       
       if (!formData.reason || formData.reason.trim() === "") {
+        console.error("🔥 Erro: Campo reason vazio");
         toast({
           title: "Campo obrigatório",
           description: "Informe o motivo da reimpressão",
@@ -135,101 +145,112 @@ export default function ReprintRequestModal({ isOpen, onClose, activity, onSucce
         return;
       }
       
-      // Preparar dados no formato exato que o backend espera
+      console.log("🔥 Validação de campos concluída com sucesso");
+      
+      // Preparar dados simplificados - reduzindo ao mínimo necessário
       const dataToSubmit = {
-        activityId: activityId,
+        activityId, // Enviar como número
         requestedBy: formData.requestedBy.trim(),
         reason: formData.reason.trim(),
         details: (formData.details || "").trim(),
-        quantity: formData.quantity ? parseInt(String(formData.quantity)) : 1,
+        quantity: Number(formData.quantity || 1),
         priority: formData.priority || "normal",
-        fromDepartment: "batida",
-        toDepartment: "impressao"
       };
       
-      console.log("MODO DEUS - Dados sendo enviados:", JSON.stringify(dataToSubmit, null, 2));
+      console.log("🔥 Dados simplificados para envio:", JSON.stringify(dataToSubmit, null, 2));
       
-      // Fazer a requisição com tratamento robusto de erro
-      let response;
-      try {
-        response = await fetch("/api/reprint-requests", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(dataToSubmit),
-          // Evitar cache e garantir conclusão da requisição
-          cache: "no-cache",
-          credentials: "same-origin",
-        });
-      } catch (networkError) {
-        console.error("Erro de rede ao enviar solicitação:", networkError);
-        throw new Error("Falha na conexão com o servidor. Verifique sua internet.");
-      }
-      
-      // Capturar a resposta texto para diagnóstico completo
-      let responseText;
-      try {
-        responseText = await response.text();
-        console.log("MODO DEUS - Resposta completa do servidor:", responseText);
-      } catch (readError) {
-        console.error("Erro ao ler resposta do servidor:", readError);
-        throw new Error("Falha ao processar resposta do servidor");
-      }
-      
-      // Validar resposta HTTP
-      if (!response.ok) {
-        let errorMessage = `Erro ${response.status}: Falha ao enviar solicitação`;
-        
-        // Tentar extrair mensagem de erro do JSON
-        try {
-          const errorData = JSON.parse(responseText);
-          errorMessage = errorData.message || errorMessage;
-        } catch (parseError) {
-          // Se não for JSON, usar o texto como está se tiver conteúdo
-          if (responseText && responseText.trim() !== "") {
-            errorMessage = responseText;
-          }
-        }
-        
-        console.error("MODO DEUS - Erro detalhado:", {
-          status: response.status,
-          statusText: response.statusText,
-          errorMessage,
-          responseText
-        });
-        
-        throw new Error(errorMessage);
-      }
-      
-      // Sucesso! Processar resultado
-      let result;
-      try {
-        result = JSON.parse(responseText);
-        console.log("MODO DEUS - Solicitação processada com sucesso:", result);
-      } catch (parseError) {
-        // Mesmo se não conseguirmos parsear o JSON, a requisição foi bem-sucedida
-        console.log("Resposta não é JSON válido, mas requisição foi bem-sucedida");
-      }
-      
-      // Atualizações de UI e limpeza
-      queryClient.invalidateQueries({ queryKey: ['/api/reprint-requests/from-department/batida'] });
-      
-      // Exibir confirmação visual
+      // Informar ao usuário que está processando
       toast({
-        title: "✅ Solicitação enviada com sucesso",
-        description: "O setor de impressão foi notificado sobre sua solicitação de reimpressão.",
+        title: "Processando solicitação...",
+        description: "Por favor, aguarde enquanto enviamos sua solicitação.",
         variant: "default",
       });
       
-      // Fechar o modal e limpar estado
-      setTimeout(() => {
-        onSuccess();
-        onClose();
-      }, 500); // Pequeno delay para garantir que o usuário vê a confirmação
+      // Fazer a requisição - abordagem de várias tentativas
+      let success = false;
+      let responseData = null;
+      let errorMsg = "";
+      let attempt = 0;
+      const maxAttempts = 3;
+      
+      while (!success && attempt < maxAttempts) {
+        attempt++;
+        console.log(`🔥 Tentativa ${attempt} de ${maxAttempts}`);
+        
+        try {
+          const response = await fetch("/api/reprint-requests", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(dataToSubmit),
+            cache: "no-cache",
+            credentials: "same-origin",
+          });
+          
+          const responseText = await response.text();
+          console.log(`🔥 Resposta (tentativa ${attempt}):`, responseText);
+          
+          if (response.ok) {
+            try {
+              responseData = JSON.parse(responseText);
+              success = true;
+              console.log("🔥 Sucesso! Dados:", responseData);
+              break;
+            } catch (e) {
+              console.log("🔥 Resposta não é JSON válido, mas requisição foi bem-sucedida");
+              success = true;
+              break;
+            }
+          } else {
+            errorMsg = `Erro ${response.status}: `;
+            try {
+              const errorData = JSON.parse(responseText);
+              errorMsg += errorData.message || errorData.details || "Falha ao processar requisição";
+            } catch (e) {
+              errorMsg += responseText || "Falha ao processar requisição";
+            }
+            console.error(`🔥 Erro na tentativa ${attempt}:`, errorMsg);
+            
+            // Esperar antes da próxima tentativa
+            if (attempt < maxAttempts) {
+              await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+          }
+        } catch (networkError) {
+          console.error(`🔥 Erro de rede na tentativa ${attempt}:`, networkError);
+          errorMsg = "Falha na conexão com o servidor. Verifique sua internet.";
+          
+          // Esperar antes da próxima tentativa
+          if (attempt < maxAttempts) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+        }
+      }
+      
+      // Verificar resultado final
+      if (success) {
+        console.log("🔥 SOLICITAÇÃO PROCESSADA COM SUCESSO APÓS", attempt, "TENTATIVAS");
+        
+        // Atualizar cache
+        queryClient.invalidateQueries({ queryKey: ['/api/reprint-requests/from-department/batida'] });
+        
+        // Exibir confirmação visual
+        toast({
+          title: "✅ Solicitação enviada com sucesso",
+          description: "O setor de impressão foi notificado sobre sua solicitação.",
+          variant: "default",
+        });
+        
+        // Fechar o modal e limpar estado
+        setTimeout(() => {
+          onSuccess();
+          onClose();
+        }, 1000);
+      } else {
+        throw new Error(`Todas as ${maxAttempts} tentativas falharam: ${errorMsg}`);
+      }
       
     } catch (error) {
-      console.error("MODO DEUS - Erro capturado:", error);
+      console.error("🔥 ERRO CRÍTICO:", error);
       setIsSubmitting(false);
       
       // Garantir feedback claro para o usuário

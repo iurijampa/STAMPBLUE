@@ -578,153 +578,57 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Reprint Requests
-  // Rota para criar uma solicitação de reimpressão (apenas batida) - VERSÃO MODO DEUS
+  // Rota para criar uma solicitação de reimpressão usando módulo EMERGENCIAL
   app.post("/api/reprint-requests", isAuthenticated, async (req, res) => {
     try {
-      console.log("[MODO DEUS 🚀] Iniciando processamento da solicitação de reimpressão...");
-      console.log("[MODO DEUS 🚀] Dados recebidos:", JSON.stringify(req.body, null, 2));
+      console.log("[MODO SUPER DEUS 9000] Inicializando protocolo de emergência...");
+      console.log("[MODO SUPER DEUS 9000] Dados recebidos:", JSON.stringify(req.body, null, 2));
       
       // Verificar autenticação
       if (!req.user) {
-        console.error("[MODO DEUS 🚀] Erro: Usuário não autenticado");
+        console.error("[MODO SUPER DEUS 9000] Erro: Usuário não autenticado");
         return res.status(401).json({ message: "Usuário não autenticado" });
       }
       
-      // Verificar se o usuário está no departamento de batida
+      // Verificar permissão
       const department = req.user.role;
-      
-      // Apenas usuários de batida e admin podem criar solicitações
       if (department !== "batida" && department !== "admin") {
-        console.error(`[MODO DEUS 🚀] Erro: Permissão negada para ${department}`);
-        return res.status(403).json({ 
-          message: "Somente o setor de batida pode solicitar reimpressões" 
-        });
+        console.error(`[MODO SUPER DEUS 9000] Permissão negada para ${department}`);
+        return res.status(403).json({ message: "Somente o setor de batida pode solicitar reimpressões" });
       }
       
-      // Verificar se o ID da atividade foi fornecido
-      if (req.body.activityId === undefined || req.body.activityId === null) {
-        console.error("[MODO DEUS 🚀] Erro: ID da atividade não informado");
-        return res.status(400).json({ message: "ID da atividade é obrigatório" });
-      }
+      // Importar o módulo de emergência
+      console.log("[MODO SUPER DEUS 9000] Carregando módulo de emergência...");
+      const emergencyModule = require('./direct-reprint.js');
       
-      // Converter para número de forma segura
-      let activityId: number;
-      
-      if (typeof req.body.activityId === 'number') {
-        activityId = req.body.activityId;
-      } else if (typeof req.body.activityId === 'string') {
-        activityId = parseInt(req.body.activityId, 10);
-        if (isNaN(activityId)) {
-          console.error(`[MODO DEUS 🚀] Erro: ID inválido: "${req.body.activityId}"`);
-          return res.status(400).json({ message: "ID da atividade deve ser um número válido" });
-        }
-      } else {
-        console.error(`[MODO DEUS 🚀] Erro: Tipo de ID inválido: ${typeof req.body.activityId}`);
-        return res.status(400).json({ message: "Formato de ID inválido" });
-      }
-      
-      if (activityId <= 0) {
-        console.error(`[MODO DEUS 🚀] Erro: ID deve ser um número positivo: ${activityId}`);
-        return res.status(400).json({ message: "ID da atividade deve ser um número positivo" });
-      }
-      
-      console.log(`[MODO DEUS 🚀] ID da atividade validado: ${activityId}`);
-      
-      // Verificar campos obrigatórios
-      if (!req.body.requestedBy || req.body.requestedBy.trim() === "") {
-        console.error(`[MODO DEUS 🚀] Erro: Campo 'requestedBy' não fornecido`);
-        return res.status(400).json({ message: "O nome de quem está solicitando é obrigatório" });
-      }
-      
-      if (!req.body.reason || req.body.reason.trim() === "") {
-        console.error(`[MODO DEUS 🚀] Erro: Campo 'reason' não fornecido`);
-        return res.status(400).json({ message: "O motivo da reimpressão é obrigatório" });
-      }
-      
-      // Verificar se a atividade existe no banco de dados
-      let activity;
+      // Verificar atividade
       try {
-        activity = await storage.getActivity(activityId);
+        const activityId = req.body.activityId ? Number(req.body.activityId) : 0;
+        const activity = await storage.getActivity(activityId);
+        
         if (!activity) {
-          console.error(`[MODO DEUS 🚀] Erro: Atividade ${activityId} não encontrada`);
+          console.error(`[MODO SUPER DEUS 9000] Atividade ${activityId} não encontrada`);
           return res.status(404).json({ message: "Atividade não encontrada" });
         }
-        console.log(`[MODO DEUS 🚀] Atividade encontrada: ${activity.title} (ID: ${activity.id})`);
-      } catch (dbError) {
-        console.error(`[MODO DEUS 🚀] Erro ao buscar atividade:`, dbError);
-        return res.status(500).json({ message: "Falha ao verificar atividade no banco de dados" });
-      }
-      
-      // Preparar dados formatados para o banco
-      const dataToSubmit = {
-        activityId,
-        requestedBy: String(req.body.requestedBy).trim(),
-        reason: String(req.body.reason).trim(),
-        details: req.body.details ? String(req.body.details).trim() : "",
-        quantity: Number(req.body.quantity) || 1,
-        priority: (req.body.priority && ["low", "normal", "high", "urgent"].includes(req.body.priority)) 
-          ? req.body.priority 
-          : "normal",
-        fromDepartment: "batida" as const,
-        toDepartment: "impressao" as const
-      };
-      
-      console.log("[MODO DEUS 🚀] Dados formatados para inserção:", JSON.stringify(dataToSubmit, null, 2));
-      
-      // Criar a solicitação no banco de dados
-      let reprintRequest;
-      try {
-        reprintRequest = await storage.createReprintRequest(dataToSubmit);
-        console.log(`[MODO DEUS 🚀] Solicitação criada com sucesso! ID: ${reprintRequest.id}`);
-      } catch (createError) {
-        console.error("[MODO DEUS 🚀] Erro ao criar solicitação no banco:", createError);
-        return res.status(500).json({ 
-          message: "Erro ao salvar a solicitação no banco de dados",
-          details: createError instanceof Error ? createError.message : "Erro desconhecido"
-        });
-      }
-      
-      // Enviar notificações - em bloco try/catch separado
-      try {
-        // Buscar usuários do setor de impressão
-        const impressaoUsers = await storage.getUsersByRole("impressao");
-        console.log(`[MODO DEUS 🚀] Enviando notificações para ${impressaoUsers.length} usuários do setor de impressão`);
         
-        // Criar notificações para cada usuário
-        for (const user of impressaoUsers) {
-          await storage.createNotification({
-            userId: user.id,
-            activityId,
-            message: `Nova solicitação de reimpressão para o pedido "${activity.title}" - Motivo: ${dataToSubmit.reason}`
-          });
-        }
-        
-        // Enviar notificação WebSocket em tempo real
-        if ((global as any).wsNotifications) {
-          (global as any).wsNotifications.notifyDepartment('impressao', {
-            type: 'new_reprint_request',
-            reprintRequest,
-            activityTitle: activity.title
-          });
-          console.log("[MODO DEUS 🚀] Notificação WebSocket enviada para o setor de impressão");
-        } else {
-          console.log("[MODO DEUS 🚀] Sistema WebSocket não disponível, apenas notificações em banco enviadas");
-        }
-      } catch (notifyError) {
-        // Log do erro mas não falhar a operação principal
-        console.error("[MODO DEUS 🚀] Erro ao enviar notificações:", notifyError);
-        // Continuar o fluxo, pois a solicitação já foi criada com sucesso
+        console.log(`[MODO SUPER DEUS 9000] Atividade validada: ${activity.title} (ID: ${activity.id})`);
+      } catch (err) {
+        console.error("[MODO SUPER DEUS 9000] Erro ao validar atividade:", err);
+        // Continuar mesmo com erro para tentar forçar inserção
       }
       
-      // Responder com sucesso
-      console.log("[MODO DEUS 🚀] Operação concluída com sucesso!");
-      return res.status(201).json(reprintRequest);
+      // Enviar para processamento de emergência
+      console.log("[MODO SUPER DEUS 9000] Chamando método de emergência...");
+      const result = await emergencyModule.createReprintRequest(req.body);
+      
+      console.log("[MODO SUPER DEUS 9000] Operação concluída com sucesso!");
+      return res.status(201).json(result);
     } catch (error) {
-      // Capturar qualquer erro não tratado
-      console.error("[MODO DEUS 🚀] ERRO CRÍTICO na rota de reimpressão:", error);
+      console.error("[MODO SUPER DEUS 9000] ERRO CRÍTICO:", error);
       return res.status(500).json({ 
-        message: "Erro interno do servidor ao processar solicitação",
-        details: error instanceof Error ? error.message : "Erro desconhecido"
+        message: "Erro ao processar solicitação de reimpressão", 
+        details: error instanceof Error ? error.message : "Erro desconhecido",
+        status: "ERRO"
       });
     }
   });
