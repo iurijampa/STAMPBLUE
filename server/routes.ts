@@ -828,6 +828,273 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ===== ROTAS PARA SISTEMA DE REIMPRESSÃO =====
+  
+  // Criar nova solicitação de reimpressão
+  app.post("/api/reprint-requests", isAuthenticated, async (req, res) => {
+    try {
+      // Só o setor de batida pode solicitar reimpressões
+      if (req.user && req.user.role !== "batida" && req.user.role !== "admin") {
+        return res.status(403).json({ 
+          message: "Apenas o setor de batida pode solicitar reimpressões" 
+        });
+      }
+      
+      // Pega o setor do usuário autenticado ou usa o setor específico (para admin)
+      const requestedDepartment = req.user!.role === "admin" ? "batida" : req.user!.role;
+      
+      // Validar dados
+      const validatedData = insertReprintRequestSchema.parse({
+        ...req.body,
+        requestedBy: req.body.requestedBy,
+        requestedDepartment: requestedDepartment,
+        targetDepartment: "impressao", // Reimpressões sempre vão para o setor de impressão
+        status: "pending",
+        requestedAt: new Date()
+      });
+      
+      // Verificar se a atividade existe
+      const activity = await storage.getActivity(validatedData.activityId);
+      if (!activity) {
+        return res.status(404).json({ message: "Atividade não encontrada" });
+      }
+      
+      // Criar solicitação de reimpressão
+      const reprintRequest = await storage.createReprintRequest(validatedData);
+      
+      // Criar notificação para o setor de impressão
+      const impressaoUsers = await storage.getUsersByRole("impressao");
+      for (const user of impressaoUsers) {
+        await storage.createNotification({
+          userId: user.id,
+          activityId: activity.id,
+          department: "impressao",
+          type: "reprint_request",
+          message: `REIMPRESSÃO SOLICITADA: ${activity.title} - Quantidade: ${reprintRequest.quantity} - Solicitado por: ${reprintRequest.requestedBy}${reprintRequest.reason ? ` - Motivo: ${reprintRequest.reason}` : ''}`
+        });
+      }
+      
+      // Notificar via WebSocket
+      if ((global as any).wsNotifications) {
+        (global as any).wsNotifications.notifyDepartment("impressao", {
+          type: "new_reprint_request",
+          reprintRequest,
+          activity
+        });
+        
+        // Notificar administradores
+        (global as any).wsNotifications.notifyDepartment("admin", {
+          type: "new_reprint_request",
+          reprintRequest,
+          activity
+        });
+      }
+      
+      res.status(201).json(reprintRequest);
+    } catch (error) {
+      console.error("Erro ao criar solicitação de reimpressão:", error);
+      if (error instanceof Error) {
+        try {
+          const validationError = fromZodError(error);
+          res.status(400).json({ message: validationError.message });
+        } catch (e) {
+          res.status(500).json({ message: "Erro ao criar solicitação de reimpressão" });
+        }
+      } else {
+        res.status(500).json({ message: "Erro ao criar solicitação de reimpressão" });
+      }
+    }
+  });
+  
+  // Obter solicitações de reimpressão para um departamento
+  app.get("/api/department/:department/reprint-requests", isAuthenticated, async (req, res) => {
+    try {
+      let department = req.params.department;
+      const status = req.query.status as string | undefined;
+      
+      // Sempre usar o departamento do usuário logado se não for admin
+      if (req.user && req.user.role !== "admin") {
+        department = req.user.role;
+      }
+      
+      // Verificar se o departamento é válido
+      if (!DEPARTMENTS.includes(department as any)) {
+        return res.status(400).json({ message: "Departamento inválido" });
+      }
+      
+      // Buscar solicitações
+      const requests = await storage.getReprintRequestsByDepartment(department, status);
+      
+      // Para cada solicitação, adicionar informações da atividade relacionada
+      const requestsWithActivity = [];
+      
+      for (const request of requests) {
+        const activity = await storage.getActivity(request.activityId);
+        requestsWithActivity.push({
+          ...request,
+          activity
+        });
+      }
+      
+      res.json(requestsWithActivity);
+    } catch (error) {
+      console.error("Erro ao buscar solicitações de reimpressão:", error);
+      res.status(500).json({ message: "Erro ao buscar solicitações de reimpressão" });
+    }
+  });
+  
+  // Obter solicitações de reimpressão para uma atividade específica
+  app.get("/api/activities/:id/reprint-requests", isAuthenticated, async (req, res) => {
+    try {
+      const activityId = parseInt(req.params.id);
+      
+      // Verificar se a atividade existe
+      const activity = await storage.getActivity(activityId);
+      if (!activity) {
+        return res.status(404).json({ message: "Atividade não encontrada" });
+      }
+      
+      // Buscar solicitações para esta atividade
+      const requests = await storage.getReprintRequestsByActivity(activityId);
+      
+      res.json(requests);
+    } catch (error) {
+      console.error("Erro ao buscar solicitações de reimpressão:", error);
+      res.status(500).json({ message: "Erro ao buscar solicitações de reimpressão" });
+    }
+  });
+  
+  // Completar uma solicitação de reimpressão (setor de impressão)
+  app.post("/api/reprint-requests/:id/complete", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      // Verificar se o usuário é do setor de impressão
+      if (req.user && req.user.role !== "impressao" && req.user.role !== "admin") {
+        return res.status(403).json({ 
+          message: "Apenas o setor de impressão pode completar reimpressões" 
+        });
+      }
+      
+      // Verificar se a solicitação existe
+      const reprintRequest = await storage.getReprintRequest(id);
+      if (!reprintRequest) {
+        return res.status(404).json({ message: "Solicitação de reimpressão não encontrada" });
+      }
+      
+      // Verificar se a solicitação já foi completada
+      if (reprintRequest.status === "completed") {
+        return res.status(400).json({ message: "Esta solicitação já foi completada" });
+      }
+      
+      // Validar dados
+      if (!req.body.completedBy) {
+        return res.status(400).json({ message: "É necessário informar quem completou a reimpressão" });
+      }
+      
+      // Completar a solicitação
+      const updatedRequest = await storage.completeReprintRequest(id, req.body.completedBy);
+      
+      // Buscar atividade relacionada
+      const activity = await storage.getActivity(reprintRequest.activityId);
+      
+      // Criar notificação para o setor de batida (que solicitou a reimpressão)
+      const batidaUsers = await storage.getUsersByRole("batida");
+      for (const user of batidaUsers) {
+        await storage.createNotification({
+          userId: user.id,
+          activityId: reprintRequest.activityId,
+          department: "batida",
+          type: "reprint_completed",
+          message: `REIMPRESSÃO CONCLUÍDA: ${activity?.title} - Quantidade: ${reprintRequest.quantity} - Completado por: ${req.body.completedBy}`
+        });
+      }
+      
+      // Notificar via WebSocket
+      if ((global as any).wsNotifications) {
+        (global as any).wsNotifications.notifyDepartment("batida", {
+          type: "reprint_request_completed",
+          reprintRequest: updatedRequest,
+          activity
+        });
+        
+        // Notificar setor de impressão
+        (global as any).wsNotifications.notifyDepartment("impressao", {
+          type: "reprint_request_updated",
+          reprintRequest: updatedRequest
+        });
+        
+        // Notificar administradores
+        (global as any).wsNotifications.notifyDepartment("admin", {
+          type: "reprint_request_completed",
+          reprintRequest: updatedRequest,
+          activity
+        });
+      }
+      
+      res.json(updatedRequest);
+    } catch (error) {
+      console.error("Erro ao completar solicitação de reimpressão:", error);
+      res.status(500).json({ message: "Erro ao completar solicitação de reimpressão" });
+    }
+  });
+  
+  // Confirmar recebimento de reimpressão (setor de batida)
+  app.post("/api/reprint-requests/:id/confirm-received", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      // Verificar se o usuário é do setor de batida
+      if (req.user && req.user.role !== "batida" && req.user.role !== "admin") {
+        return res.status(403).json({ 
+          message: "Apenas o setor de batida pode confirmar recebimento de reimpressões" 
+        });
+      }
+      
+      // Verificar se a solicitação existe
+      const reprintRequest = await storage.getReprintRequest(id);
+      if (!reprintRequest) {
+        return res.status(404).json({ message: "Solicitação de reimpressão não encontrada" });
+      }
+      
+      // Verificar se a solicitação já foi completada
+      if (reprintRequest.status !== "completed") {
+        return res.status(400).json({ message: "Esta solicitação ainda não foi completada" });
+      }
+      
+      // Verificar se já foi confirmada
+      if (reprintRequest.receivedBy) {
+        return res.status(400).json({ message: "Esta reimpressão já foi confirmada como recebida" });
+      }
+      
+      // Validar dados
+      if (!req.body.receivedBy) {
+        return res.status(400).json({ message: "É necessário informar quem recebeu a reimpressão" });
+      }
+      
+      // Confirmar recebimento
+      const updatedRequest = await storage.confirmReprintReceived(id, req.body.receivedBy);
+      
+      // Buscar atividade relacionada
+      const activity = await storage.getActivity(reprintRequest.activityId);
+      
+      // Notificar via WebSocket
+      if ((global as any).wsNotifications) {
+        // Notificar administradores
+        (global as any).wsNotifications.notifyDepartment("admin", {
+          type: "reprint_request_received",
+          reprintRequest: updatedRequest,
+          activity
+        });
+      }
+      
+      res.json(updatedRequest);
+    } catch (error) {
+      console.error("Erro ao confirmar recebimento de reimpressão:", error);
+      res.status(500).json({ message: "Erro ao confirmar recebimento de reimpressão" });
+    }
+  });
+  
   // Create HTTP server
   const httpServer = createServer(app);
   
