@@ -629,4 +629,118 @@ export class DatabaseStorage implements IStorage {
     
     return updatedNotification;
   }
+
+  // ===== MÉTODOS DE SOLICITAÇÃO DE REIMPRESSÃO =====
+  
+  async createReprintRequest(requestData: InsertReprintRequest): Promise<ReprintRequest> {
+    const [request] = await db
+      .insert(reprintRequests)
+      .values({
+        ...requestData,
+        requestedAt: new Date(),
+        status: 'pending',
+        processedBy: null,
+        processedAt: null,
+        responseNotes: null
+      })
+      .returning();
+    
+    // Limpar qualquer cache relacionado
+    clearCacheByPattern(`reprint_requests`);
+    clearCacheByPattern(`reprint_requests_dept_${requestData.fromDepartment}`);
+    clearCacheByPattern(`reprint_requests_dept_${requestData.toDepartment}`);
+    
+    return request;
+  }
+  
+  async getReprintRequest(id: number): Promise<ReprintRequest | undefined> {
+    const [request] = await db
+      .select()
+      .from(reprintRequests)
+      .where(eq(reprintRequests.id, id));
+    
+    return request;
+  }
+  
+  async getReprintRequestsByActivity(activityId: number): Promise<ReprintRequest[]> {
+    return db
+      .select()
+      .from(reprintRequests)
+      .where(eq(reprintRequests.activityId, activityId))
+      .orderBy(desc(reprintRequests.requestedAt));
+  }
+  
+  async getReprintRequestsByStatus(status: string): Promise<ReprintRequest[]> {
+    return db
+      .select()
+      .from(reprintRequests)
+      .where(eq(reprintRequests.status, status as any))
+      .orderBy(desc(reprintRequests.requestedAt));
+  }
+  
+  async getReprintRequestsForDepartment(department: string): Promise<ReprintRequest[]> {
+    // Retorna solicitações destinadas a este departamento
+    return cachedQuery(`reprint_requests_to_dept_${department}`, async () => {
+      return db
+        .select()
+        .from(reprintRequests)
+        .where(
+          and(
+            eq(reprintRequests.toDepartment, department as any),
+            eq(reprintRequests.status, 'pending')
+          )
+        )
+        .orderBy(desc(reprintRequests.requestedAt));
+    }, 5000); // Cache por 5 segundos
+  }
+  
+  async getReprintRequestsFromDepartment(department: string): Promise<ReprintRequest[]> {
+    // Retorna solicitações feitas por este departamento
+    return cachedQuery(`reprint_requests_from_dept_${department}`, async () => {
+      return db
+        .select()
+        .from(reprintRequests)
+        .where(eq(reprintRequests.fromDepartment, department as any))
+        .orderBy(desc(reprintRequests.requestedAt));
+    }, 5000); // Cache por 5 segundos
+  }
+  
+  async updateReprintRequestStatus(
+    id: number,
+    status: string,
+    processedBy?: string,
+    responseNotes?: string
+  ): Promise<ReprintRequest> {
+    // Primeiro obter a solicitação para ter informações de departamentos
+    const request = await this.getReprintRequest(id);
+    if (!request) {
+      throw new Error("Solicitação de reimpressão não encontrada");
+    }
+    
+    // Preparar dados da atualização
+    const updateData: any = {
+      status: status as any
+    };
+    
+    // Se for marcada como concluída ou rejeitada, adicionar informações de processamento
+    if (status === 'completed' || status === 'rejected') {
+      updateData.processedBy = processedBy || null;
+      updateData.processedAt = new Date();
+      updateData.responseNotes = responseNotes || null;
+    }
+    
+    // Atualizar no banco de dados
+    const [updatedRequest] = await db
+      .update(reprintRequests)
+      .set(updateData)
+      .where(eq(reprintRequests.id, id))
+      .returning();
+    
+    // Limpar caches relacionados
+    clearCacheByPattern(`reprint_requests`);
+    clearCacheByPattern(`reprint_requests_dept_${request.fromDepartment}`);
+    clearCacheByPattern(`reprint_requests_dept_${request.toDepartment}`);
+    
+    return updatedRequest;
+  }
 }
