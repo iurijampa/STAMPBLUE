@@ -12,6 +12,7 @@ import { ptBR } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import Layout from "@/components/Layout";
 import ViewActivityModal from "@/components/view-activity-modal";
 import CompleteActivityModal from "@/components/complete-activity-modal";
@@ -879,23 +880,75 @@ export default function DepartmentDashboard() {
             activity={reprintActivity}
           />
 
-          {/* Modal de solicitação de reimpressão independente - ULTRA SIMPLIFICADO */}
-          <SuperSimpleReprint 
-            isOpen={showIndependentReprintModal}
-            onClose={() => setShowIndependentReprintModal(false)}
-            onSuccess={() => {
-              toast({
-                title: "✅ Reimpressão solicitada com sucesso!",
-                description: "A reimpressão urgente foi enviada para o setor de impressão",
-                variant: "default",
-              });
-              // Atualizar a lista de solicitações após enviar uma nova
-              setTimeout(() => {
-                console.log("Recarregando página após solicitação de reimpressão de emergência");
-                window.location.reload();
-              }, 1500);
-            }}
-          />
+          {/* Modal emergencial de reimpressão ultra simplificado (inline) */}
+          <Dialog open={showIndependentReprintModal} onOpenChange={(open) => !open && setShowIndependentReprintModal(false)}>
+            <DialogContent className="sm:max-w-[425px]">
+              <DialogHeader>
+                <DialogTitle>Solicitar Reimpressão Emergencial</DialogTitle>
+              </DialogHeader>
+              
+              <div className="py-6">
+                <p className="text-center text-neutral-700 text-lg">
+                  Esta solicitação de reimpressão será enviada diretamente para o setor de impressão.
+                </p>
+                <p className="text-center mt-2 text-neutral-700">
+                  Clique no botão abaixo para enviar a solicitação de emergência.
+                </p>
+              </div>
+
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setShowIndependentReprintModal(false)}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={async () => {
+                    try {
+                      // Chamar diretamente a API de emergência
+                      const response = await fetch("/api/reimpressao-emergencia", {
+                        method: "POST",
+                        headers: {
+                          "Content-Type": "application/json",
+                        },
+                        credentials: "include",
+                        body: JSON.stringify({ timestamp: Date.now() })
+                      });
+                      
+                      if (!response.ok) {
+                        throw new Error("Falha ao enviar reimpressão");
+                      }
+                      
+                      // Fechar o modal
+                      setShowIndependentReprintModal(false);
+                      
+                      // Mostrar mensagem de sucesso
+                      toast({
+                        title: "✅ Reimpressão enviada com sucesso!",
+                        description: "A reimpressão urgente foi enviada para o setor de impressão",
+                        variant: "default",
+                      });
+                      
+                      // Recarregar página após breve delay
+                      setTimeout(() => {
+                        window.location.reload();
+                      }, 1500);
+                    } catch (error) {
+                      console.error("Erro ao enviar reimpressão:", error);
+                      toast({
+                        title: "Erro",
+                        description: "Houve um problema ao enviar a solicitação",
+                        variant: "destructive",
+                      });
+                    }
+                  }}
+                >
+                  Enviar Reimpressão Urgente
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </>
       )}
     </Layout>
