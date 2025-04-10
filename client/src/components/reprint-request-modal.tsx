@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Activity } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { queryClient } from "@/lib/queryClient";
 
 import {
   Dialog,
@@ -63,7 +63,7 @@ export default function ReprintRequestModal({ isOpen, onClose, activity, onSucce
 
   // Definir valores padrão para o formulário
   const defaultValues: Partial<ReprintRequestFormValues> = {
-    activityId: activity?.id || 0,
+    activityId: activity ? activity.id : 0,
     requestedBy: "",
     reason: "",
     details: "",
@@ -77,9 +77,17 @@ export default function ReprintRequestModal({ isOpen, onClose, activity, onSucce
     resolver: zodResolver(reprintRequestFormSchema),
     defaultValues,
   });
+  
+  // Usar useEffect para atualizar o valor de activityId quando a prop activity mudar
+  useEffect(() => {
+    if (activity && form) {
+      console.log("Atualizando ID da atividade para:", activity.id);
+      form.setValue("activityId", activity.id);
+    }
+  }, [activity, form]);
 
   // Buscar atividades caso não tenha uma atividade específica
-  const { data: activities, isLoading: isLoadingActivities } = useQuery({
+  const { data: activities = [], isLoading: isLoadingActivities } = useQuery({
     queryKey: ["/api/activities"],
     enabled: !activity, // Só busca se não tiver atividade específica
   });
@@ -94,9 +102,20 @@ export default function ReprintRequestModal({ isOpen, onClose, activity, onSucce
       // Obter valores do formulário
       const formValues = form.getValues();
       
+      // Garantir que a atividade está definida corretamente
+      if (activity && (!formValues.activityId || formValues.activityId === 0)) {
+        formValues.activityId = activity.id;
+      }
+
+      // Validar se a atividade existe
+      if (!formValues.activityId || formValues.activityId === 0) {
+        throw new Error("Selecione um pedido válido");
+      }
+      
       // Garantir que os departamentos estão definidos
       const dataToSubmit = {
         ...formValues,
+        activityId: formValues.activityId,
         fromDepartment: "batida",
         toDepartment: "impressao"
       };
