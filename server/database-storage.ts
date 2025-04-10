@@ -639,9 +639,10 @@ export class DatabaseStorage implements IStorage {
         ...requestData,
         requestedAt: new Date(),
         status: 'pending',
-        processedBy: null,
-        processedAt: null,
-        responseNotes: null
+        completedBy: null,
+        completedAt: null,
+        receivedBy: null,
+        receivedAt: null
       })
       .returning();
     
@@ -709,7 +710,7 @@ export class DatabaseStorage implements IStorage {
     id: number,
     status: string,
     processedBy?: string,
-    responseNotes?: string
+    notes?: string
   ): Promise<ReprintRequest> {
     // Primeiro obter a solicitação para ter informações de departamentos
     const request = await this.getReprintRequest(id);
@@ -722,11 +723,23 @@ export class DatabaseStorage implements IStorage {
       status: status as any
     };
     
-    // Se for marcada como concluída ou rejeitada, adicionar informações de processamento
-    if (status === 'completed' || status === 'rejected') {
-      updateData.processedBy = processedBy || null;
-      updateData.processedAt = new Date();
-      updateData.responseNotes = responseNotes || null;
+    // Se for marcada como concluída, adicionar informações de conclusão
+    if (status === 'completed') {
+      updateData.completedBy = processedBy || null;
+      updateData.completedAt = new Date();
+      
+      if (notes) {
+        updateData.details = (request.details ? request.details + "\n\n" : "") + 
+                            `Concluído por ${processedBy} em ${new Date().toLocaleDateString()}: ${notes}`;
+      }
+    }
+    
+    // Se for rejeitada, adicionar informações em details também
+    if (status === 'rejected') {
+      if (notes) {
+        updateData.details = (request.details ? request.details + "\n\n" : "") + 
+                            `Rejeitado por ${processedBy} em ${new Date().toLocaleDateString()}: ${notes}`;
+      }
     }
     
     // Atualizar no banco de dados

@@ -594,7 +594,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...req.body,
         fromDepartment: "batida",
         toDepartment: "impressao", // Sempre envia para impressão
-        requestedAt: new Date()
       });
       
       // Verificar se a atividade existe
@@ -612,7 +611,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await storage.createNotification({
           userId: user.id,
           activityId: validatedData.activityId,
-          message: `Nova solicitação de reimpressão para o pedido "${activity.title}" - Peça: ${validatedData.itemDescription}`
+          message: `Nova solicitação de reimpressão para o pedido "${activity.title}" - Motivo: ${validatedData.reason}`
         });
       }
       
@@ -752,7 +751,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await storage.createNotification({
           userId: user.id,
           activityId: reprintRequest.activityId,
-          message: `Solicitação de reimpressão do item "${reprintRequest.itemDescription}" para o pedido "${activity?.title || 'Desconhecido'}" foi ${req.body.status === 'completed' ? 'concluída' : req.body.status === 'rejected' ? 'rejeitada' : 'atualizada'} por ${req.body.processedBy || 'usuário do sistema'}`
+          message: `Solicitação de reimpressão para o pedido "${activity?.title || 'Desconhecido'}" foi ${req.body.status === 'completed' ? 'concluída' : req.body.status === 'rejected' ? 'rejeitada' : 'atualizada'} por ${req.body.processedBy || 'usuário do sistema'}`
         });
       }
       

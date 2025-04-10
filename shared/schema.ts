@@ -108,28 +108,37 @@ export const insertNotificationSchema = createInsertSchema(notifications).pick({
 
 // Solicitações de reimpressão
 export const reprintStatusEnum = pgEnum('reprint_status', ['pending', 'in_progress', 'completed', 'rejected']);
+export const priorityEnum = pgEnum('priority', ['low', 'normal', 'high', 'urgent']);
 
 export const reprintRequests = pgTable("reprint_requests", {
   id: serial("id").primaryKey(),
   activityId: integer("activity_id").notNull(),
-  requestedBy: text("requested_by").notNull(), // Nome do funcionário que solicitou
-  requestedAt: timestamp("requested_at").notNull().defaultNow(),
+  // Quem solicitou a reimpressão
+  requestedBy: text("requested_by").notNull(),
   // Departamento que solicitou (normalmente 'batida')
-  fromDepartment: roleEnum("from_department").notNull(),
+  fromDepartment: roleEnum("requested_department").notNull(),
   // Departamento para onde vai a solicitação (normalmente 'impressao')
-  toDepartment: roleEnum("to_department").notNull(),
-  // Descrição do problema e da peça que precisa ser reimpressa
-  description: text("description").notNull(),
-  // Quantidade de peças que precisam ser reimpressas
+  toDepartment: roleEnum("target_department").notNull(),
+  // Quando foi solicitada
+  requestedAt: timestamp("requested_at").notNull().defaultNow(),
+  // Motivo da reimpressão
+  reason: text("reason").notNull(), 
+  // Detalhes adicionais, como descrição das peças/itens
+  details: text("details"),
+  // Quantidade de peças a reimprimir
   quantity: integer("quantity").notNull().default(1),
+  // Prioridade da solicitação
+  priority: priorityEnum("priority").notNull().default('normal'),
   // Status da solicitação
   status: reprintStatusEnum("status").notNull().default('pending'),
-  // Quem atendeu a solicitação
-  processedBy: text("processed_by"),
-  // Quando foi atendida
-  processedAt: timestamp("processed_at"),
-  // Observações de quem atendeu a solicitação
-  responseNotes: text("response_notes"),
+  // Quem completou a reimpressão
+  completedBy: text("completed_by"),
+  // Quando foi completada
+  completedAt: timestamp("completed_at"),
+  // Quem recebeu/verificou a reimpressão
+  receivedBy: text("received_by"),
+  // Quando foi recebida/verificada
+  receivedAt: timestamp("received_at"),
 });
 
 export const insertReprintRequestSchema = createInsertSchema(reprintRequests).pick({
@@ -137,8 +146,10 @@ export const insertReprintRequestSchema = createInsertSchema(reprintRequests).pi
   requestedBy: true,
   fromDepartment: true,
   toDepartment: true,
-  description: true,
+  reason: true,
+  details: true,
   quantity: true,
+  priority: true,
 });
 
 // Export types
