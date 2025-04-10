@@ -44,6 +44,8 @@ export default function ReprintRequestModal({ isOpen, onClose, activity, onSucce
       details?: string;
       quantity: number;
       priority: "low" | "normal" | "high" | "urgent";
+      fromDepartment: string;
+      toDepartment: string;
     }) => {
       const response = await apiRequest("POST", "/api/reprint-requests", data);
       return response.json();
@@ -121,6 +123,8 @@ export default function ReprintRequestModal({ isOpen, onClose, activity, onSucce
       details: details || undefined,
       quantity: parseInt(quantity, 10),
       priority,
+      fromDepartment: "batida",
+      toDepartment: "impressao",
     });
   };
   
