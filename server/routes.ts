@@ -6,9 +6,11 @@ import { WebSocketServer, WebSocket } from "ws";
 import { 
   insertActivitySchema, 
   insertActivityProgressSchema,
+  insertReprintRequestSchema,
   DEPARTMENTS,
   activityProgress,
-  activities
+  activities,
+  reprintRequests
 } from "@shared/schema";
 import { fromZodError } from "zod-validation-error";
 import fs from 'fs';

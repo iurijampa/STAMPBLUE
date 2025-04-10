@@ -1,0 +1,167 @@
+[
+  {
+    "id": 24,
+    "activityId": 13,
+    "department": "gabarito",
+    "status": "completed",
+    "completedBy": "WILL",
+    "completedAt": "2025-04-09T17:25:33.774Z",
+    "notes": "tanto faz a orix",
+    "returnedBy": "teste",
+    "returnedAt": "2025-04-09T17:25:15.147Z"
+  },
+  {
+    "id": 56,
+    "activityId": 13,
+    "department": "impressao",
+    "status": "completed",
+    "completedBy": "JOAS",
+    "completedAt": "2025-04-09T18:33:54.721Z",
+    "notes": "PEDINDO SAINDO AGORA PRO SETOR DA BATIDA!",
+    "returnedBy": null,
+    "returnedAt": null
+  },
+  {
+    "id": 79,
+    "activityId": 13,
+    "department": "batida",
+    "status": "completed",
+    "completedBy": "Teste",
+    "completedAt": "2025-04-10T13:03:33.450Z",
+    "notes": "Teste\n",
+    "returnedBy": "testeretorno",
+    "returnedAt": "2025-04-10T13:02:41.632Z"
+  },
+  {
+    "id": 101,
+    "activityId": 13,
+    "department": "costura",
+    "status": "pending",
+    "completedBy": null,
+    "completedAt": null,
+    "notes": null,
+    "returnedBy": null,
+    "returnedAt": null
+  },
+  {
+    "id": 25,
+    "activityId": 14,
+    "department": "gabarito",
+    "status": "pending",
+    "completedBy": null,
+    "completedAt": null,
+    "notes": null,
+    "returnedBy": null,
+    "returnedAt": null
+  },
+  {
+    "id": 47,
+    "activityId": 28,
+    "department": "gabarito",
+    "status": "completed",
+    "completedBy": "teste",
+    "completedAt": "2025-04-09T19:52:36.831Z",
+    "notes": "teste",
+    "returnedBy": "teste",
+    "returnedAt": "2025-04-09T18:06:15.503Z"
+  },
+  {
+    "id": 57,
+    "activityId": 28,
+    "department": "impressao",
+    "status": "completed",
+    "completedBy": "dawdaw",
+    "completedAt": "2025-04-09T19:55:12.679Z",
+    "notes": "dawd",
+    "returnedBy": null,
+    "returnedAt": null
+  },
+  {
+    "id": 95,
+    "activityId": 28,
+    "department": "batida",
+    "status": "completed",
+    "completedBy": "Tets",
+    "completedAt": "2025-04-10T13:04:09.275Z",
+    "notes": "Gsha",
+    "returnedBy": "testeretorno",
+    "returnedAt": "2025-04-10T13:02:59.397Z"
+  },
+  {
+    "id": 100,
+    "activityId": 28,
+    "department": "costura",
+    "status": "pending",
+    "completedBy": null,
+    "completedAt": null,
+    "notes": null,
+    "returnedBy": null,
+    "returnedAt": null
+  },
+  {
+    "id": 59,
+    "activityId": 33,
+    "department": "gabarito",
+    "status": "pending",
+    "completedBy": null,
+    "completedAt": null,
+    "notes": null,
+    "returnedBy": null,
+    "returnedAt": null
+  },
+  {
+    "id": 102,
+    "activityId": 47,
+    "department": "gabarito",
+    "status": "completed",
+    "completedBy": "WILL",
+    "completedAt": "2025-04-10T13:40:56.393Z",
+    "notes": "CONFIRMAR COM IURE EM QUAL MÁQUINA VAI RODAR.",
+    "returnedBy": null,
+    "returnedAt": null
+  },
+  {
+    "id": 104,
+    "activityId": 47,
+    "department": "impressao",
+    "status": "pending",
+    "completedBy": null,
+    "completedAt": null,
+    "notes": null,
+    "returnedBy": null,
+    "returnedAt": null
+  },
+  {
+    "id": 103,
+    "activityId": 48,
+    "department": "gabarito",
+    "status": "completed",
+    "completedBy": "WILL",
+    "completedAt": "2025-04-10T14:13:39.755Z",
+    "notes": "VERIFICAR COM IURE EM QUAL MAQUINA RODAR.",
+    "returnedBy": null,
+    "returnedAt": null
+  },
+  {
+    "id": 105,
+    "activityId": 48,
+    "department": "impressao",
+    "status": "pending",
+    "completedBy": null,
+    "completedAt": null,
+    "notes": null,
+    "returnedBy": null,
+    "returnedAt": null
+  },
+  {
+    "id": 106,
+    "activityId": 49,
+    "department": "gabarito",
+    "status": "pending",
+    "completedBy": null,
+    "completedAt": null,
+    "notes": null,
+    "returnedBy": null,
+    "returnedAt": null
+  }
+]
