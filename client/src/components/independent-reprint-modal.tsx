@@ -98,8 +98,9 @@ export default function IndependentReprintModal({
         reason: formData.reason,
       });
 
-      // Enviar solicitação para o backend
-      const response = await fetch("/api/reprint-requests/independent", {
+      // Enviar solicitação para o backend usando a rota simplificada
+      console.log("[REIMPRESSAO] Enviando para a rota simplificada");
+      const response = await fetch("/api/reimpressao-independente", {
         method: "POST",
         body: submitData,
         credentials: "include"
