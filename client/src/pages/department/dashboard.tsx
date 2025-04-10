@@ -41,7 +41,8 @@ export default function DepartmentDashboard() {
   const [completeActivity, setCompleteActivity] = useState<ActivityWithNotes | null>(null);
   const [returnActivity, setReturnActivity] = useState<ActivityWithNotes | null>(null);
   const [reprintActivity, setReprintActivity] = useState<ActivityWithNotes | null>(null);
-  const [showReprintRequests, setShowReprintRequests] = useState(false);
+  // As solicitações de reimpressão agora estão sempre visíveis
+  const [showReprintRequests, setShowReprintRequests] = useState(true);
   
   // Obtendo o departamento da URL
   const department = params.department;
