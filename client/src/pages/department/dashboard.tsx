@@ -879,19 +879,19 @@ export default function DepartmentDashboard() {
             activity={reprintActivity}
           />
 
-          {/* Modal de solicitação de reimpressão independente */}
-          <IndependentReprintModal 
+          {/* Modal de solicitação de reimpressão independente - ULTRA SIMPLIFICADO */}
+          <SuperSimpleReprint 
             isOpen={showIndependentReprintModal}
             onClose={() => setShowIndependentReprintModal(false)}
             onSuccess={() => {
               toast({
-                title: "Solicitação de reimpressão criada",
-                description: "A reimpressão foi enviada para o setor de impressão",
+                title: "✅ Reimpressão solicitada com sucesso!",
+                description: "A reimpressão urgente foi enviada para o setor de impressão",
                 variant: "default",
               });
               // Atualizar a lista de solicitações após enviar uma nova
               setTimeout(() => {
-                console.log("Recarregando página após criação bem-sucedida de reimpressão");
+                console.log("Recarregando página após solicitação de reimpressão de emergência");
                 window.location.reload();
               }, 1500);
             }}
