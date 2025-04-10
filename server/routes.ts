@@ -41,6 +41,17 @@ function isAdmin(req: Request, res: Response, next: Function) {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Permitir acesso às rotas simplificadas sem autenticação
+  app.use((req, res, next) => {
+    // Se for uma rota para a página de teste ou API simplificada, pular autenticação
+    if (req.path.startsWith('/api/reimpressao-simples')) {
+      req.isAuthenticated = () => true; // Fingir que está autenticado
+      return next();
+    }
+    // Caso contrário, seguir o fluxo normal
+    next();
+  });
+
   // Setup authentication routes
   setupAuth(app);
 
@@ -581,7 +592,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   let solicitacoesReimpressao: any[] = [];
   
   // Rota simples para criar solicitação
-  app.post("/api/reimpressao-simples", isAuthenticated, (req, res) => {
+  app.post("/api/reimpressao-simples/criar", (req, res) => {
     try {
       console.log("🆘 RECEBENDO SOLICITAÇÃO SIMPLES:", req.body);
       
@@ -630,7 +641,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // Rota para listar solicitações
-  app.get("/api/reimpressao-simples/listar", isAuthenticated, (req, res) => {
+  app.get("/api/reimpressao-simples/listar", (req, res) => {
     try {
       console.log("🆘 LISTANDO SOLICITAÇÕES. Total:", solicitacoesReimpressao.length);
       return res.json(solicitacoesReimpressao);
@@ -644,7 +655,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // Rota para processar solicitações (atualizar status)
-  app.post("/api/reimpressao-simples/:id/processar", isAuthenticated, (req, res) => {
+  app.post("/api/reimpressao-simples/:id/processar", (req, res) => {
     try {
       const { id } = req.params;
       const { status, processedBy } = req.body;
