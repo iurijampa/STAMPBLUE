@@ -884,8 +884,16 @@ export default function DepartmentDashboard() {
             isOpen={showIndependentReprintModal}
             onClose={() => setShowIndependentReprintModal(false)}
             onSuccess={() => {
+              toast({
+                title: "Solicitação de reimpressão criada",
+                description: "A reimpressão foi enviada para o setor de impressão",
+                variant: "default",
+              });
               // Atualizar a lista de solicitações após enviar uma nova
-              setTimeout(() => window.location.reload(), 500);
+              setTimeout(() => {
+                console.log("Recarregando página após criação bem-sucedida de reimpressão");
+                window.location.reload();
+              }, 1500);
             }}
           />
         </>
