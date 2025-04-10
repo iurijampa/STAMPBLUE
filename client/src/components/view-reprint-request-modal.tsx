@@ -73,7 +73,7 @@ export default function ViewReprintRequestModal({ isOpen, onClose, request }: Vi
   // Verificar se o usuário atual pertence ao departamento que recebe a solicitação
   const canProcess = user?.role === request.toDepartment;
 
-  // Mutação para atualizar o status da solicitação
+  // Mutação para atualizar o status da solicitação usando API emergencial
   const updateStatusMutation = useMutation({
     mutationFn: async ({ id, status, processedBy, responseNotes }: { 
       id: number; 
@@ -81,10 +81,17 @@ export default function ViewReprintRequestModal({ isOpen, onClose, request }: Vi
       processedBy: string; 
       responseNotes?: string;
     }) => {
-      const response = await apiRequest("PATCH", `/api/reprint-requests/${id}/status`, {
-        status,
-        processedBy,
-        responseNotes
+      // Usando a API emergencial em vez da original
+      const response = await fetch(`/api/reimpressao-emergencial/${id}/processar`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          status,
+          processedBy,
+          responseNotes
+        })
       });
       
       if (!response.ok) {
@@ -96,8 +103,8 @@ export default function ViewReprintRequestModal({ isOpen, onClose, request }: Vi
     },
     onSuccess: () => {
       setIsProcessing(false);
-      queryClient.invalidateQueries({ queryKey: ["/api/reprint-requests/for-department", user?.role] });
-      queryClient.invalidateQueries({ queryKey: ["/api/reprint-requests/from-department", request.fromDepartment] });
+      // Atualizar cache usando a API emergencial
+      queryClient.invalidateQueries({ queryKey: ["/api/reimpressao-emergencial/listar"] });
       toast({
         title: "Solicitação atualizada",
         description: "Status da solicitação atualizado com sucesso.",
