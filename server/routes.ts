@@ -928,18 +928,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
       // Criar solicitação de reimpressão associada à atividade temporária
-      const reprintRequest = await storage.createReprintRequest({
+      const reprintData = {
         activityId: temporaryActivity.id,
         quantity: parseInt(quantity) || 1,
-        reason,
+        reason: reason,
         details: req.body.details || "",
         priority: priority || "normal",
-        requestedBy,
+        requestedBy: requestedBy,
         requestedDepartment: "batida",
         targetDepartment: "impressao",
         status: "pending",
         requestedAt: new Date()
-      });
+      };
+      
+      // Validar os dados usando o schema
+      let reprintRequest;
+      try {
+        const validatedData = insertReprintRequestSchema.parse(reprintData);
+        reprintRequest = await storage.createReprintRequest(validatedData);
+      } catch (validationError) {
+        console.error("Erro de validação:", validationError);
+        throw new Error("Dados inválidos para solicitação de reimpressão");
+      }
       
       // Notificar o setor de impressão
       // Criar notificação para o setor de impressão

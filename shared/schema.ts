@@ -151,6 +151,8 @@ export const insertReprintRequestSchema = createInsertSchema(reprintRequests).pi
   requestedDepartment: true, 
   targetDepartment: true,
   priority: true,
+  status: true,
+  requestedAt: true,
 });
 
 // Export types
