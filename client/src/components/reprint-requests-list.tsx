@@ -149,12 +149,6 @@ export default function ReprintRequestsList({ department, activity }: ReprintReq
             ? `Solicitações de Reimpressão para ${activity.title}` 
             : "Solicitações de Reimpressão"}
         </h3>
-        {department === "batida" && (
-          <Button onClick={handleCreateRequest} size="sm">
-            <FilePlus className="h-4 w-4 mr-1" />
-            Nova Solicitação
-          </Button>
-        )}
       </div>
 
       {filteredRequests && filteredRequests.length > 0 ? (
@@ -194,12 +188,6 @@ export default function ReprintRequestsList({ department, activity }: ReprintReq
               ? "Nenhuma solicitação de reimpressão para este pedido." 
               : "Nenhuma solicitação de reimpressão encontrada."}
           </p>
-          {department === "batida" && (
-            <Button onClick={handleCreateRequest} variant="outline" className="mt-2">
-              <FilePlus className="h-4 w-4 mr-1" />
-              Criar Solicitação
-            </Button>
-          )}
         </div>
       )}
 

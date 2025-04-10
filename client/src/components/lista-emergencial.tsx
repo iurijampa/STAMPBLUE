@@ -204,12 +204,12 @@ export default function ListaEmergencial({ department, activities, refreshInterv
   };
   
   // Obter imagem da atividade
-  const getActivityImage = (activityId: number, activityImage?: string) => {
+  const getActivityImage = (activityId: number, activityImage?: string): string | undefined => {
     // Se já temos a imagem na solicitação, usar essa
     if (activityImage) return activityImage;
     // Caso contrário, procurar na lista de atividades
     const activity = activities.find(a => a.id === activityId);
-    return activity?.image || null;
+    return activity?.image;
   };
   
   // Formatar data
@@ -478,10 +478,25 @@ export default function ListaEmergencial({ department, activities, refreshInterv
           {selectedSolicitacao && (
             <div className="py-4">
               <div className="mb-4 p-3 bg-muted rounded-md">
-                <p className="font-medium">{getActivityTitle(selectedSolicitacao.activityId)}</p>
-                <p className="text-sm">Solicitado por: {selectedSolicitacao.requestedBy}</p>
-                <p className="text-sm">Motivo: {selectedSolicitacao.reason}</p>
-                <p className="text-sm">Quantidade: {selectedSolicitacao.quantity}</p>
+                <div className="flex items-start gap-3 mb-2">
+                  {/* Imagem da atividade como miniatura */}
+                  {getActivityImage(selectedSolicitacao.activityId, selectedSolicitacao.activityImage) && (
+                    <div className="flex-shrink-0 w-16 h-16 rounded-md overflow-hidden border">
+                      <img 
+                        src={getActivityImage(selectedSolicitacao.activityId, selectedSolicitacao.activityImage)} 
+                        alt="Miniatura do pedido" 
+                        className="w-full h-full object-cover"
+                        onError={(e) => (e.currentTarget.style.display = 'none')}
+                      />
+                    </div>
+                  )}
+                  <div>
+                    <p className="font-medium">{getActivityTitle(selectedSolicitacao.activityId, selectedSolicitacao.activityTitle)}</p>
+                    <p className="text-sm">Solicitado por: {selectedSolicitacao.requestedBy}</p>
+                    <p className="text-sm">Motivo: {selectedSolicitacao.reason}</p>
+                    <p className="text-sm">Quantidade: {selectedSolicitacao.quantity}</p>
+                  </div>
+                </div>
               </div>
               
               <div className="space-y-4">
