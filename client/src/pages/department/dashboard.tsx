@@ -746,28 +746,44 @@ export default function DepartmentDashboard() {
               </Card>
             </TabsContent>
             
-            {/* Conteúdo da guia de reimpressão (condicionalmente renderizado) */}
-            {(userDepartment === "batida" || userDepartment === "impressao") && (
+            {/* Conteúdo da guia de reimpressão - BATIDA */}
+            {userDepartment === "batida" && (
               <TabsContent value="reprintRequests">
                 <Card>
-                  <CardHeader>
-                    <CardTitle>
-                      {userDepartment === "batida" 
-                        ? "Solicitar Reimpressão" 
-                        : "Reimpressões Pendentes"
-                      }
-                    </CardTitle>
-                    <CardDescription>
-                      {userDepartment === "batida"
-                        ? "Solicite reimpressão de peças que apresentaram problemas"
-                        : "Lista de reimpressões solicitadas pelo setor de batida"
-                      }
-                    </CardDescription>
+                  <CardHeader className="flex flex-row items-center justify-between pb-2">
+                    <div>
+                      <CardTitle>Solicitar Reimpressão</CardTitle>
+                      <CardDescription>
+                        Solicite reimpressão de peças que apresentaram problemas
+                      </CardDescription>
+                    </div>
+
+                    {/* Botão destacado para nova solicitação de reimpressão */}
+                    <Button 
+                      variant="default" 
+                      className="flex items-center bg-blue-600 hover:bg-blue-700"
+                      onClick={() => {
+                        // Selecionar o primeiro item da lista ou exibir mensagem
+                        if (activitiesData && activitiesData.length > 0) {
+                          setReprintActivity(activitiesData[0]);
+                        } else {
+                          toast({
+                            title: "Nenhuma atividade disponível",
+                            description: "Não há atividades disponíveis para solicitar reimpressão.",
+                            variant: "destructive"
+                          });
+                        }
+                      }}
+                    >
+                      <Printer className="h-4 w-4 mr-2" />
+                      Nova Solicitação
+                    </Button>
                   </CardHeader>
                   <CardContent>
-                    {userDepartment === "batida" && (
-                      <div className="space-y-4">
-                        {/* Lista de atividades concluídas para potencial reimpressão */}
+                    <div className="space-y-6">
+                      {/* Lista de atividades disponíveis para reimpressão */}
+                      <div>
+                        <h3 className="text-lg font-semibold mb-4">Pedidos Disponíveis</h3>
                         {activitiesData && activitiesData.length > 0 ? (
                           <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2">
                             {activitiesData.map((activity) => (
@@ -786,33 +802,49 @@ export default function DepartmentDashboard() {
                                   <Button
                                     variant="outline"
                                     size="sm"
-                                    className="flex items-center"
+                                    className="flex items-center text-blue-600 hover:text-blue-700 hover:bg-blue-50"
                                     onClick={() => setReprintActivity(activity)}
                                   >
                                     <Printer className="h-4 w-4 mr-1" />
-                                    <span>Solicitar Reimpressão</span>
+                                    <span>Solicitar</span>
                                   </Button>
                                 </div>
                               </div>
                             ))}
                           </div>
                         ) : (
-                          <div className="text-center py-8 text-neutral-500">
-                            Nenhuma atividade disponível para reimpressão.
+                          <div className="text-center py-8 bg-neutral-50 rounded-md border border-dashed">
+                            <Printer className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-30" />
+                            <p className="text-neutral-500">
+                              Nenhuma atividade disponível para reimpressão.
+                            </p>
                           </div>
                         )}
-                        
-                        {/* Lista de solicitações de reimpressão */}
-                        <div className="mt-8">
-                          <h3 className="text-lg font-semibold mb-4">Minhas Reimpressões</h3>
-                          <ReprintRequestsList department={userDepartment} />
-                        </div>
                       </div>
-                    )}
-                    
-                    {userDepartment === "impressao" && (
-                      <ReprintRequestsList department={userDepartment} />
-                    )}
+                      
+                      {/* Lista de solicitações de reimpressão */}
+                      <div className="mt-8">
+                        <h3 className="text-lg font-semibold mb-4">Minhas Solicitações</h3>
+                        <ReprintRequestsList department={userDepartment} />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            )}
+            
+            {/* Conteúdo da guia de reimpressão - IMPRESSÃO */}
+            {userDepartment === "impressao" && (
+              <TabsContent value="reprintRequests">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Reimpressões Pendentes</CardTitle>
+                    <CardDescription>
+                      Lista de reimpressões solicitadas pelo setor de batida
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <ReprintRequestsList department={userDepartment} />
                   </CardContent>
                 </Card>
               </TabsContent>
