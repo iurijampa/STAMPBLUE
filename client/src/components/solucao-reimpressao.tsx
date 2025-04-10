@@ -59,8 +59,8 @@ export default function SolucaoReimpressao({
     try {
       setIsLoading(true);
       
-      // Enviar solicitação para API
-      console.log("Enviando solicitação para API:", {
+      // Enviar solicitação para API emergencial
+      console.log("Enviando solicitação para API EMERGENCIAL:", {
         activityId,
         requestedBy,
         reason,
@@ -68,7 +68,7 @@ export default function SolucaoReimpressao({
         quantity: quantityNum
       });
       
-      const response = await fetch("/api/reimpressao-simples/criar", {
+      const response = await fetch("/api/reimpressao-emergencial/criar", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
