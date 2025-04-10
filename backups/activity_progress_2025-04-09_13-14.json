@@ -1,0 +1,68 @@
+[
+  {
+    "id": 19,
+    "activityId": 10,
+    "department": "gabarito",
+    "status": "pending",
+    "completedBy": null,
+    "completedAt": null,
+    "notes": null,
+    "returnedBy": null,
+    "returnedAt": null
+  },
+  {
+    "id": 20,
+    "activityId": 11,
+    "department": "gabarito",
+    "status": "pending",
+    "completedBy": null,
+    "completedAt": null,
+    "notes": null,
+    "returnedBy": null,
+    "returnedAt": null
+  },
+  {
+    "id": 21,
+    "activityId": 12,
+    "department": "gabarito",
+    "status": "completed",
+    "completedBy": "Iuri",
+    "completedAt": "2025-04-08T23:05:26.677Z",
+    "notes": "A gola é ribana",
+    "returnedBy": null,
+    "returnedAt": null
+  },
+  {
+    "id": 23,
+    "activityId": 12,
+    "department": "batida",
+    "status": "completed",
+    "completedBy": "Fabiano",
+    "completedAt": "2025-04-08T23:07:02.586Z",
+    "notes": "Veio só os corpo",
+    "returnedBy": null,
+    "returnedAt": null
+  },
+  {
+    "id": 22,
+    "activityId": 12,
+    "department": "impressao",
+    "status": "completed",
+    "completedBy": "joas",
+    "completedAt": "2025-04-09T12:52:12.089Z",
+    "notes": "gola ribana",
+    "returnedBy": "Fabiano",
+    "returnedAt": "2025-04-08T23:07:02.674Z"
+  },
+  {
+    "id": 24,
+    "activityId": 13,
+    "department": "gabarito",
+    "status": "pending",
+    "completedBy": null,
+    "completedAt": null,
+    "notes": null,
+    "returnedBy": null,
+    "returnedAt": null
+  }
+]

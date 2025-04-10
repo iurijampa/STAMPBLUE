@@ -6,49 +6,28 @@ import { useAuth } from "@/hooks/use-auth";
 import { useCallback, useEffect, useState, useRef } from "react";
 import { User, Activity } from "@shared/schema";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, CalendarClock, Clock, Eye, RefreshCw, RotateCcw, Printer, FileText, Plus } from "lucide-react";
+import { Loader2, CalendarClock, Clock, Eye, RefreshCw, RotateCcw } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import Layout from "@/components/Layout";
 import ViewActivityModal from "@/components/view-activity-modal";
 import CompleteActivityModal from "@/components/complete-activity-modal";
 import ReturnActivityModal from "@/components/return-activity-modal";
-import ReprintRequestModal from "@/components/reprint-request-modal";
-import IndependentReprintModal from "@/components/independent-reprint-modal";
-import { UrgentReprintButton } from "@/components/urgent-reprint-button";
-import ReprintRequestsList from "@/components/reprint-requests-list";
 import { ActivitySkeleton, StatsSkeleton } from "@/components/activity-skeleton";
 import { SoundToggleButton, SoundTestButton } from "@/components/SoundManagerSimples";
 
 // Estendendo a interface Activity para incluir os campos que estamos recebendo do backend
-interface ActivityWithNotes {
-  id: number;
-  status: "pending" | "in_progress" | "completed";
-  title: string;
-  description: string;
-  image: string | null;
-  additionalImages: string[] | null;
-  quantity: number | null;
-  clientName: string | null;
-  priority: string | null;
-  createdBy: string | null;
-  createdAt: Date;
-  deadline: Date | null;
-  notes: string | null;
-  isReprintRequest: boolean | null;
-  // Campos adicionais que vêm do backend
-  previousNotes: string | null;
-  previousDepartment: string | null;
-  previousCompletedBy: string | null;
+interface ActivityWithNotes extends Activity {
+  previousNotes?: string | null;
+  previousDepartment?: string | null;
+  previousCompletedBy?: string | null;
   // Campos para informações de retorno
-  wasReturned: boolean;
-  returnedBy: string | null;
-  returnNotes: string | null;
-  returnedAt: Date | null;
+  wasReturned?: boolean;
+  returnedBy?: string | null;
+  returnNotes?: string | null;
+  returnedAt?: Date | null;
 }
 
 export default function DepartmentDashboard() {
@@ -58,9 +37,6 @@ export default function DepartmentDashboard() {
   const [viewActivity, setViewActivity] = useState<ActivityWithNotes | null>(null);
   const [completeActivity, setCompleteActivity] = useState<ActivityWithNotes | null>(null);
   const [returnActivity, setReturnActivity] = useState<ActivityWithNotes | null>(null);
-  const [reprintActivity, setReprintActivity] = useState<ActivityWithNotes | null>(null);
-  const [showIndependentReprintModal, setShowIndependentReprintModal] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<string>("pendingActivities");
   
   // Obtendo o departamento da URL
   const department = params.department;
@@ -520,44 +496,49 @@ export default function DepartmentDashboard() {
             }}
             className="flex items-center px-3 py-1 bg-blue-100 text-blue-800 hover:bg-blue-200 border-blue-300 animate-pulse"
           >
-            Ativar Notificações Sonoras
+            <span className="mr-1">🔊</span>
+            <span>Ativar Notificações Sonoras</span>
           </Button>
-                    
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={handleRefresh}
-            className="flex items-center gap-1"
-          >
-            <RefreshCw className="h-4 w-4" />
-            Atualizar
-          </Button>
-          
-          {/* Botão de teste de som */}
-          <SoundTestButton />
         </div>
-        
-        {!userLoading && <SoundToggleButton />}
+        <Button 
+          variant="outline" 
+          size="sm" 
+          onClick={handleRefresh}
+          className="flex items-center gap-1"
+          disabled={userLoading || activitiesLoading}
+        >
+          <svg 
+            xmlns="http://www.w3.org/2000/svg" 
+            width="16" 
+            height="16" 
+            viewBox="0 0 24 24" 
+            fill="none" 
+            stroke="currentColor" 
+            strokeWidth="2" 
+            strokeLinecap="round" 
+            strokeLinejoin="round" 
+            className="h-4 w-4"
+          >
+            <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+            <path d="M21 3v5h-5" />
+            <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+            <path d="M8 16H3v5" />
+          </svg>
+          <span>Atualizar</span>
+        </Button>
       </div>
       
       {userLoading ? (
-        <div className="flex items-center justify-center h-64">
-          <Loader2 className="h-8 w-8 animate-spin text-brand" />
+        <div className="h-64 flex items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary-500" />
         </div>
       ) : (
         <>
-          {!statsLoading && (
-            <div className="grid grid-cols-2 gap-4 mb-6">
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-lg font-semibold">Atividades Pendentes</CardTitle>
-                  <CardDescription>Atividades aguardando processamento</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-3xl font-bold">{stats.pendingCount || 0}</p>
-                </CardContent>
-              </Card>
-              
+          {/* Carregamento de estatísticas com esqueleto - Simplificado */}
+          {statsLoading ? (
+            <StatsSkeleton />
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-1 gap-6 mb-8">
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-lg font-semibold">Atividades Concluídas</CardTitle>
@@ -570,314 +551,172 @@ export default function DepartmentDashboard() {
             </div>
           )}
           
-          {/* Seção de Atividades Pendentes (sempre exibida) */}
-          <div className="mb-8">
-            <div className="flex items-center gap-2 mb-4">
-              <Clock className="h-5 w-5 text-blue-600" />
-              <h2 className="text-xl font-semibold">Atividades Pendentes</h2>
-            </div>
-            
-            <Card>
-              <CardHeader>
-                <CardTitle>Atividades Pendentes</CardTitle>
-                <CardDescription>
-                  Lista de atividades que precisam ser processadas pelo seu departamento
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {/* Carregamento de atividades com esqueleto */}
-                {activitiesLoading ? (
-                  <ActivitySkeleton />
-                ) : activitiesData && activitiesData.length > 0 ? (
-                  <div className="space-y-4">
-                    {/* Ordena atividades por data de entrega */}
-                    {[...activitiesData]
-                      .sort((a, b) => {
-                        // Se ambos têm deadline, ordena por data
-                        if (a.deadline && b.deadline) {
-                          return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
-                        }
-                        // Se apenas a atividade A tem deadline, ela vem primeiro
-                        else if (a.deadline) {
-                          return -1;
-                        }
-                        // Se apenas a atividade B tem deadline, ela vem primeiro
-                        else if (b.deadline) {
-                          return 1;
-                        }
-                        // Se nenhuma tem deadline, mantém a ordem original
-                        return 0;
-                      })
-                      .map((activity) => (
-                        <div 
-                          key={activity.id}
-                          className="border rounded-lg p-4 hover:bg-neutral-50 transition-colors"
-                        >
-                          <div className="flex justify-between items-start">
-                            <div className="flex gap-4">
-                              {/* Miniatura da imagem */}
-                              <div className="w-16 h-16 min-w-16 rounded overflow-hidden border bg-neutral-100 flex items-center justify-center">
-                                {activity.image ? (
-                                  <img 
-                                    src={activity.image} 
-                                    alt={`Imagem de ${activity.title}`} 
-                                    className="w-full h-full object-cover"
-                                  />
-                                ) : (
-                                  <span className="text-xs text-neutral-400">Sem imagem</span>
-                                )}
-                              </div>
-                              
-                              <div>
-                                <div className="flex items-center gap-2 mb-1">
-                                  <Badge 
-                                    variant="outline" 
-                                    className={cn("text-white", getDeadlineColor(activity.deadline))}
-                                  >
-                                    {activity.deadline ? formatDate(activity.deadline) : "Sem prazo"}
-                                  </Badge>
-                                </div>
-                                
-                                <h3 className="text-lg font-semibold">{activity.title}</h3>
-                                <p className="text-neutral-600 line-clamp-2 my-2">
-                                  {activity.description}
-                                </p>
-                                
-                                {/* Informações de retorno, se o pedido foi retornado */}
-                                {activity.wasReturned && (
-                                  <div className="bg-red-50 p-2 rounded-md mb-2 border border-red-200">
-                                    <p className="font-medium text-red-800 text-sm">
-                                      Pedido retornado pelo próximo setor
-                                    </p>
-                                    <p className="text-sm text-red-700">
-                                      <span className="font-medium">Retornado por:</span> {activity.returnedBy || "Não informado"}
-                                    </p>
-                                    {activity.returnNotes && (
-                                      <p className="text-sm text-red-700">
-                                        <span className="font-medium">Motivo:</span> {activity.returnNotes}
-                                      </p>
-                                    )}
-                                    {activity.returnedAt && (
-                                      <p className="text-xs text-red-600 mt-1">
-                                        <span className="font-medium">Data:</span> {formatDate(activity.returnedAt)}
-                                      </p>
-                                    )}
-                                  </div>
-                                )}
-                                
-                                {/* Observações do setor anterior */}
-                                {activity.previousNotes && !activity.wasReturned && (
-                                  <div className="bg-amber-50 p-2 rounded-md mb-2 border border-amber-200">
-                                    <p className="font-medium text-amber-800 text-sm">
-                                      Observações do setor anterior ({activity.previousDepartment}):
-                                    </p>
-                                    <p className="text-sm text-amber-700">
-                                      {activity.previousNotes}
-                                    </p>
-                                    {activity.previousCompletedBy && (
-                                      <p className="text-xs text-amber-600 mt-1">
-                                        Finalizado por: {activity.previousCompletedBy}
-                                      </p>
-                                    )}
-                                  </div>
-                                )}
-                                
-                                <div className="flex items-center text-sm text-neutral-500 gap-4 mt-2">
-                                  <div className="flex items-center">
-                                    <CalendarClock className="h-4 w-4 mr-1" />
-                                    <span>Criado: {formatDate(activity.createdAt)}</span>
-                                  </div>
-                                  
-                                  {activity.deadline && (
-                                    <div className="flex items-center">
-                                      <Clock className="h-4 w-4 mr-1" />
-                                      <span>
-                                        Entrega em {formatDistanceToNow(new Date(activity.deadline), {
-                                          addSuffix: true, 
-                                          locale: ptBR
-                                        })}
-                                      </span>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
+          <Card>
+            <CardHeader>
+              <CardTitle>Atividades Pendentes</CardTitle>
+              <CardDescription>
+                Lista de atividades que precisam ser processadas pelo seu departamento
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {/* Carregamento de atividades com esqueleto */}
+              {activitiesLoading ? (
+                <ActivitySkeleton />
+              ) : activitiesData && activitiesData.length > 0 ? (
+                <div className="space-y-4">
+                  {/* Ordena atividades por data de entrega */}
+                  {[...activitiesData]
+                    .sort((a, b) => {
+                      // Se ambos têm deadline, ordena por data
+                      if (a.deadline && b.deadline) {
+                        return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
+                      }
+                      // Se apenas a atividade A tem deadline, ela vem primeiro
+                      else if (a.deadline) {
+                        return -1;
+                      }
+                      // Se apenas a atividade B tem deadline, ela vem primeiro
+                      else if (b.deadline) {
+                        return 1;
+                      }
+                      // Se nenhuma tem deadline, mantém a ordem original
+                      return 0;
+                    })
+                    .map((activity) => (
+                    <div 
+                      key={activity.id}
+                      className="border rounded-lg p-4 hover:bg-neutral-50 transition-colors"
+                    >
+                      <div className="flex justify-between items-start">
+                        <div className="flex gap-4">
+                          {/* Miniatura da imagem */}
+                          <div className="w-16 h-16 min-w-16 rounded overflow-hidden border bg-neutral-100 flex items-center justify-center">
+                            {activity.image ? (
+                              <img 
+                                src={activity.image} 
+                                alt={`Imagem de ${activity.title}`} 
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <span className="text-xs text-neutral-400">Sem imagem</span>
+                            )}
+                          </div>
+                          
+                          <div>
+                            <div className="flex items-center gap-2 mb-1">
+                              <Badge 
+                                variant="outline" 
+                                className={cn("text-white", getDeadlineColor(activity.deadline))}
+                              >
+                                {activity.deadline ? formatDate(activity.deadline) : "Sem prazo"}
+                              </Badge>
                             </div>
                             
-                            <div className="flex flex-col gap-2">
-                              <Button 
-                                variant="outline" 
-                                size="sm"
-                                className="flex items-center"
-                                onClick={() => setViewActivity(activity)}
-                              >
-                                <Eye className="h-4 w-4 mr-1" />
-                                <span>Visualizar</span>
-                              </Button>
+                            <h3 className="text-lg font-semibold">{activity.title}</h3>
+                            <p className="text-neutral-600 line-clamp-2 my-2">
+                              {activity.description}
+                            </p>
+                            
+                            {/* Informações de retorno, se o pedido foi retornado */}
+                            {activity.wasReturned && (
+                              <div className="bg-red-50 p-2 rounded-md mb-2 border border-red-200">
+                                <p className="font-medium text-red-800 text-sm">
+                                  Pedido retornado pelo próximo setor
+                                </p>
+                                <p className="text-sm text-red-700">
+                                  <span className="font-medium">Retornado por:</span> {activity.returnedBy || "Não informado"}
+                                </p>
+                                {activity.returnNotes && (
+                                  <p className="text-sm text-red-700">
+                                    <span className="font-medium">Motivo:</span> {activity.returnNotes}
+                                  </p>
+                                )}
+                                {activity.returnedAt && (
+                                  <p className="text-xs text-red-600 mt-1">
+                                    <span className="font-medium">Data:</span> {formatDate(activity.returnedAt)}
+                                  </p>
+                                )}
+                              </div>
+                            )}
+                            
+                            {/* Observações do setor anterior */}
+                            {activity.previousNotes && !activity.wasReturned && (
+                              <div className="bg-amber-50 p-2 rounded-md mb-2 border border-amber-200">
+                                <p className="font-medium text-amber-800 text-sm">
+                                  Observações do setor anterior ({activity.previousDepartment}):
+                                </p>
+                                <p className="text-sm text-amber-700">
+                                  {activity.previousNotes}
+                                </p>
+                                {activity.previousCompletedBy && (
+                                  <p className="text-xs text-amber-600 mt-1">
+                                    Finalizado por: {activity.previousCompletedBy}
+                                  </p>
+                                )}
+                              </div>
+                            )}
+                            
+                            <div className="flex items-center text-sm text-neutral-500 gap-4 mt-2">
+                              <div className="flex items-center">
+                                <CalendarClock className="h-4 w-4 mr-1" />
+                                <span>Criado: {formatDate(activity.createdAt)}</span>
+                              </div>
                               
-                              <Button 
-                                variant="default" 
-                                size="sm"
-                                onClick={() => setCompleteActivity(activity)}
-                              >
-                                Concluir
-                              </Button>
-                              
-                              <Button 
-                                variant="outline" 
-                                size="sm"
-                                className="flex items-center text-yellow-600 hover:text-yellow-700"
-                                onClick={() => setReturnActivity(activity)}
-                              >
-                                <RotateCcw className="h-4 w-4 mr-1" />
-                                <span>Retornar</span>
-                              </Button>
+                              {activity.deadline && (
+                                <div className="flex items-center">
+                                  <Clock className="h-4 w-4 mr-1" />
+                                  <span>
+                                    Entrega em {formatDistanceToNow(new Date(activity.deadline), {
+                                      addSuffix: true, 
+                                      locale: ptBR
+                                    })}
+                                  </span>
+                                </div>
+                              )}
                             </div>
                           </div>
                         </div>
-                      ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-8 text-neutral-500">
-                    Nenhuma atividade pendente encontrada para o seu departamento.
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-          
-          {/* Seção de Reimpressão para o setor de BATIDA - separada como uma seção completa */}
-          {userDepartment === "batida" && (
-            <div className="mt-8 pb-6">
-              <div className="flex justify-between items-center mb-4">
-                <div className="flex items-center gap-2">
-                  <Printer className="h-5 w-5 text-red-600" />
-                  <h2 className="text-xl font-semibold">Sistema de Reimpressão Urgente</h2>
-                </div>
-              </div>
-              
-              {/* Card com explicação e botão de ação única */}
-              <Card className="bg-red-50 border-red-200 mb-6">
-                <CardHeader>
-                  <CardTitle className="text-red-700">Reimpressão Rápida</CardTitle>
-                  <CardDescription className="text-red-600">
-                    Se você encontrou problemas com alguma peça durante a batida e precisa solicitar uma reimpressão urgente
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-center py-2">
-                    <p className="text-neutral-600 mb-4">
-                      Clique no botão abaixo para enviar uma solicitação de reimpressão
-                      urgente diretamente para o setor de impressão.
-                    </p>
-                    
-                    {/* Botão ultra simplificado */}
-                    <UrgentReprintButton />
-                  </div>
-                </CardContent>
-              </Card>
-              
-              <div className="flex justify-between items-center mb-4">
-                <div className="flex items-center gap-2">
-                  <Printer className="h-5 w-5 text-blue-600" />
-                  <h2 className="text-xl font-semibold">Sistema de Reimpressão Anterior</h2>
-                </div>
-                
-                {/* Botão para o antigo sistema de reimpressão */}
-                <Button 
-                  variant="outline" 
-                  className="flex items-center text-blue-600"
-                  onClick={() => {
-                    // Abrir modal de reimpressão independente
-                    setShowIndependentReprintModal(true);
-                  }}
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Usar Sistema Anterior
-                </Button>
-              </div>
-              
-              <Card>
-                <CardHeader>
-                  <CardTitle>Solicitar Reimpressão</CardTitle>
-                  <CardDescription>
-                    Solicite reimpressão de peças que apresentaram problemas
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-6">
-                    {/* Lista de atividades disponíveis para reimpressão */}
-                    <div>
-                      <h3 className="text-lg font-semibold mb-4">Pedidos Disponíveis</h3>
-                      {activitiesData && activitiesData.length > 0 ? (
-                        <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2">
-                          {activitiesData.map((activity) => (
-                            <div
-                              key={activity.id}
-                              className="border rounded-lg p-4 hover:bg-neutral-50 transition-colors"
-                            >
-                              <div className="flex justify-between items-start">
-                                <div>
-                                  <h3 className="text-lg font-semibold">{activity.title}</h3>
-                                  <p className="text-neutral-600 line-clamp-2 my-2">
-                                    {activity.description}
-                                  </p>
-                                </div>
-                                
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="flex items-center text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                                  onClick={() => setReprintActivity(activity)}
-                                >
-                                  <Printer className="h-4 w-4 mr-1" />
-                                  <span>Solicitar</span>
-                                </Button>
-                              </div>
-                            </div>
-                          ))}
+                        
+                        <div className="flex flex-col gap-2">
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            className="flex items-center"
+                            onClick={() => setViewActivity(activity)}
+                          >
+                            <Eye className="h-4 w-4 mr-1" />
+                            <span>Visualizar</span>
+                          </Button>
+                          
+                          <Button 
+                            variant="default" 
+                            size="sm"
+                            onClick={() => setCompleteActivity(activity)}
+                          >
+                            Concluir
+                          </Button>
+                          
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            className="flex items-center text-yellow-600 hover:text-yellow-700"
+                            onClick={() => setReturnActivity(activity)}
+                          >
+                            <RotateCcw className="h-4 w-4 mr-1" />
+                            <span>Retornar</span>
+                          </Button>
                         </div>
-                      ) : (
-                        <div className="text-center py-8 bg-neutral-50 rounded-md border border-dashed">
-                          <Printer className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-30" />
-                          <p className="text-neutral-500">
-                            Nenhuma atividade disponível para reimpressão.
-                          </p>
-                        </div>
-                      )}
+                      </div>
                     </div>
-                    
-                    {/* Lista de solicitações de reimpressão */}
-                    <div className="mt-8">
-                      <h3 className="text-lg font-semibold mb-4">Minhas Solicitações</h3>
-                      <ReprintRequestsList department={userDepartment} />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          )}
-          
-          {/* Seção de Reimpressão para o setor de IMPRESSÃO - separada como uma seção completa */}
-          {userDepartment === "impressao" && (
-            <div className="mt-12 pb-6">
-              <div className="flex items-center gap-2 mb-4">
-                <Printer className="h-5 w-5 text-blue-600" />
-                <h2 className="text-xl font-semibold">Solicitações de Reimpressão</h2>
-              </div>
-              
-              <Card>
-                <CardHeader>
-                  <CardTitle>Reimpressões Pendentes</CardTitle>
-                  <CardDescription>
-                    Lista de reimpressões solicitadas pelo setor de batida
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <ReprintRequestsList department={userDepartment} />
-                </CardContent>
-              </Card>
-            </div>
-          )}
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-neutral-500">
+                  Nenhuma atividade pendente encontrada para o seu departamento.
+                </div>
+              )}
+            </CardContent>
+          </Card>
           
           {/* Modal de visualização de atividade */}
           <ViewActivityModal 
@@ -901,83 +740,6 @@ export default function DepartmentDashboard() {
             activityId={returnActivity?.id || null}
             onSuccess={handleActivityReturned}
           />
-          
-          {/* Modal de solicitação de reimpressão */}
-          <ReprintRequestModal
-            isOpen={!!reprintActivity}
-            onClose={() => setReprintActivity(null)}
-            activity={reprintActivity}
-          />
-
-          {/* Modal emergencial de reimpressão ultra simplificado (inline) */}
-          <Dialog open={showIndependentReprintModal} onOpenChange={(open) => !open && setShowIndependentReprintModal(false)}>
-            <DialogContent className="sm:max-w-[425px]">
-              <DialogHeader>
-                <DialogTitle>Solicitar Reimpressão Emergencial</DialogTitle>
-              </DialogHeader>
-              
-              <div className="py-6">
-                <p className="text-center text-neutral-700 text-lg">
-                  Esta solicitação de reimpressão será enviada diretamente para o setor de impressão.
-                </p>
-                <p className="text-center mt-2 text-neutral-700">
-                  Clique no botão abaixo para enviar a solicitação de emergência.
-                </p>
-              </div>
-
-              <DialogFooter>
-                <Button
-                  variant="outline"
-                  onClick={() => setShowIndependentReprintModal(false)}
-                >
-                  Cancelar
-                </Button>
-                <Button
-                  onClick={async () => {
-                    try {
-                      // Chamar diretamente a API de emergência
-                      const response = await fetch("/api/reimpressao-emergencia", {
-                        method: "POST",
-                        headers: {
-                          "Content-Type": "application/json",
-                        },
-                        credentials: "include",
-                        body: JSON.stringify({ timestamp: Date.now() })
-                      });
-                      
-                      if (!response.ok) {
-                        throw new Error("Falha ao enviar reimpressão");
-                      }
-                      
-                      // Fechar o modal
-                      setShowIndependentReprintModal(false);
-                      
-                      // Mostrar mensagem de sucesso
-                      toast({
-                        title: "✅ Reimpressão enviada com sucesso!",
-                        description: "A reimpressão urgente foi enviada para o setor de impressão",
-                        variant: "default",
-                      });
-                      
-                      // Recarregar página após breve delay
-                      setTimeout(() => {
-                        window.location.reload();
-                      }, 1500);
-                    } catch (error) {
-                      console.error("Erro ao enviar reimpressão:", error);
-                      toast({
-                        title: "Erro",
-                        description: "Houve um problema ao enviar a solicitação",
-                        variant: "destructive",
-                      });
-                    }
-                  }}
-                >
-                  Enviar Reimpressão Urgente
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
         </>
       )}
     </Layout>

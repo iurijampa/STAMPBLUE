@@ -3,13 +3,11 @@ import {
   Activity, InsertActivity, 
   ActivityProgress, InsertActivityProgress, 
   Notification, InsertNotification,
-  ReprintRequest, InsertReprintRequest,
   DEPARTMENTS,
   users,
   activities,
   activityProgress,
-  notifications,
-  reprintRequests
+  notifications
 } from "@shared/schema";
 import session from "express-session";
 import { db, sql as postgresClient, cachedQuery, clearCacheByPattern } from "./db";
@@ -584,18 +582,8 @@ export class DatabaseStorage implements IStorage {
       })
       .returning();
     
-    // Limpar cache de notificações
-    if (notificationData.userId) {
-      clearCacheByPattern(`user_notifications_${notificationData.userId}`);
-    }
-    
-    if (notificationData.department) {
-      clearCacheByPattern(`department_notifications_${notificationData.department}`);
-    }
-    
-    if (notificationData.type) {
-      clearCacheByPattern(`notifications_type_${notificationData.type}`);
-    }
+    // Limpar cache de notificações para este usuário
+    clearCacheByPattern(`user_notifications_${notificationData.userId}`);
     
     return notification;
   }
@@ -622,27 +610,6 @@ export class DatabaseStorage implements IStorage {
     }, 2000); // Cache por apenas 2 segundos para garantir notificações atualizadas
   }
 
-  async getNotificationsByDepartment(department: string, type?: string): Promise<Notification[]> {
-    // Cache para consultas por departamento
-    const cacheKey = type 
-      ? `department_notifications_${department}_${type}` 
-      : `department_notifications_${department}`;
-    
-    return cachedQuery(cacheKey, async () => {
-      let query = db
-        .select()
-        .from(notifications)
-        .where(eq(notifications.department as any, department))
-        .orderBy(desc(notifications.createdAt));
-      
-      if (type) {
-        query = query.where(eq(notifications.type as any, type));
-      }
-      
-      return await query;
-    }, 2000); // Cache por 2 segundos
-  }
-
   async markNotificationAsRead(id: number): Promise<Notification> {
     const [updatedNotification] = await db
       .update(notifications)
@@ -654,116 +621,9 @@ export class DatabaseStorage implements IStorage {
       throw new Error("Notificação não encontrada");
     }
     
-    // Limpar todas as caches relacionadas
-    if (updatedNotification.userId) {
-      clearCacheByPattern(`user_notifications_${updatedNotification.userId}`);
-    }
-    
-    if (updatedNotification.department) {
-      clearCacheByPattern(`department_notifications_${updatedNotification.department}`);
-    }
-    
-    if (updatedNotification.type) {
-      clearCacheByPattern(`notifications_type_${updatedNotification.type}`);
-    }
+    // Limpar cache de notificações para este usuário
+    clearCacheByPattern(`user_notifications_${updatedNotification.userId}`);
     
     return updatedNotification;
-  }
-  
-  // ===== MÉTODOS DE REIMPRESSÃO =====
-  async createReprintRequest(reprintData: InsertReprintRequest): Promise<ReprintRequest> {
-    const [request] = await db
-      .insert(reprintRequests)
-      .values(reprintData)
-      .returning();
-    
-    // Limpar caches relacionados
-    clearCacheByPattern(`reprint_requests_${reprintData.targetDepartment}`);
-    clearCacheByPattern(`reprint_requests_activity_${reprintData.activityId}`);
-    
-    return request;
-  }
-  
-  async getReprintRequest(id: number): Promise<ReprintRequest | undefined> {
-    const [request] = await db
-      .select()
-      .from(reprintRequests)
-      .where(eq(reprintRequests.id, id));
-      
-    return request;
-  }
-  
-  async getReprintRequestsByActivity(activityId: number): Promise<ReprintRequest[]> {
-    return cachedQuery(`reprint_requests_activity_${activityId}`, async () => {
-      return await db
-        .select()
-        .from(reprintRequests)
-        .where(eq(reprintRequests.activityId, activityId))
-        .orderBy(desc(reprintRequests.requestedAt));
-    }, 5000); // Cache por 5 segundos
-  }
-  
-  async getReprintRequestsByDepartment(department: string, status?: string): Promise<ReprintRequest[]> {
-    const cacheKey = status 
-      ? `reprint_requests_${department}_${status}` 
-      : `reprint_requests_${department}`;
-    
-    return cachedQuery(cacheKey, async () => {
-      let query = db
-        .select()
-        .from(reprintRequests)
-        .where(eq(reprintRequests.targetDepartment as any, department));
-      
-      if (status) {
-        query = query.where(eq(reprintRequests.status as any, status));
-      }
-      
-      return await query.orderBy(desc(reprintRequests.requestedAt));
-    }, 5000); // Cache por 5 segundos
-  }
-  
-  async completeReprintRequest(id: number, completedBy: string): Promise<ReprintRequest> {
-    const [updatedRequest] = await db
-      .update(reprintRequests)
-      .set({
-        status: "completed" as any,
-        completedBy,
-        completedAt: new Date()
-      })
-      .where(eq(reprintRequests.id, id))
-      .returning();
-    
-    if (!updatedRequest) {
-      throw new Error("Solicitação de reimpressão não encontrada");
-    }
-    
-    // Limpar caches
-    clearCacheByPattern(`reprint_requests_${updatedRequest.targetDepartment}`);
-    clearCacheByPattern(`reprint_requests_activity_${updatedRequest.activityId}`);
-    clearCacheByPattern(`reprint_requests_${updatedRequest.requestedDepartment}`);
-    
-    return updatedRequest;
-  }
-  
-  async confirmReprintReceived(id: number, receivedBy: string): Promise<ReprintRequest> {
-    const [updatedRequest] = await db
-      .update(reprintRequests)
-      .set({
-        receivedBy,
-        receivedAt: new Date()
-      })
-      .where(eq(reprintRequests.id, id))
-      .returning();
-    
-    if (!updatedRequest) {
-      throw new Error("Solicitação de reimpressão não encontrada");
-    }
-    
-    // Limpar caches
-    clearCacheByPattern(`reprint_requests_${updatedRequest.targetDepartment}`);
-    clearCacheByPattern(`reprint_requests_activity_${updatedRequest.activityId}`);
-    clearCacheByPattern(`reprint_requests_${updatedRequest.requestedDepartment}`);
-    
-    return updatedRequest;
   }
 }

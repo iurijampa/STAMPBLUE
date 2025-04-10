@@ -1,0 +1,58 @@
+[
+  {
+    "id": 56,
+    "userId": 2,
+    "activityId": 24,
+    "message": "Nova atividade: DIJOWAQJOID",
+    "read": false,
+    "createdAt": "2025-04-09T15:35:56.328Z"
+  },
+  {
+    "id": 55,
+    "userId": 2,
+    "activityId": 23,
+    "message": "Nova atividade: PEDIDO",
+    "read": false,
+    "createdAt": "2025-04-09T15:35:18.490Z"
+  },
+  {
+    "id": 54,
+    "userId": 2,
+    "activityId": 22,
+    "message": "Nova atividade: TESTE",
+    "read": false,
+    "createdAt": "2025-04-09T15:34:51.446Z"
+  },
+  {
+    "id": 40,
+    "userId": 2,
+    "activityId": 14,
+    "message": "Nova atividade: RED BULL NEW YORK THIRD 23-24",
+    "read": false,
+    "createdAt": "2025-04-09T14:46:14.337Z"
+  },
+  {
+    "id": 39,
+    "userId": 2,
+    "activityId": 13,
+    "message": "Nova atividade: CAMISA PAREDINHA 62 - DRYFIT",
+    "read": false,
+    "createdAt": "2025-04-09T13:03:41.930Z"
+  },
+  {
+    "id": 57,
+    "userId": 4,
+    "activityId": 24,
+    "message": "Novo pedido de gabarito para impressao: DIJOWAQJOID",
+    "read": false,
+    "createdAt": "2025-04-09T15:36:32.891Z"
+  },
+  {
+    "id": 58,
+    "userId": 1,
+    "activityId": 24,
+    "message": "Pedido \"DIJOWAQJOID\" passou de gabarito para impressao - Finalizado por: X - Obs: DSFSEFS",
+    "read": false,
+    "createdAt": "2025-04-09T15:36:33.076Z"
+  }
+]
