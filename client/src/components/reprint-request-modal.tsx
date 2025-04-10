@@ -107,18 +107,23 @@ export default function ReprintRequestModal({ isOpen, onClose, activity, onSucce
       console.log("Atividade selecionada para reimpressão:", activity);
       console.log("ID da atividade:", activity.id, "Título:", activity.title);
       
-      // Obter valores do formulário, mas substitua o activityId pelo valor correto
-      const formValues = form.getValues();
+      // Obter valores do formulário preenchidos pelo usuário
+      const userFormValues = form.getValues();
       
-      // Garantir que os departamentos estão definidos e o ID da atividade é o correto
+      // Criar objeto explícito com exatamente os campos esperados pelo backend
       const dataToSubmit = {
-        ...formValues,
-        activityId: activity.id, // Usar explicitamente o ID da atividade do prop
+        activityId: parseInt(String(activity.id)), // Garantir que é um número
+        requestedBy: userFormValues.requestedBy,
+        reason: userFormValues.reason,
+        details: userFormValues.details || "",
+        quantity: parseInt(String(userFormValues.quantity)) || 1,
+        priority: userFormValues.priority || "normal",
         fromDepartment: "batida",
         toDepartment: "impressao"
       };
       
-      console.log("Enviando solicitação:", dataToSubmit);
+      console.log("Enviando solicitação (dados processados):", dataToSubmit);
+      console.log("activityId tipo:", typeof dataToSubmit.activityId, "valor:", dataToSubmit.activityId);
       
       // Fazer a requisição diretamente em vez de usar a mutação
       const response = await fetch("/api/reprint-requests", {
@@ -129,13 +134,30 @@ export default function ReprintRequestModal({ isOpen, onClose, activity, onSucce
         body: JSON.stringify(dataToSubmit),
       });
       
+      // Capturar tanto o texto quanto o objeto de erro
+      const responseText = await response.text();
+      console.log("Resposta do servidor:", responseText);
+      
+      // Se não for OK, tentar parsear como JSON ou usar o texto como mensagem
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Erro ao enviar solicitação");
+        let errorMessage = "Erro ao enviar solicitação";
+        try {
+          const errorData = JSON.parse(responseText);
+          errorMessage = errorData.message || errorMessage;
+        } catch (parseError) {
+          errorMessage = responseText || errorMessage;
+        }
+        throw new Error(errorMessage);
       }
       
-      const result = await response.json();
-      console.log("Solicitação enviada com sucesso!", result);
+      // Parsear resultado (se necessário)
+      let result;
+      try {
+        result = JSON.parse(responseText);
+        console.log("Solicitação enviada com sucesso!", result);
+      } catch (e) {
+        console.log("Resposta não é um JSON válido, mas requisição foi bem-sucedida");
+      }
       
       // Invalidar a lista de solicitações para atualizar automaticamente
       queryClient.invalidateQueries({ queryKey: ['/api/reprint-requests/from-department/batida'] });

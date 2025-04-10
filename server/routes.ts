@@ -637,51 +637,67 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       console.log(`Atividade ${activityId} encontrada: ${activity.title}`);
       
-      // Validar os dados
-      const validatedData = insertReprintRequestSchema.parse({
-        ...req.body,
-        activityId: activityId, // Garantir que estamos usando o ID verificado
+      // Montar objeto limpo para validação
+      const dataToValidate = {
+        activityId: activityId,
+        requestedBy: req.body.requestedBy || "",
+        reason: req.body.reason || "",
+        details: req.body.details || "",
+        quantity: parseInt(String(req.body.quantity)) || 1,
+        priority: req.body.priority || "normal",
         fromDepartment: "batida",
-        toDepartment: "impressao", // Sempre envia para impressão
-      });
+        toDepartment: "impressao"
+      };
       
-      // Criar a solicitação
-      const reprintRequest = await storage.createReprintRequest(validatedData);
+      console.log("Dados preparados para validação:", JSON.stringify(dataToValidate, null, 2));
       
-      // Enviar notificação para os usuários do setor de impressão
-      const impressaoUsers = await storage.getUsersByRole("impressao");
-      for (const user of impressaoUsers) {
-        await storage.createNotification({
-          userId: user.id,
-          activityId: validatedData.activityId,
-          message: `Nova solicitação de reimpressão para o pedido "${activity.title}" - Motivo: ${validatedData.reason}`
-        });
-      }
+      try {
+        // Validar os dados
+        const validatedData = insertReprintRequestSchema.parse(dataToValidate);
+        console.log("Dados validados com sucesso:", JSON.stringify(validatedData, null, 2));
+        
+        // Criar a solicitação
+        const reprintRequest = await storage.createReprintRequest(validatedData);
+        console.log("Solicitação criada com sucesso:", reprintRequest.id);
       
-      // Enviar notificação WebSocket
-      if ((global as any).wsNotifications) {
-        (global as any).wsNotifications.notifyDepartment('impressao', {
-          type: 'new_reprint_request',
-          reprintRequest,
-          activityTitle: activity.title
-        });
-      }
-      
-      res.status(201).json(reprintRequest);
-    } catch (error) {
-      // Tratamento mais seguro de erros
-      console.error("Erro ao criar solicitação de reimpressão:", error);
-      if (error instanceof z.ZodError) {
-        try {
-          const validationError = fromZodError(error);
-          res.status(400).json({ message: validationError.message });
-        } catch (innerError) {
-          console.error("Erro ao processar validação:", innerError);
-          res.status(400).json({ message: "Erro de validação dos dados da solicitação" });
+        // Enviar notificação para os usuários do setor de impressão
+        const impressaoUsers = await storage.getUsersByRole("impressao");
+        for (const user of impressaoUsers) {
+          await storage.createNotification({
+            userId: user.id,
+            activityId: validatedData.activityId,
+            message: `Nova solicitação de reimpressão para o pedido "${activity.title}" - Motivo: ${validatedData.reason}`
+          });
         }
-      } else {
-        res.status(500).json({ message: "Erro ao criar solicitação de reimpressão" });
+        
+        // Enviar notificação WebSocket
+        if ((global as any).wsNotifications) {
+          (global as any).wsNotifications.notifyDepartment('impressao', {
+            type: 'new_reprint_request',
+            reprintRequest,
+            activityTitle: activity.title
+          });
+        }
+        
+        res.status(201).json(reprintRequest);
+      } catch (error) {
+        // Tratamento mais seguro de erros
+        console.error("Erro ao criar solicitação de reimpressão:", error);
+        if (error instanceof z.ZodError) {
+          try {
+            const validationError = fromZodError(error);
+            res.status(400).json({ message: validationError.message });
+          } catch (innerError) {
+            console.error("Erro ao processar validação:", innerError);
+            res.status(400).json({ message: "Erro de validação dos dados da solicitação" });
+          }
+        } else {
+          res.status(500).json({ message: "Erro ao criar solicitação de reimpressão" });
+        }
       }
+    } catch (error) {
+      console.error("Erro externo na rota de reimpressão:", error);
+      res.status(500).json({ message: "Erro do servidor ao processar solicitação" });
     }
   });
   
