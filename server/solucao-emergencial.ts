@@ -337,60 +337,48 @@ export async function completarProgressoAtividadeEmergencia(
         
         // SUPER-OTIMIZAÇÃO: Implementar UPSERT em uma única query para minimizar round-trips
         // e garantir máxima consistência e velocidade
-        try {
-          // Usar SQL preparado para máxima performance
-          await tx.execute(sql`
-            INSERT INTO ${activityProgress} (activity_id, department, status)
-            VALUES (${activityId}, ${proximoDepartamento}, 'pending')
-            ON CONFLICT (activity_id, department) 
-            DO UPDATE SET 
-              status = 'pending', 
-              completed_by = NULL, 
-              completed_at = NULL, 
-              notes = NULL, 
-              returned_by = NULL, 
-              returned_at = NULL
-          `);
-        } catch (error) {
-          // Fallback para método tradicional dentro da mesma transação
-          // se a sintaxe UPSERT não for suportada
-          const erroUpsert = error as Error;
+        // CORREÇÃO: A tabela activity_progress não tem restrição única nas colunas (activity_id, department)
+        // Em vez de usar ON CONFLICT que estava causando o erro 500, vamos verificar se já existe o registro
+        // e fazer update ou insert conforme necessário
           
-          // Buscar existente com FOR UPDATE para evitar condições de corrida
-          const [existeProgresso] = await tx
-            .select()
-            .from(activityProgress)
-            .where(
-              and(
-                eq(activityProgress.activityId, activityId),
-                eq(activityProgress.department, proximoDepartamento as any)
-              )
+        // Buscar se já existe o progresso para este próximo departamento
+        const [existeProgresso] = await tx
+          .select()
+          .from(activityProgress)
+          .where(
+            and(
+              eq(activityProgress.activityId, activityId),
+              eq(activityProgress.department, proximoDepartamento as any)
             )
-            .limit(1);
-          
-          if (existeProgresso) {
-            // Atualizar progresso existente
-            await tx
-              .update(activityProgress)
-              .set({
-                status: "pending",
-                completedBy: null,
-                completedAt: null,
-                notes: null,
-                returnedBy: null,
-                returnedAt: null
-              })
-              .where(eq(activityProgress.id, existeProgresso.id));
-          } else {
-            // Criar novo progresso apenas com campos essenciais
-            await tx
-              .insert(activityProgress)
-              .values({
-                activityId,
-                department: proximoDepartamento as any,
-                status: "pending"
-              });
-          }
+          )
+          .limit(1);
+            
+        if (existeProgresso) {
+          // Se existe, apenas atualizar para garantir que esteja como pendente
+          await tx
+            .update(activityProgress)
+            .set({
+              status: "pending",
+              completedBy: null,
+              completedAt: null,
+              notes: null,
+              returnedBy: null,
+              returnedAt: null
+            })
+            .where(eq(activityProgress.id, existeProgresso.id));
+              
+          console.log(`[DEBUG] Progresso existente atualizado para atividade ${activityId} no departamento ${proximoDepartamento}`);
+        } else {
+          // Se não existe, criar novo
+          await tx
+            .insert(activityProgress)
+            .values({
+              activityId,
+              department: proximoDepartamento as any,
+              status: "pending"
+            });
+              
+          console.log(`[DEBUG] Novo progresso criado para atividade ${activityId} no departamento ${proximoDepartamento}`);
         }
         
         // Invalidar cache para garantir dados atualizados
