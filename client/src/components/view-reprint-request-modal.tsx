@@ -1,14 +1,41 @@
+import { Activity } from "@shared/schema";
+import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import { apiRequest } from "@/lib/queryClient";
+
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
-  DialogTitle,
   DialogDescription,
   DialogFooter,
+  DialogHeader,
+  DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Loader2 } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
 
+// Interface para representar a solicitação de reimpressão
 interface ReprintRequest {
   id: number;
   activityId: number;
@@ -24,143 +51,293 @@ interface ReprintRequest {
   completedAt?: string;
   receivedBy?: string;
   receivedAt?: string;
+  fromDepartment: string;
+  toDepartment: string;
 }
 
 interface ViewReprintRequestModalProps {
   isOpen: boolean;
   onClose: () => void;
-  request: ReprintRequest | null;
+  request: ReprintRequest;
 }
 
-const statusLabels = {
-  pending: "Pendente",
-  in_progress: "Em andamento",
-  completed: "Concluído",
-  rejected: "Rejeitado"
-};
+export default function ViewReprintRequestModal({ isOpen, onClose, request }: ViewReprintRequestModalProps) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [processedBy, setProcessedBy] = useState("");
+  const [responseNotes, setResponseNotes] = useState("");
+  const [selectedStatus, setSelectedStatus] = useState<string>("");
 
-const statusColors = {
-  pending: "bg-yellow-500",
-  in_progress: "bg-blue-500",
-  completed: "bg-green-500",
-  rejected: "bg-red-500"
-};
+  // Verificar se o usuário atual pertence ao departamento que recebe a solicitação
+  const canProcess = user?.role === request.toDepartment;
 
-const priorityLabels = {
-  low: "Baixa",
-  normal: "Normal",
-  high: "Alta",
-  urgent: "Urgente"
-};
+  // Mutação para atualizar o status da solicitação
+  const updateStatusMutation = useMutation({
+    mutationFn: async ({ id, status, processedBy, responseNotes }: { 
+      id: number; 
+      status: string; 
+      processedBy: string; 
+      responseNotes?: string;
+    }) => {
+      const response = await apiRequest("PATCH", `/api/reprint-requests/${id}/status`, {
+        status,
+        processedBy,
+        responseNotes
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Erro ao atualizar solicitação");
+      }
+      
+      return await response.json();
+    },
+    onSuccess: () => {
+      setIsProcessing(false);
+      queryClient.invalidateQueries({ queryKey: ["/api/reprint-requests/for-department", user?.role] });
+      queryClient.invalidateQueries({ queryKey: ["/api/reprint-requests/from-department", request.fromDepartment] });
+      toast({
+        title: "Solicitação atualizada",
+        description: "Status da solicitação atualizado com sucesso.",
+      });
+      onClose();
+    },
+    onError: (error: Error) => {
+      setIsProcessing(false);
+      toast({
+        title: "Erro ao atualizar solicitação",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
 
-const priorityColors = {
-  low: "bg-slate-500",
-  normal: "bg-blue-500",
-  high: "bg-amber-500",
-  urgent: "bg-red-500"
-};
+  // Função para lidar com a atualização do status
+  const handleUpdateStatus = (status: string) => {
+    if (!processedBy) {
+      toast({
+        title: "Informação necessária",
+        description: "Informe quem está processando esta solicitação.",
+        variant: "destructive",
+      });
+      return;
+    }
 
-export default function ViewReprintRequestModal({
-  isOpen,
-  onClose,
-  request
-}: ViewReprintRequestModalProps) {
-  // Função para formatar a data
-  const formatDate = (dateString?: string) => {
-    if (!dateString) return "Não informado";
-    return new Date(dateString).toLocaleDateString('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
+    setIsProcessing(true);
+    updateStatusMutation.mutate({
+      id: request.id,
+      status,
+      processedBy,
+      responseNotes,
     });
   };
 
-  if (!request) return null;
+  // Formatação da prioridade e status
+  const getPriorityBadge = (priority: string) => {
+    switch (priority) {
+      case 'low':
+        return <Badge variant="outline">Baixa</Badge>;
+      case 'normal':
+        return <Badge variant="secondary">Normal</Badge>;
+      case 'high':
+        return <Badge variant="default">Alta</Badge>;
+      case 'urgent':
+        return <Badge variant="destructive">Urgente</Badge>;
+      default:
+        return <Badge variant="secondary">Normal</Badge>;
+    }
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return <Badge variant="outline" className="bg-yellow-50 text-yellow-700">Pendente</Badge>;
+      case 'in_progress':
+        return <Badge variant="secondary" className="bg-blue-50 text-blue-700">Em Processo</Badge>;
+      case 'completed':
+        return <Badge variant="default" className="bg-green-50 text-green-700">Concluída</Badge>;
+      case 'rejected':
+        return <Badge variant="destructive">Rejeitada</Badge>;
+      default:
+        return <Badge variant="outline">Desconhecido</Badge>;
+    }
+  };
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-md">
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            Solicitação de Reimpressão
-            <Badge className={statusColors[request.status]}>
-              {statusLabels[request.status]}
-            </Badge>
-          </DialogTitle>
+          <DialogTitle>Detalhes da Solicitação de Reimpressão</DialogTitle>
           <DialogDescription>
-            {request.activityTitle || `Atividade #${request.activityId}`}
+            Detalhes completos da solicitação para o pedido {request.activityTitle || `#${request.activityId}`}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 pt-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <h4 className="text-sm font-medium">Prioridade</h4>
-              <p className="text-sm">
-                <Badge className={priorityColors[request.priority]}>
-                  {priorityLabels[request.priority]}
-                </Badge>
-              </p>
-            </div>
-            <div>
-              <h4 className="text-sm font-medium">Quantidade</h4>
-              <p className="text-sm">{request.quantity}</p>
-            </div>
-          </div>
-
-          <div>
-            <h4 className="text-sm font-medium">Solicitado por</h4>
-            <p className="text-sm">{request.requestedBy}</p>
-          </div>
-
-          <div>
-            <h4 className="text-sm font-medium">Data da solicitação</h4>
-            <p className="text-sm">{formatDate(request.requestedAt)}</p>
-          </div>
-
-          <div>
-            <h4 className="text-sm font-medium">Motivo</h4>
-            <p className="text-sm">{request.reason}</p>
-          </div>
-
-          {request.details && (
-            <div>
-              <h4 className="text-sm font-medium">Detalhes</h4>
-              <p className="text-sm whitespace-pre-line">{request.details}</p>
-            </div>
-          )}
-
-          {request.status === 'completed' && (
-            <>
-              <div>
-                <h4 className="text-sm font-medium">Concluído por</h4>
-                <p className="text-sm">{request.completedBy || "Não informado"}</p>
+        <div className="space-y-4">
+          <Card>
+            <CardHeader className="pb-2">
+              <div className="flex justify-between">
+                <div>
+                  <CardTitle>Informações da Solicitação</CardTitle>
+                  <CardDescription>
+                    Criado em {new Date(request.requestedAt).toLocaleString()}
+                  </CardDescription>
+                </div>
+                <div className="flex flex-col gap-1 items-end">
+                  {getPriorityBadge(request.priority)}
+                  {getStatusBadge(request.status)}
+                </div>
               </div>
-              <div>
-                <h4 className="text-sm font-medium">Data de conclusão</h4>
-                <p className="text-sm">{formatDate(request.completedAt)}</p>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-muted-foreground text-xs">Solicitado por</Label>
+                  <p className="font-medium">{request.requestedBy}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-xs">Quantidade</Label>
+                  <p className="font-medium">{request.quantity} {request.quantity > 1 ? 'peças' : 'peça'}</p>
+                </div>
               </div>
-            </>
-          )}
+              
+              <div>
+                <Label className="text-muted-foreground text-xs">Motivo</Label>
+                <p className="font-medium">{request.reason}</p>
+              </div>
+              
+              {request.details && (
+                <div>
+                  <Label className="text-muted-foreground text-xs">Detalhes</Label>
+                  <p className="text-sm whitespace-pre-wrap">{request.details}</p>
+                </div>
+              )}
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-muted-foreground text-xs">Departamento Solicitante</Label>
+                  <p className="font-medium capitalize">{request.fromDepartment}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-xs">Departamento Destinatário</Label>
+                  <p className="font-medium capitalize">{request.toDepartment}</p>
+                </div>
+              </div>
+              
+              {request.status === 'completed' && request.completedBy && (
+                <>
+                  <Separator />
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-muted-foreground text-xs">Concluído por</Label>
+                      <p className="font-medium">{request.completedBy}</p>
+                    </div>
+                    {request.completedAt && (
+                      <div>
+                        <Label className="text-muted-foreground text-xs">Data de Conclusão</Label>
+                        <p className="font-medium">{new Date(request.completedAt).toLocaleString()}</p>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+              
+              {request.status === 'rejected' && request.completedBy && (
+                <>
+                  <Separator />
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-muted-foreground text-xs">Rejeitado por</Label>
+                      <p className="font-medium">{request.completedBy}</p>
+                    </div>
+                    {request.completedAt && (
+                      <div>
+                        <Label className="text-muted-foreground text-xs">Data de Rejeição</Label>
+                        <p className="font-medium">{new Date(request.completedAt).toLocaleString()}</p>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
 
-          {request.status === 'rejected' && (
-            <>
-              <div>
-                <h4 className="text-sm font-medium">Rejeitado por</h4>
-                <p className="text-sm">{request.completedBy || "Não informado"}</p>
-              </div>
-              <div>
-                <h4 className="text-sm font-medium">Data de rejeição</h4>
-                <p className="text-sm">{formatDate(request.completedAt)}</p>
-              </div>
-            </>
+          {/* Seção para processar a solicitação - apenas visível para o departamento destinatário */}
+          {canProcess && request.status === 'pending' && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle>Processar Solicitação</CardTitle>
+                <CardDescription>
+                  Atualize o status desta solicitação de reimpressão
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label htmlFor="processedBy">Processado por</Label>
+                  <Input
+                    id="processedBy"
+                    value={processedBy}
+                    onChange={(e) => setProcessedBy(e.target.value)}
+                    placeholder="Nome de quem está processando"
+                    disabled={isProcessing}
+                  />
+                </div>
+                
+                <div>
+                  <Label htmlFor="status">Atualizar Status</Label>
+                  <Select 
+                    onValueChange={setSelectedStatus}
+                    disabled={isProcessing}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o novo status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="in_progress">Em Processamento</SelectItem>
+                      <SelectItem value="completed">Concluída</SelectItem>
+                      <SelectItem value="rejected">Rejeitada</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div>
+                  <Label htmlFor="responseNotes">Observações</Label>
+                  <Textarea
+                    id="responseNotes"
+                    value={responseNotes}
+                    onChange={(e) => setResponseNotes(e.target.value)}
+                    placeholder="Observações sobre o processamento (opcional)"
+                    disabled={isProcessing}
+                  />
+                </div>
+                
+                <div className="flex justify-end space-x-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => handleUpdateStatus(selectedStatus)}
+                    disabled={!selectedStatus || isProcessing}
+                  >
+                    {isProcessing ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Processando...
+                      </>
+                    ) : (
+                      "Atualizar Status"
+                    )}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
           )}
         </div>
 
-        <DialogFooter className="mt-6">
-          <Button onClick={onClose}>Fechar</Button>
+        <DialogFooter>
+          <Button onClick={onClose} variant="outline">
+            Fechar
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
