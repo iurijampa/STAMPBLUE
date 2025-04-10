@@ -1,16 +1,27 @@
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState, useEffect } from "react";
+import { useToast } from "@/hooks/use-toast";
+import { Activity } from "@shared/schema";
+import { 
+  Card, 
+  CardContent, 
+  CardDescription, 
+  CardFooter, 
+  CardHeader, 
+  CardTitle 
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Activity } from "@shared/schema";
-import { Loader2, RefreshCw, ClipboardList } from "lucide-react";
-import ViewReprintRequestModal from "@/components/view-reprint-request-modal";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Loader2, FilePlus, RotateCw } from "lucide-react";
+import ReprintRequestModal from "./reprint-request-modal";
+import ViewReprintRequestModal from "./view-reprint-request-modal";
 
+// Interface para representar uma solicitação de reimpressão
 interface ReprintRequest {
   id: number;
   activityId: number;
-  activityTitle?: string; // Adicionado pelo backend
+  activityTitle?: string;
   requestedBy: string;
   reason: string;
   details?: string;
@@ -22,233 +33,192 @@ interface ReprintRequest {
   completedAt?: string;
   receivedBy?: string;
   receivedAt?: string;
+  fromDepartment: string;
+  toDepartment: string;
 }
-
-const statusLabels = {
-  pending: "Pendente",
-  in_progress: "Em andamento",
-  completed: "Concluído",
-  rejected: "Rejeitado"
-};
-
-const statusColors = {
-  pending: "bg-yellow-500",
-  in_progress: "bg-blue-500",
-  completed: "bg-green-500",
-  rejected: "bg-red-500"
-};
-
-const priorityLabels = {
-  low: "Baixa",
-  normal: "Normal",
-  high: "Alta",
-  urgent: "Urgente"
-};
-
-const priorityColors = {
-  low: "bg-slate-500",
-  normal: "bg-blue-500",
-  high: "bg-amber-500",
-  urgent: "bg-red-500"
-};
 
 interface ReprintRequestsListProps {
   department: string;
+  activity?: Activity | null;
 }
 
-export default function ReprintRequestsList({ department }: ReprintRequestsListProps) {
-  const [viewRequest, setViewRequest] = useState<ReprintRequest | null>(null);
-  
-  // Buscar solicitações feitas pelo departamento atual
-  const { 
-    data: reprintRequests = [], 
-    isLoading, 
-    refetch 
-  } = useQuery({
+export default function ReprintRequestsList({ department, activity }: ReprintRequestsListProps) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+  const [selectedRequest, setSelectedRequest] = useState<ReprintRequest | null>(null);
+  const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null);
+
+  // Buscar solicitações para o departamento atual
+  const { data: requests, isLoading, error } = useQuery({
     queryKey: ["/api/reprint-requests/from-department", department],
     queryFn: async () => {
-      const response = await fetch(`/api/reprint-requests/from-department/${department}`, {
-        credentials: 'include',
-        headers: {
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache'
-        }
-      });
-      
+      const response = await fetch(`/api/reprint-requests/from-department/${department}`);
       if (!response.ok) {
-        throw new Error('Erro ao buscar solicitações de reimpressão');
+        throw new Error("Erro ao buscar solicitações de reimpressão");
       }
-      
       return await response.json() as ReprintRequest[];
-    },
-    enabled: !!department,
-    staleTime: 30000,
-    refetchOnWindowFocus: false
+    }
   });
-  
-  // Função para formatar a data
-  const formatDate = (dateString: string) => {
-    if (!dateString) return "Não informado";
-    return new Date(dateString).toLocaleDateString('pt-BR');
-  };
-  
-  // Agrupar solicitações por status para melhor visualização
-  const pendingRequests = reprintRequests.filter(req => 
-    req.status === 'pending' || req.status === 'in_progress'
-  );
-  
-  const completedRequests = reprintRequests.filter(req => 
-    req.status === 'completed' || req.status === 'rejected'
-  );
 
-  return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h3 className="text-lg font-semibold">Solicitações de Reimpressão</h3>
-        <Button 
-          size="sm" 
-          variant="outline" 
-          onClick={() => refetch()}
-          disabled={isLoading}
-        >
-          {isLoading ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <RefreshCw className="h-4 w-4" />
-          )}
-          <span className="ml-2">Atualizar</span>
+  // Filtrar solicitações para a atividade selecionada, se houver
+  const filteredRequests = activity 
+    ? requests?.filter(req => req.activityId === activity.id)
+    : requests;
+
+  // Abrir modal para criar uma nova solicitação
+  const handleCreateRequest = () => {
+    setSelectedActivity(activity || null);
+    setIsCreateModalOpen(true);
+  };
+
+  // Abrir modal para visualizar detalhes de uma solicitação
+  const handleViewRequest = (request: ReprintRequest) => {
+    setSelectedRequest(request);
+    setIsViewModalOpen(true);
+  };
+
+  // Lidar com o sucesso na criação de uma solicitação
+  const handleRequestSuccess = () => {
+    queryClient.invalidateQueries({ queryKey: ["/api/reprint-requests/from-department", department] });
+    toast({
+      title: "Solicitação enviada",
+      description: "A solicitação de reimpressão foi enviada com sucesso.",
+    });
+  };
+
+  // Formatação condicional com base na prioridade e status
+  const getPriorityBadge = (priority: string) => {
+    switch (priority) {
+      case 'low':
+        return <Badge variant="outline">Baixa</Badge>;
+      case 'normal':
+        return <Badge variant="secondary">Normal</Badge>;
+      case 'high':
+        return <Badge variant="default">Alta</Badge>;
+      case 'urgent':
+        return <Badge variant="destructive">Urgente</Badge>;
+      default:
+        return <Badge variant="secondary">Normal</Badge>;
+    }
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return <Badge variant="outline" className="bg-yellow-50 text-yellow-700">Pendente</Badge>;
+      case 'in_progress':
+        return <Badge variant="secondary" className="bg-blue-50 text-blue-700">Em Processo</Badge>;
+      case 'completed':
+        return <Badge variant="default" className="bg-green-50 text-green-700">Concluída</Badge>;
+      case 'rejected':
+        return <Badge variant="destructive">Rejeitada</Badge>;
+      default:
+        return <Badge variant="outline">Desconhecido</Badge>;
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center p-6">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-4 text-red-600">
+        Erro ao carregar solicitações de reimpressão. 
+        <Button onClick={() => queryClient.invalidateQueries({ 
+          queryKey: ["/api/reprint-requests/from-department", department] 
+        })} variant="outline" size="sm" className="ml-2">
+          <RotateCw className="h-4 w-4 mr-1" />
+          Tentar novamente
         </Button>
       </div>
-      
-      {isLoading ? (
-        <div className="py-4 text-center">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto" />
-          <p className="text-sm text-muted-foreground mt-2">Carregando solicitações...</p>
-        </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <h3 className="text-lg font-medium">
+          {activity 
+            ? `Solicitações de Reimpressão para ${activity.title}` 
+            : "Solicitações de Reimpressão"}
+        </h3>
+        {department === "batida" && (
+          <Button onClick={handleCreateRequest} size="sm">
+            <FilePlus className="h-4 w-4 mr-1" />
+            Nova Solicitação
+          </Button>
+        )}
+      </div>
+
+      {filteredRequests && filteredRequests.length > 0 ? (
+        <ScrollArea className="h-[300px] rounded-md border">
+          <div className="space-y-2 p-2">
+            {filteredRequests.map((request) => (
+              <Card key={request.id} className="cursor-pointer hover:bg-muted/40"
+                onClick={() => handleViewRequest(request)}>
+                <CardHeader className="p-3 pb-0">
+                  <div className="flex justify-between items-start">
+                    <CardTitle className="text-base">
+                      {request.activityTitle || `Pedido #${request.activityId}`}
+                    </CardTitle>
+                    <div className="flex space-x-2">
+                      {getPriorityBadge(request.priority)}
+                      {getStatusBadge(request.status)}
+                    </div>
+                  </div>
+                  <CardDescription className="text-xs">
+                    Solicitado por: {request.requestedBy} em {new Date(request.requestedAt).toLocaleDateString()}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="p-3 pt-0">
+                  <p className="text-sm truncate">{request.reason}</p>
+                </CardContent>
+                <CardFooter className="p-3 pt-0 text-xs text-muted-foreground">
+                  Quantidade: {request.quantity} {request.quantity > 1 ? 'peças' : 'peça'}
+                </CardFooter>
+              </Card>
+            ))}
+          </div>
+        </ScrollArea>
       ) : (
-        <div className="space-y-6">
-          {/* Solicitações pendentes/em andamento */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg">Solicitações Ativas</CardTitle>
-              <CardDescription>
-                Solicitações pendentes ou em processamento
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {pendingRequests.length > 0 ? (
-                <div className="space-y-4">
-                  {pendingRequests.map(request => (
-                    <div key={request.id} className="border rounded-md p-4">
-                      <div className="flex justify-between">
-                        <div className="flex flex-col">
-                          <div className="flex items-center gap-2">
-                            <h4 className="font-medium">{request.activityTitle || `Atividade #${request.activityId}`}</h4>
-                            <Badge className={statusColors[request.status]}>
-                              {statusLabels[request.status]}
-                            </Badge>
-                            <Badge className={priorityColors[request.priority]}>
-                              {priorityLabels[request.priority]}
-                            </Badge>
-                          </div>
-                          <p className="text-sm text-muted-foreground mt-1">
-                            Motivo: {request.reason}
-                          </p>
-                          <div className="mt-2 flex flex-wrap gap-4 text-xs text-muted-foreground">
-                            <span>Solicitado por: {request.requestedBy}</span>
-                            <span>Data: {formatDate(request.requestedAt)}</span>
-                            <span>Quantidade: {request.quantity}</span>
-                          </div>
-                        </div>
-                        <div>
-                          <Button 
-                            variant="ghost" 
-                            size="sm"
-                            onClick={() => setViewRequest(request)}
-                          >
-                            <ClipboardList className="h-4 w-4 mr-1" />
-                            <span>Detalhes</span>
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-8 text-muted-foreground">
-                  Nenhuma solicitação ativa no momento.
-                </div>
-              )}
-            </CardContent>
-          </Card>
-          
-          {/* Solicitações concluídas/rejeitadas */}
-          {completedRequests.length > 0 && (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg">Histórico de Solicitações</CardTitle>
-                <CardDescription>
-                  Solicitações concluídas ou rejeitadas
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {completedRequests.map(request => (
-                    <div key={request.id} className="border rounded-md p-4">
-                      <div className="flex justify-between">
-                        <div className="flex flex-col">
-                          <div className="flex items-center gap-2">
-                            <h4 className="font-medium">{request.activityTitle || `Atividade #${request.activityId}`}</h4>
-                            <Badge className={`${statusColors[request.status]} ${request.status === 'completed' ? 'bg-opacity-80' : ''}`}>
-                              {statusLabels[request.status]}
-                            </Badge>
-                          </div>
-                          <p className="text-sm text-muted-foreground mt-1">
-                            Motivo: {request.reason}
-                          </p>
-                          <div className="mt-2 flex flex-wrap gap-4 text-xs text-muted-foreground">
-                            <span>Solicitado por: {request.requestedBy}</span>
-                            <span>Data: {formatDate(request.requestedAt)}</span>
-                            {request.completedBy && (
-                              <span>Processado por: {request.completedBy}</span>
-                            )}
-                            {request.completedAt && (
-                              <span>Concluído em: {formatDate(request.completedAt)}</span>
-                            )}
-                          </div>
-                        </div>
-                        <div>
-                          <Button 
-                            variant="ghost" 
-                            size="sm"
-                            onClick={() => setViewRequest(request)}
-                          >
-                            <ClipboardList className="h-4 w-4 mr-1" />
-                            <span>Detalhes</span>
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-          
-          {reprintRequests.length === 0 && !isLoading && (
-            <div className="text-center py-8 text-muted-foreground">
-              Nenhuma solicitação de reimpressão encontrada.
-            </div>
+        <div className="text-center py-8 border rounded-md bg-muted/20">
+          <p className="text-muted-foreground">
+            {activity 
+              ? "Nenhuma solicitação de reimpressão para este pedido." 
+              : "Nenhuma solicitação de reimpressão encontrada."}
+          </p>
+          {department === "batida" && (
+            <Button onClick={handleCreateRequest} variant="outline" className="mt-2">
+              <FilePlus className="h-4 w-4 mr-1" />
+              Criar Solicitação
+            </Button>
           )}
         </div>
       )}
-      
-      {/* Modal para visualizar detalhes da solicitação */}
-      <ViewReprintRequestModal
-        isOpen={!!viewRequest}
-        onClose={() => setViewRequest(null)}
-        request={viewRequest}
-      />
+
+      {isCreateModalOpen && (
+        <ReprintRequestModal 
+          isOpen={isCreateModalOpen}
+          onClose={() => setIsCreateModalOpen(false)}
+          activity={selectedActivity}
+          onSuccess={handleRequestSuccess}
+        />
+      )}
+
+      {isViewModalOpen && selectedRequest && (
+        <ViewReprintRequestModal
+          isOpen={isViewModalOpen}
+          onClose={() => setIsViewModalOpen(false)}
+          request={selectedRequest}
+        />
+      )}
     </div>
   );
 }

@@ -11,6 +11,7 @@ import {
   activityProgress,
   activities
 } from "@shared/schema";
+import { z } from "zod";
 import { fromZodError } from "zod-validation-error";
 import fs from 'fs';
 import path from 'path';
@@ -626,11 +627,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.status(201).json(reprintRequest);
     } catch (error) {
+      // Tratamento mais seguro de erros
+      console.error("Erro ao criar solicitação de reimpressão:", error);
       if (error instanceof z.ZodError) {
-        const validationError = fromZodError(error);
-        res.status(400).json({ message: validationError.message });
+        try {
+          const validationError = fromZodError(error);
+          res.status(400).json({ message: validationError.message });
+        } catch (innerError) {
+          console.error("Erro ao processar validação:", innerError);
+          res.status(400).json({ message: "Erro de validação dos dados da solicitação" });
+        }
       } else {
-        console.error("Erro ao criar solicitação de reimpressão:", error);
         res.status(500).json({ message: "Erro ao criar solicitação de reimpressão" });
       }
     }
