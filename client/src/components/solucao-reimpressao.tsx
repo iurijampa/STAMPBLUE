@@ -60,6 +60,14 @@ export default function SolucaoReimpressao({
       setIsLoading(true);
       
       // Enviar solicitação para API
+      console.log("Enviando solicitação para API:", {
+        activityId,
+        requestedBy,
+        reason,
+        details: details.trim() || "",
+        quantity: quantityNum
+      });
+      
       const response = await fetch("/api/reimpressao-simples/criar", {
         method: "POST",
         headers: {
@@ -69,10 +77,8 @@ export default function SolucaoReimpressao({
           activityId,
           requestedBy,
           reason,
-          details: details.trim() || undefined,
-          quantity: quantityNum,
-          fromDepartment: "batida",
-          toDepartment: "impressao",
+          details: details.trim() || "",
+          quantity: quantityNum
         }),
       });
       
