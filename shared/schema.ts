@@ -51,8 +51,7 @@ export const activities = pgTable("activities", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
   createdBy: text("created_by"), // Alterado para text para aceitar nome de usuário
   status: activityStatusEnum("status").notNull().default('in_progress'),
-  previousDepartment: text("previous_department"), // Adicionado para controle de origem
-  isReprintRequest: boolean("is_reprint_request").default(false), // Flag para identificar solicitações independentes
+  isReprintRequest: boolean("is_reprint_request").default(false) // Flag para identificar solicitações independentes
 });
 
 // Criamos o esquema base e depois sobrescrevemos o deadline para aceitar string ISO
@@ -68,10 +67,12 @@ export const insertActivitySchema = createInsertSchema(activities)
     deadline: true,
     notes: true,
     createdBy: true,
+    isReprintRequest: true,
   })
   .extend({
     deadline: z.string().nullable().transform(val => val ? new Date(val) : null),
     additionalImages: z.array(z.string()).optional().default([]),
+    isReprintRequest: z.boolean().optional().default(false),
   });
 
 // Activity progress tracking
