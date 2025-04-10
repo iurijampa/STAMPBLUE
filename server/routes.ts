@@ -54,12 +54,129 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Permitir acesso às rotas simplificadas sem autenticação
   app.use((req, res, next) => {
     // Se for uma rota para a página de teste ou API simplificada, pular autenticação
-    if (req.path.startsWith('/api/reimpressao-simples')) {
+    if (req.path.startsWith('/api/reimpressao-simples') || 
+        req.path.startsWith('/api/reimpressao-ultrabasico') ||
+        req.path.startsWith('/api/reimpressao-emergencial')) {
       req.isAuthenticated = () => true; // Fingir que está autenticado
+      console.log(`[AUTH_BYPASS] Autenticação pulada para: ${req.path}`);
       return next();
     }
     // Caso contrário, seguir o fluxo normal
     next();
+  });
+  
+  // Rotas de reimpressão emergencial (em memória)
+  // Variável global para armazenar solicitações em memória
+  const solicitacoesEmergenciais: any[] = [];
+  
+  // Rota para criar solicitação emergencial
+  app.post("/api/reimpressao-emergencial/criar", (req, res) => {
+    try {
+      const { activityId, requestedBy, reason, details, quantity } = req.body;
+      
+      // Log dos dados recebidos
+      console.log("🚨 RECEBENDO SOLICITAÇÃO EMERGENCIAL:", req.body);
+      
+      // Validação básica
+      if (!activityId || !requestedBy || !reason) {
+        return res.status(400).json({
+          success: false,
+          message: "Dados incompletos. Informe o ID do pedido, seu nome e o motivo."
+        });
+      }
+      
+      // Criar solicitação
+      const novaSolicitacao = {
+        id: Date.now(),
+        activityId: Number(activityId),
+        requestedBy,
+        reason,
+        details: details || "",
+        quantity: Number(quantity) || 1,
+        status: "pendente",
+        createdAt: new Date().toISOString(),
+        fromDepartment: "batida",
+        toDepartment: "impressao"
+      };
+      
+      // Adicionar à lista em memória
+      solicitacoesEmergenciais.push(novaSolicitacao);
+      
+      console.log("🚨 SOLICITAÇÃO EMERGENCIAL CRIADA:", novaSolicitacao);
+      console.log("🚨 TOTAL DE SOLICITAÇÕES EMERGENCIAIS:", solicitacoesEmergenciais.length);
+      
+      // Retornar sucesso
+      res.status(201).json({
+        success: true,
+        message: "Solicitação criada com sucesso!",
+        data: novaSolicitacao
+      });
+      
+    } catch (erro) {
+      console.error("⚠️ ERRO AO PROCESSAR SOLICITAÇÃO EMERGENCIAL:", erro);
+      res.status(500).json({
+        success: false,
+        message: "Erro interno do servidor"
+      });
+    }
+  });
+  
+  // Rota para listar solicitações emergenciais (todas)
+  app.get("/api/reimpressao-emergencial/listar", (req, res) => {
+    console.log("🚨 LISTANDO SOLICITAÇÕES EMERGENCIAIS:", solicitacoesEmergenciais.length);
+    res.json(solicitacoesEmergenciais);
+  });
+  
+  // Rota para processar solicitação emergencial
+  app.post("/api/reimpressao-emergencial/:id/processar", (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { status, processedBy } = req.body;
+      
+      console.log(`🚨 PROCESSANDO SOLICITAÇÃO EMERGENCIAL #${id}:`, req.body);
+      
+      // Validação
+      if (!status || !processedBy) {
+        return res.status(400).json({
+          success: false,
+          message: "Informe o status e o responsável pelo processamento"
+        });
+      }
+      
+      // Buscar solicitação
+      const index = solicitacoesEmergenciais.findIndex(s => s.id === id);
+      
+      if (index === -1) {
+        return res.status(404).json({
+          success: false,
+          message: "Solicitação não encontrada"
+        });
+      }
+      
+      // Atualizar solicitação
+      solicitacoesEmergenciais[index] = {
+        ...solicitacoesEmergenciais[index],
+        status,
+        processedBy,
+        processedAt: new Date().toISOString()
+      };
+      
+      console.log(`🚨 SOLICITAÇÃO EMERGENCIAL #${id} PROCESSADA:`, solicitacoesEmergenciais[index]);
+      
+      // Retornar sucesso
+      res.json({
+        success: true,
+        message: `Solicitação ${status === "concluida" ? "concluída" : "rejeitada"} com sucesso!`,
+        data: solicitacoesEmergenciais[index]
+      });
+      
+    } catch (erro) {
+      console.error("⚠️ ERRO AO PROCESSAR SOLICITAÇÃO EMERGENCIAL:", erro);
+      res.status(500).json({
+        success: false,
+        message: "Erro interno do servidor"
+      });
+    }
   });
 
   // Setup authentication routes

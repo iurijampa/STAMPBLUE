@@ -4,15 +4,32 @@ import ListaReimpressaoSimples from "@/components/lista-reimpressao-simples";
 import ReimpressaoProcessamento from "@/components/reimpressao-processamento";
 import FormUltraSimples from "@/components/form-ultra-simples";
 import ListaUltraSimples from "@/components/lista-ultra-simples";
+import FormEmergencial from "@/components/form-emergencial";
+import ListaEmergencial from "@/components/lista-emergencial";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Megaphone } from "lucide-react";
 
 export default function TestPage() {
   // Usar um ID fixo para teste
   const testeActivityId = 49; // ID de uma atividade que existe no sistema
   const testeActivityTitle = "CHAVEIRO INOVAÇÃO";
   const [atualizacaoPendente, setAtualizacaoPendente] = useState(false);
+  
+  // Mock dos dados para o teste da solução emergencial
+  const testeActivity = {
+    id: testeActivityId,
+    title: testeActivityTitle,
+    client: "Cliente Teste",
+    description: "Descrição do pedido de teste"
+  };
+  
+  const testeActivities = [
+    { id: 47, title: "LUCIANO BRITO", client: "Cliente 1" },
+    { id: 48, title: "GS IPHONE", client: "Cliente 2" },
+    { id: 49, title: "CHAVEIRO INOVAÇÃO", client: "Cliente 3" },
+    { id: 51, title: "POSTO INOVAÇÃO E CONVENIENCIA", client: "Cliente 4" }
+  ];
 
   const handleSolicitacaoCriada = () => {
     // Indicar que uma nova solicitação foi criada
@@ -70,44 +87,79 @@ export default function TestPage() {
       </Card>
       
       <div className="mt-8">
-        <Tabs defaultValue="ultra-criar">
+        <div className="bg-blue-50 border border-blue-200 rounded-md p-4 mb-6 flex items-start gap-3">
+          <Megaphone className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
+          <div>
+            <h3 className="font-medium text-blue-800 mb-1">NOVA SOLUÇÃO EMERGENCIAL DISPONÍVEL!</h3>
+            <p className="text-blue-700 text-sm mb-2">
+              Desenvolvemos uma nova versão <strong>SUPER RÁPIDA</strong> do sistema de reimpressão 
+              que funciona diretamente na RAM do servidor, sem depender do banco de dados.
+            </p>
+            <p className="text-blue-700 text-sm">
+              Utilize a aba <strong>VERSÃO EMERGENCIAL</strong> abaixo para acessar esta nova versão.
+            </p>
+          </div>
+        </div>
+        
+        <Tabs defaultValue="emergencial-criar">
           <TabsList className="mb-6">
-            <TabsTrigger value="ultra-criar">VERSÃO ULTRA SIMPLIFICADA</TabsTrigger>
-            <TabsTrigger value="ultra-listar">SOLICITAÇÕES ENVIADAS</TabsTrigger>
-            <TabsTrigger value="antigo-criar">VERSÃO ANTIGA (NÃO USAR)</TabsTrigger>
-            <TabsTrigger value="antigo-listar">VERSÃO ANTIGA (NÃO USAR)</TabsTrigger>
+            <TabsTrigger value="emergencial-criar">VERSÃO EMERGENCIAL</TabsTrigger>
+            <TabsTrigger value="emergencial-listar">SOLICITAÇÕES EMERGENCIAIS</TabsTrigger>
+            <TabsTrigger value="ultra-simples">ULTRA SIMPLIFICADA</TabsTrigger>
+            <TabsTrigger value="antiga">VERSÃO ANTIGA (NÃO USAR)</TabsTrigger>
           </TabsList>
           
-          <TabsContent value="ultra-criar">
-            <FormUltraSimples />
-          </TabsContent>
-          
-          <TabsContent value="ultra-listar">
-            <ListaUltraSimples />
-          </TabsContent>
-          
-          <TabsContent value="antigo-criar">
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
-              <h3 className="font-medium text-red-800 mb-1">ATENÇÃO: Não utilize esta versão!</h3>
-              <p className="text-red-700 text-sm">
-                Esta versão do formulário possui problemas conhecidos. Por favor, utilize a VERSÃO ULTRA SIMPLIFICADA.
-              </p>
-            </div>
-            <SolucaoReimpressao 
-              activityId={testeActivityId} 
-              activityTitle={testeActivityTitle}
+          <TabsContent value="emergencial-criar">
+            <FormEmergencial 
+              activity={testeActivity}
               onSuccess={handleSolicitacaoCriada}
             />
           </TabsContent>
           
-          <TabsContent value="antigo-listar">
+          <TabsContent value="emergencial-listar">
+            <ListaEmergencial 
+              department="batida"
+              activities={testeActivities}
+              refreshInterval={5000}
+            />
+            
+            <ListaEmergencial 
+              department="impressao"
+              activities={testeActivities}
+              refreshInterval={5000}
+            />
+          </TabsContent>
+          
+          <TabsContent value="ultra-simples">
+            <div className="grid gap-6">
+              <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-md">
+                <h3 className="font-medium text-amber-800 mb-1">Versão Anterior (Ultra Simplificada)</h3>
+                <p className="text-amber-700 text-sm">
+                  Esta é a versão anterior da solução emergencial. Recomendamos usar a VERSÃO EMERGENCIAL.
+                </p>
+              </div>
+              
+              <FormUltraSimples />
+              <ListaUltraSimples />
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="antiga">
             <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
               <h3 className="font-medium text-red-800 mb-1">ATENÇÃO: Não utilize esta versão!</h3>
               <p className="text-red-700 text-sm">
-                Esta versão da listagem possui problemas conhecidos. Por favor, utilize a VERSÃO ULTRA SIMPLIFICADA.
+                Esta versão possui problemas conhecidos. Por favor, utilize a VERSÃO EMERGENCIAL.
               </p>
             </div>
-            <ListaReimpressaoSimples />
+            
+            <div className="grid gap-6">
+              <SolucaoReimpressao 
+                activityId={testeActivityId} 
+                activityTitle={testeActivityTitle}
+                onSuccess={handleSolicitacaoCriada}
+              />
+              <ListaReimpressaoSimples />
+            </div>
           </TabsContent>
         </Tabs>
       </div>
