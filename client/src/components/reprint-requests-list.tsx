@@ -51,7 +51,7 @@ export default function ReprintRequestsList({ department, activity }: ReprintReq
   const [selectedRequest, setSelectedRequest] = useState<ReprintRequest | null>(null);
   const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null);
 
-  // Buscar solicitações usando a API emergencial
+  // Buscar solicitações usando a API emergencial com atualização periódica
   const { data: requests, isLoading, error } = useQuery({
     queryKey: ["/api/reimpressao-emergencial/listar"],
     queryFn: async () => {
@@ -60,7 +60,11 @@ export default function ReprintRequestsList({ department, activity }: ReprintReq
         throw new Error("Erro ao buscar solicitações de reimpressão");
       }
       return await response.json() as ReprintRequest[];
-    }
+    },
+    // Atualizar dados a cada 5 segundos
+    refetchInterval: 5000,
+    // Atualizar mesmo quando a aba está em segundo plano
+    refetchIntervalInBackground: true
   });
 
   // Filtrar solicitações para a atividade selecionada, se houver

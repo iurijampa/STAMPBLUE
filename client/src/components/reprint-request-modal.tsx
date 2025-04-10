@@ -231,8 +231,11 @@ export default function ReprintRequestModal({ isOpen, onClose, activity, onSucce
       if (success) {
         console.log("🔥 SOLICITAÇÃO PROCESSADA COM SUCESSO APÓS", attempt, "TENTATIVAS");
         
-        // Atualizar cache com a nova API emergencial
-        queryClient.invalidateQueries({ queryKey: ['/api/reimpressao-emergencial/listar'] });
+        // Atualizar cache com a nova API emergencial e forçar atualização imediata
+        queryClient.invalidateQueries({ 
+          queryKey: ['/api/reimpressao-emergencial/listar'],
+          refetchType: 'all'
+        });
         
         // Exibir confirmação visual
         toast({

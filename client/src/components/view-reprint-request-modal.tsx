@@ -104,8 +104,12 @@ export default function ViewReprintRequestModal({ isOpen, onClose, request }: Vi
     },
     onSuccess: () => {
       setIsProcessing(false);
-      // Atualizar cache usando a API emergencial
-      queryClient.invalidateQueries({ queryKey: ["/api/reimpressao-emergencial/listar"] });
+      // Forçar atualização imediata de todas as listas de solicitações
+      queryClient.invalidateQueries({
+        queryKey: ["/api/reimpressao-emergencial/listar"],
+        refetchType: 'all'
+      });
+      // Mostrar notificação de sucesso
       toast({
         title: "Solicitação atualizada",
         description: "Status da solicitação atualizado com sucesso.",
