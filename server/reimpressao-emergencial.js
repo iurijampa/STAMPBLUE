@@ -8,8 +8,20 @@ const router = express.Router();
 // Armazenamento em memória para as solicitações
 const solicitacoes = [];
 
+// Função para obter imagem da atividade
+async function getActivityImage(activityId) {
+  try {
+    // Caminho base para as imagens
+    const basePath = '/uploads/';
+    return `${basePath}activity_${activityId}.jpg`;
+  } catch (error) {
+    console.error('Erro ao obter imagem da atividade:', error);
+    return null;
+  }
+}
+
 // Rota para criar solicitação (POST /api/reimpressao-emergencial/criar)
-router.post('/criar', (req, res) => {
+router.post('/criar', async (req, res) => {
   console.log('💡 Requisição para criar solicitação de emergência:', req.body);
   
   try {
@@ -24,10 +36,26 @@ router.post('/criar', (req, res) => {
       });
     }
     
+    // Buscar título da atividade do "banco de dados"
+    let activityTitle = "";
+    try {
+      const { storage } = require('./storage-export');
+      const activity = await storage.getActivity(Number(activityId));
+      activityTitle = activity ? activity.title : `Pedido #${activityId}`;
+    } catch (err) {
+      console.error('Erro ao buscar título da atividade:', err);
+      activityTitle = `Pedido #${activityId}`;
+    }
+    
+    // Obter a URL da imagem da atividade
+    const activityImage = await getActivityImage(activityId);
+    
     // Criar solicitação
     const novaSolicitacao = {
       id: Date.now(),
       activityId: Number(activityId),
+      activityTitle,
+      activityImage,
       requestedBy,
       reason,
       details: details || '',
