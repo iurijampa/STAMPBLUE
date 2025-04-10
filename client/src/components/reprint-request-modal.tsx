@@ -178,7 +178,8 @@ export default function ReprintRequestModal({ isOpen, onClose, activity, onSucce
         console.log(`🔥 Tentativa ${attempt} de ${maxAttempts}`);
         
         try {
-          const response = await fetch("/api/reprint-requests", {
+          // Usando a API emergencial em vez da original
+          const response = await fetch("/api/reimpressao-emergencial/criar", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(dataToSubmit),
@@ -230,8 +231,8 @@ export default function ReprintRequestModal({ isOpen, onClose, activity, onSucce
       if (success) {
         console.log("🔥 SOLICITAÇÃO PROCESSADA COM SUCESSO APÓS", attempt, "TENTATIVAS");
         
-        // Atualizar cache
-        queryClient.invalidateQueries({ queryKey: ['/api/reprint-requests/from-department/batida'] });
+        // Atualizar cache com a nova API emergencial
+        queryClient.invalidateQueries({ queryKey: ['/api/reimpressao-emergencial/listar'] });
         
         // Exibir confirmação visual
         toast({

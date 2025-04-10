@@ -50,11 +50,11 @@ export default function ReprintRequestsList({ department, activity }: ReprintReq
   const [selectedRequest, setSelectedRequest] = useState<ReprintRequest | null>(null);
   const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null);
 
-  // Buscar solicitações para o departamento atual
+  // Buscar solicitações usando a API emergencial
   const { data: requests, isLoading, error } = useQuery({
-    queryKey: ["/api/reprint-requests/from-department", department],
+    queryKey: ["/api/reimpressao-emergencial/listar"],
     queryFn: async () => {
-      const response = await fetch(`/api/reprint-requests/from-department/${department}`);
+      const response = await fetch(`/api/reimpressao-emergencial/listar`);
       if (!response.ok) {
         throw new Error("Erro ao buscar solicitações de reimpressão");
       }
@@ -81,7 +81,7 @@ export default function ReprintRequestsList({ department, activity }: ReprintReq
 
   // Lidar com o sucesso na criação de uma solicitação
   const handleRequestSuccess = () => {
-    queryClient.invalidateQueries({ queryKey: ["/api/reprint-requests/from-department", department] });
+    queryClient.invalidateQueries({ queryKey: ["/api/reimpressao-emergencial/listar"] });
     toast({
       title: "Solicitação enviada",
       description: "A solicitação de reimpressão foi enviada com sucesso.",
@@ -132,7 +132,7 @@ export default function ReprintRequestsList({ department, activity }: ReprintReq
       <div className="p-4 text-red-600">
         Erro ao carregar solicitações de reimpressão. 
         <Button onClick={() => queryClient.invalidateQueries({ 
-          queryKey: ["/api/reprint-requests/from-department", department] 
+          queryKey: ["/api/reimpressao-emergencial/listar"] 
         })} variant="outline" size="sm" className="ml-2">
           <RotateCw className="h-4 w-4 mr-1" />
           Tentar novamente
