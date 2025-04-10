@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { Activity } from "@shared/schema";
+import { Activity, type InsertReprintRequest } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useAuth } from "@/hooks/use-auth";
 
 import {
   Dialog,
@@ -59,6 +60,7 @@ interface ReprintRequestModalProps {
 
 export default function ReprintRequestModal({ isOpen, onClose, activity, onSuccess }: ReprintRequestModalProps) {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Definir valores padrão para o formulário
@@ -112,9 +114,44 @@ export default function ReprintRequestModal({ isOpen, onClose, activity, onSucce
   });
 
   // Função para lidar com o envio do formulário
-  const onSubmit = (values: ReprintRequestFormValues) => {
-    setIsSubmitting(true);
-    createMutation.mutate(values);
+  const onSubmit = async (values: ReprintRequestFormValues) => {
+    try {
+      // Garantir que os departamentos estão definidos
+      const dataToSubmit = {
+        ...values,
+        fromDepartment: "batida",
+        toDepartment: "impressao"
+      };
+      
+      console.log("Enviando solicitação:", dataToSubmit);
+      setIsSubmitting(true);
+      
+      // Usar mutateAsync para aguardar a conclusão
+      const result = await createMutation.mutateAsync(dataToSubmit);
+      console.log("Solicitação enviada com sucesso!", result);
+      
+      // Invalidar a lista de solicitações para atualizar automaticamente
+      queryClient.invalidateQueries({ queryKey: ['/api/reprint-requests/from-department/batida'] });
+      
+      // Exibir mensagem de sucesso
+      toast({
+        title: "Solicitação enviada com sucesso",
+        description: "O setor de impressão foi notificado da sua solicitação.",
+        variant: "default",
+      });
+      
+      // Fechar modal e executar callback de sucesso
+      onSuccess();
+      onClose();
+    } catch (error) {
+      console.error("Erro ao enviar solicitação:", error);
+      setIsSubmitting(false);
+      toast({
+        title: "Erro ao enviar solicitação",
+        description: error instanceof Error ? error.message : "Falha ao conectar com o servidor",
+        variant: "destructive",
+      });
+    }
   };
 
   // Renderizar opções de prioridade
