@@ -47,7 +47,7 @@ export default function ReprintRequestsForDepartment({ department }: ReprintRequ
   const [selectedRequest, setSelectedRequest] = useState<ReprintRequest | null>(null);
   const [activeTab, setActiveTab] = useState("pending");
 
-  // Buscar solicitações para o departamento atual
+  // Buscar solicitações para o departamento atual com atualização automática
   const { data: requests, isLoading, error, refetch } = useQuery({
     queryKey: ["/api/reprint-requests/for-department", department],
     queryFn: async () => {
@@ -62,6 +62,10 @@ export default function ReprintRequestsForDepartment({ department }: ReprintRequ
         throw error;
       }
     },
+    // Atualizar dados a cada 5 segundos
+    refetchInterval: 5000,
+    // Atualizar mesmo quando a aba está em segundo plano
+    refetchIntervalInBackground: true,
     retry: 1,
   });
 

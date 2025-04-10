@@ -783,51 +783,37 @@ export default function DepartmentDashboard() {
           {/* Seção de solicitações de reimpressão (para o setor de Batida) */}
           {userDepartment === "batida" && (
             <div className="mt-8">
-              <div className="flex justify-between items-center mb-4">
+              <div className="mb-4">
                 <h3 className="text-lg font-semibold">Sistema de Reimpressão</h3>
-                <Button 
-                  variant="outline"
-                  onClick={() => setShowReprintRequests(!showReprintRequests)}
-                >
-                  {showReprintRequests ? "Ocultar Solicitações" : "Ver Solicitações"}
-                </Button>
               </div>
               
-              {showReprintRequests && (
-                <ReprintRequestsList department={userDepartment} />
-              )}
+              {/* Solicitações sempre visíveis */}
+              <ReprintRequestsList department={userDepartment} />
             </div>
           )}
           
           {/* Seção de processamento de solicitações de reimpressão (para o setor de Impressão) */}
           {userDepartment === "impressao" && (
             <div className="mt-8">
-              <div className="flex justify-between items-center mb-4">
+              <div className="mb-4">
                 <h3 className="text-lg font-semibold">Gerenciamento de Reimpressões</h3>
-                <Button 
-                  variant="outline"
-                  onClick={() => setShowReprintRequests(!showReprintRequests)}
-                >
-                  {showReprintRequests ? "Ocultar Solicitações" : "Ver Solicitações"}
-                </Button>
               </div>
               
-              {showReprintRequests && (
-                <div className="mt-6">
-                  <Card>
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-lg">Solicitações de Reimpressão</CardTitle>
-                      <CardDescription>
-                        Gerencie as solicitações recebidas do setor de Batida
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      {/* Componente para o setor de impressão gerenciar solicitações */}
-                      <ReprintRequestsForDepartment department={userDepartment} />
-                    </CardContent>
-                  </Card>
-                </div>
-              )}
+              {/* Solicitações sempre visíveis */}
+              <div className="mt-6">
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-lg">Solicitações de Reimpressão</CardTitle>
+                    <CardDescription>
+                      Gerencie as solicitações recebidas do setor de Batida
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {/* Componente para o setor de impressão gerenciar solicitações */}
+                    <ReprintRequestsForDepartment department={userDepartment} />
+                  </CardContent>
+                </Card>
+              </div>
             </div>
           )}
         </>
