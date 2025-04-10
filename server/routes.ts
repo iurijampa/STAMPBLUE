@@ -24,6 +24,7 @@ import {
   criarProgressoProximoDepartamentoEmergencia, 
   completarProgressoAtividadeEmergencia 
 } from "./solucao-emergencial";
+import { registrarRotasReimpressao } from "./reimpressao"; // Importando rota simplificada para reimpressão
 
 // Middleware to check if the user is authenticated
 function isAuthenticated(req: Request, res: Response, next: Function) {
@@ -1431,6 +1432,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     });
   });
+  
+  // Registrar rotas de reimpressão independente (simplificadas)
+  console.log("[ROUTES] Registrando rotas de reimpressão independente");
+  registrarRotasReimpressao(app);
   
   return httpServer;
 }
