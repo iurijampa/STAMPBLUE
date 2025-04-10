@@ -85,21 +85,25 @@ export default function ReimpressaoProcessamento() {
     try {
       setIsLoading(true);
       
-      // Simulação de processamento no servidor
-      // Criar uma nova lista de solicitações com o status atualizado
-      const updatedSolicitacoes = solicitacoes.map(s => {
-        if (s.id === selectedRequest.id) {
-          return {
-            ...s,
-            status: status,
-            processedBy: processedBy
-          };
-        }
-        return s;
+      // Enviar solicitação para API
+      const response = await fetch(`/api/reimpressao-simples/${selectedRequest.id}/processar`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          status: status,
+          processedBy: processedBy,
+        }),
       });
       
-      // Aguardar um pouco para simular chamada de API
-      await new Promise(resolve => setTimeout(resolve, 500));
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.message || "Erro ao processar solicitação");
+      }
+      
+      console.log("Resposta do servidor:", result);
       
       // Atualizar a lista local
       setSolicitacoes(solicitacoes.filter(s => s.id !== selectedRequest.id));

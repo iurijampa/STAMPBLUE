@@ -643,6 +643,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // Rota para processar solicitações (atualizar status)
+  app.post("/api/reimpressao-simples/:id/processar", isAuthenticated, (req, res) => {
+    try {
+      const { id } = req.params;
+      const { status, processedBy } = req.body;
+      
+      console.log(`🆘 PROCESSANDO SOLICITAÇÃO #${id}:`, { status, processedBy });
+      
+      // Validação básica
+      if (!id || !status || !processedBy) {
+        return res.status(400).json({
+          success: false,
+          message: "Dados incompletos. ID, status e processedBy são obrigatórios"
+        });
+      }
+      
+      // Verificar se a solicitação existe
+      const solicitacaoIndex = solicitacoesReimpressao.findIndex(s => s.id === Number(id));
+      if (solicitacaoIndex === -1) {
+        return res.status(404).json({
+          success: false,
+          message: "Solicitação não encontrada"
+        });
+      }
+      
+      // Atualizar o status
+      const solicitacaoAtualizada = {
+        ...solicitacoesReimpressao[solicitacaoIndex],
+        status: status,
+        processedBy: processedBy,
+        processedAt: new Date().toISOString()
+      };
+      
+      // Substituir na lista
+      solicitacoesReimpressao[solicitacaoIndex] = solicitacaoAtualizada;
+      
+      console.log(`🆘 SOLICITAÇÃO #${id} PROCESSADA:`, solicitacaoAtualizada);
+      
+      return res.json({
+        success: true,
+        message: `Solicitação ${status === 'concluida' ? 'concluída' : 'rejeitada'} com sucesso`,
+        data: solicitacaoAtualizada
+      });
+    } catch (error) {
+      console.error("🆘 ERRO AO PROCESSAR SOLICITAÇÃO:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Erro ao processar solicitação",
+        error: error instanceof Error ? error.message : "Erro desconhecido"
+      });
+    }
+  });
+  
   // Rota original de reimpressão - DESATIVADA
   app.post("/api/reprint-requests", isAuthenticated, async (req, res) => {
     try {

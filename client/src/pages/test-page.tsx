@@ -57,6 +57,7 @@ export default function TestPage() {
           <TabsList className="mb-6">
             <TabsTrigger value="criar">CRIAR SOLICITAÇÃO</TabsTrigger>
             <TabsTrigger value="listar">LISTAR SOLICITAÇÕES</TabsTrigger>
+            <TabsTrigger value="processar">IMPRESSÃO - PROCESSAR</TabsTrigger>
           </TabsList>
           
           <TabsContent value="criar">
@@ -69,6 +70,16 @@ export default function TestPage() {
           
           <TabsContent value="listar">
             <ListaReimpressaoSimples />
+          </TabsContent>
+          
+          <TabsContent value="processar">
+            <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-md">
+              <h3 className="font-medium text-amber-800 mb-1">Processamento (Setor de Impressão)</h3>
+              <p className="text-amber-700 text-sm">
+                Esta interface deve ser usada apenas pelo setor de impressão para processar solicitações de reimpressão.
+              </p>
+            </div>
+            <ReimpressaoProcessamento />
           </TabsContent>
         </Tabs>
       </div>

@@ -1,19 +1,11 @@
 import React, { useState } from "react";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
+import { Label } from "./ui/label";
 import { Textarea } from "./ui/textarea";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "./ui/card";
 import { toast } from "@/hooks/use-toast";
-import { AlertCircle, CheckCircle } from "lucide-react";
-import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
-
-interface ReprintRequestData {
-  activityId: number;
-  requestedBy: string;
-  reason: string;
-  details?: string;
-  quantity?: number;
-}
+import { Printer, AlertCircle } from "lucide-react";
 
 interface SolucaoReimpressaoProps {
   activityId: number;
@@ -21,209 +13,194 @@ interface SolucaoReimpressaoProps {
   onSuccess?: () => void;
 }
 
-export default function SolucaoReimpressao({ activityId, activityTitle, onSuccess }: SolucaoReimpressaoProps) {
-  const [formData, setFormData] = useState<ReprintRequestData>({
-    activityId,
-    requestedBy: "",
-    reason: "",
-    details: "",
-    quantity: 1,
-  });
-  
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [status, setStatus] = useState<"idle" | "success" | "error">("idle");
-  const [errorMessage, setErrorMessage] = useState("");
-  
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: name === "quantity" ? Number(value) : value
-    }));
-  };
+export default function SolucaoReimpressao({ 
+  activityId, 
+  activityTitle,
+  onSuccess
+}: SolucaoReimpressaoProps) {
+  const [requestedBy, setRequestedBy] = useState("");
+  const [reason, setReason] = useState("");
+  const [details, setDetails] = useState("");
+  const [quantity, setQuantity] = useState("1");
+  const [isLoading, setIsLoading] = useState(false);
   
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validação básica
-    if (!formData.requestedBy.trim()) {
+    // Validação simples
+    if (!requestedBy.trim()) {
       toast({
         title: "Erro de validação",
         description: "Informe quem está solicitando a reimpressão",
-        variant: "destructive",
+        variant: "destructive"
       });
       return;
     }
     
-    if (!formData.reason.trim()) {
+    if (!reason.trim()) {
       toast({
         title: "Erro de validação",
         description: "Informe o motivo da reimpressão",
-        variant: "destructive",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    const quantityNum = parseInt(quantity);
+    if (isNaN(quantityNum) || quantityNum < 1) {
+      toast({
+        title: "Erro de validação",
+        description: "A quantidade deve ser um número positivo",
+        variant: "destructive"
       });
       return;
     }
     
     try {
-      setIsSubmitting(true);
-      setStatus("idle");
-      setErrorMessage("");
+      setIsLoading(true);
       
-      console.log("Enviando solicitação:", formData);
-      
-      const response = await fetch("/api/reimpressao-simples", {
+      // Enviar solicitação para API
+      const response = await fetch("/api/reimpressao-simples/criar", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          activityId,
+          requestedBy,
+          reason,
+          details: details.trim() || undefined,
+          quantity: quantityNum,
+          fromDepartment: "batida",
+          toDepartment: "impressao",
+        }),
       });
       
       const result = await response.json();
       
       if (!response.ok) {
-        throw new Error(result.mensagem || "Erro ao processar solicitação");
+        throw new Error(result.message || "Erro ao criar solicitação");
       }
       
-      console.log("Resposta:", result);
+      // Limpar formulário
+      setRequestedBy("");
+      setReason("");
+      setDetails("");
+      setQuantity("1");
       
-      // Sucesso
-      setStatus("success");
+      // Notificar sucesso
       toast({
-        title: "Solicitação enviada com sucesso",
-        description: "O setor de impressão foi notificado da sua solicitação",
+        title: "Solicitação criada",
+        description: "Sua solicitação de reimpressão foi enviada com sucesso",
       });
       
-      // Resetar form depois de alguns segundos
-      setTimeout(() => {
-        setFormData({
-          activityId,
-          requestedBy: "",
-          reason: "",
-          details: "",
-          quantity: 1,
-        });
-        
-        if (onSuccess) {
-          onSuccess();
-        }
-      }, 3000);
+      // Chamar callback de sucesso se fornecido
+      if (onSuccess) {
+        onSuccess();
+      }
       
     } catch (error) {
       console.error("Erro ao enviar solicitação:", error);
-      setStatus("error");
-      setErrorMessage(error instanceof Error ? error.message : "Erro desconhecido");
-      
       toast({
-        title: "Erro ao enviar solicitação",
-        description: error instanceof Error ? error.message : "Falha na comunicação com o servidor",
-        variant: "destructive",
+        title: "Erro ao criar solicitação",
+        description: error instanceof Error ? error.message : "Erro desconhecido",
+        variant: "destructive"
       });
     } finally {
-      setIsSubmitting(false);
+      setIsLoading(false);
     }
   };
   
   return (
-    <Card className="w-full max-w-md mx-auto">
-      <CardHeader>
-        <CardTitle>Solicitar Reimpressão - Modo Simples</CardTitle>
-        <CardDescription>
-          Solicitação para: {activityTitle} (ID: {activityId})
-        </CardDescription>
-      </CardHeader>
-      
-      <CardContent>
-        {status === "success" && (
-          <Alert className="mb-4 bg-green-50 border-green-600">
-            <CheckCircle className="h-4 w-4 text-green-600" />
-            <AlertTitle className="text-green-700">Solicitação Enviada!</AlertTitle>
-            <AlertDescription className="text-green-700">
-              Sua solicitação foi enviada com sucesso. O setor de impressão foi notificado.
-            </AlertDescription>
-          </Alert>
-        )}
+    <form onSubmit={handleSubmit}>
+      <Card className="w-full">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Printer className="h-5 w-5" />
+            <span>Solicitar Reimpressão</span>
+          </CardTitle>
+          <CardDescription>
+            Faça uma solicitação de reimpressão para o pedido {activityId} - {activityTitle}
+          </CardDescription>
+        </CardHeader>
         
-        {status === "error" && (
-          <Alert className="mb-4" variant="destructive">
-            <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Erro ao processar solicitação</AlertTitle>
-            <AlertDescription>
-              {errorMessage || "Ocorreu um erro ao enviar sua solicitação. Tente novamente."}
-            </AlertDescription>
-          </Alert>
-        )}
-        
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <CardContent className="space-y-4">
+          <div className="bg-blue-50 p-3 rounded-md border border-blue-100 mb-2">
+            <h3 className="text-sm font-medium text-blue-800 mb-1">Informação</h3>
+            <p className="text-sm text-blue-700">
+              Esta solicitação será enviada ao setor de impressão para reimpressão das peças com problemas.
+            </p>
+          </div>
+          
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="requestedBy">Solicitado por</Label>
+              <Input
+                id="requestedBy"
+                placeholder="Seu nome"
+                value={requestedBy}
+                onChange={(e) => setRequestedBy(e.target.value)}
+                required
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="quantity">Quantidade</Label>
+              <Input
+                id="quantity"
+                type="number"
+                min="1"
+                placeholder="Quantidade a ser reimpressa"
+                value={quantity}
+                onChange={(e) => setQuantity(e.target.value)}
+                required
+              />
+            </div>
+          </div>
+          
           <div className="space-y-2">
-            <label className="text-sm font-medium">
-              Solicitado por <span className="text-red-500">*</span>
-            </label>
+            <Label htmlFor="reason">Motivo da reimpressão</Label>
             <Input
-              name="requestedBy"
-              value={formData.requestedBy}
-              onChange={handleChange}
-              placeholder="Nome do responsável pela solicitação"
-              disabled={isSubmitting || status === "success"}
+              id="reason"
+              placeholder="Ex: Cor errada, falha na impressão, etc."
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
               required
             />
           </div>
           
           <div className="space-y-2">
-            <label className="text-sm font-medium">
-              Motivo da reimpressão <span className="text-red-500">*</span>
-            </label>
-            <Input
-              name="reason"
-              value={formData.reason}
-              onChange={handleChange}
-              placeholder="Ex: Peças com defeito na impressão"
-              disabled={isSubmitting || status === "success"}
-              required
-            />
-          </div>
-          
-          <div className="space-y-2">
-            <label className="text-sm font-medium">
-              Detalhes adicionais
-            </label>
+            <Label htmlFor="details">Detalhes adicionais (opcional)</Label>
             <Textarea
-              name="details"
-              value={formData.details}
-              onChange={handleChange}
-              placeholder="Descreva detalhes específicos sobre as peças que precisam ser reimpressas"
-              disabled={isSubmitting || status === "success"}
+              id="details"
+              placeholder="Forneça mais detalhes sobre o problema, se necessário"
+              value={details}
+              onChange={(e) => setDetails(e.target.value)}
               rows={3}
             />
           </div>
+        </CardContent>
+        
+        <CardFooter className="flex justify-end space-x-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              setRequestedBy("");
+              setReason("");
+              setDetails("");
+              setQuantity("1");
+            }}
+            disabled={isLoading}
+          >
+            Limpar
+          </Button>
           
-          <div className="space-y-2">
-            <label className="text-sm font-medium">
-              Quantidade
-            </label>
-            <Input
-              name="quantity"
-              type="number"
-              value={formData.quantity}
-              onChange={handleChange}
-              min={1}
-              disabled={isSubmitting || status === "success"}
-            />
-          </div>
-        </form>
-      </CardContent>
-      
-      <CardFooter className="flex justify-end gap-3">
-        <Button variant="outline">
-          Cancelar
-        </Button>
-        <Button 
-          onClick={handleSubmit} 
-          disabled={isSubmitting || status === "success"}
-        >
-          {isSubmitting ? "Enviando..." : "Enviar Solicitação"}
-        </Button>
-      </CardFooter>
-    </Card>
+          <Button type="submit" disabled={isLoading}>
+            {isLoading ? "Enviando..." : "Enviar Solicitação"}
+          </Button>
+        </CardFooter>
+      </Card>
+    </form>
   );
 }

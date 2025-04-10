@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Switch, Route, Redirect } from "wouter";
+import { Switch, Route, Redirect, useLocation } from "wouter";
 import { Toaster } from "@/components/ui/toaster";
 import { useQueryClient } from "@tanstack/react-query";
 import NotFound from "@/pages/not-found";
@@ -22,6 +22,12 @@ function DashboardRedirect() {
   const { user, isLoading } = useAuth();
   const [isDataLoading, setIsDataLoading] = useState(false);
   const queryClient = useQueryClient();
+  
+  // Verificar se estamos em páginas que não precisam de autenticação
+  const [location] = useLocation();
+  if (location.startsWith('/test') || location.startsWith('/teste')) {
+    return null; // Se estamos na página de teste, não redirecione
+  }
   
   // Efeito para pré-carregar os dados do departamento quando o usuário é carregado
   useEffect(() => {
@@ -106,6 +112,7 @@ function App() {
             <Route path="/" component={DashboardRedirect} />
             <Route path="/auth" component={AuthPage} />
             <Route path="/test" component={TestPage} />
+            <Route path="/teste" component={TestPage} />
             <Route path="/admin/dashboard" component={AdminDashboard} />
             <Route path="/admin/users" component={AdminUsers} />
             <Route path="/department/:department/dashboard" component={DepartmentDashboard} />
