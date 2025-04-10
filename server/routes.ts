@@ -70,7 +70,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const solicitacoesEmergenciais: any[] = [];
   
   // Rota para criar solicitação emergencial
-  app.post("/api/reimpressao-emergencial/criar", (req, res) => {
+  app.post("/api/reimpressao-emergencial/criar", async (req, res) => {
     try {
       const { activityId, requestedBy, reason, details, quantity } = req.body;
       
@@ -85,10 +85,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // Criar solicitação
+      // Buscar título da atividade para adicionar na solicitação
+      let activityTitle = `Pedido #${activityId}`;
+      try {
+        const activity = await storage.getActivity(Number(activityId));
+        if (activity) {
+          activityTitle = activity.title;
+          console.log(`🚨 Título da atividade encontrado: ${activityTitle}`);
+        }
+      } catch (err) {
+        console.warn(`⚠️ Não foi possível buscar o título da atividade #${activityId}:`, err);
+      }
+      
+      // Criar solicitação com o título da atividade
       const novaSolicitacao = {
         id: Date.now(),
         activityId: Number(activityId),
+        activityTitle, // Adicionado o título da atividade
         requestedBy,
         reason,
         details: details || "",
@@ -122,8 +135,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // Rota para listar solicitações emergenciais (todas)
-  app.get("/api/reimpressao-emergencial/listar", (req, res) => {
+  app.get("/api/reimpressao-emergencial/listar", async (req, res) => {
     console.log("🚨 LISTANDO SOLICITAÇÕES EMERGENCIAIS:", solicitacoesEmergenciais.length);
+    
+    // Para cada solicitação, verificar se já possui título da atividade, se não, buscar o título
+    for (let i = 0; i < solicitacoesEmergenciais.length; i++) {
+      const solicitacao = solicitacoesEmergenciais[i];
+      
+      // Se a solicitação não tiver título da atividade, buscar o título
+      if (!solicitacao.activityTitle) {
+        try {
+          const activity = await storage.getActivity(solicitacao.activityId);
+          if (activity) {
+            solicitacao.activityTitle = activity.title;
+            console.log(`🚨 Título adicionado para atividade #${solicitacao.activityId}: ${solicitacao.activityTitle}`);
+          } else {
+            solicitacao.activityTitle = `Pedido #${solicitacao.activityId}`;
+          }
+        } catch (err) {
+          console.warn(`⚠️ Erro ao buscar título para atividade #${solicitacao.activityId}:`, err);
+          solicitacao.activityTitle = `Pedido #${solicitacao.activityId}`;
+        }
+      }
+    }
+    
     res.json(solicitacoesEmergenciais);
   });
   
