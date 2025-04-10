@@ -922,7 +922,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         deadline: null, // Adicionando campo obrigatório
         quantity: parseInt(quantity) || 1,
         notes: notes,
-        clientName: "Reimpressão"
+        clientName: "Reimpressão",
+        isReprintRequest: true // Marcar como solicitação de reimpressão
+        // Removido o campo previousDepartment que não existe na tabela
       });
       
       // Criar solicitação de reimpressão associada à atividade temporária
