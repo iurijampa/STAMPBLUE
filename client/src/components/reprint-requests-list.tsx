@@ -22,6 +22,7 @@ interface ReprintRequest {
   id: number;
   activityId: number;
   activityTitle?: string;
+  activityImage?: string;
   requestedBy: string;
   reason: string;
   details?: string;
@@ -159,17 +160,32 @@ export default function ReprintRequestsList({ department, activity }: ReprintReq
                 onClick={() => handleViewRequest(request)}>
                 <CardHeader className="p-3 pb-0">
                   <div className="flex justify-between items-start">
-                    <CardTitle className="text-base">
-                      {request.activityTitle || `Pedido #${request.activityId}`}
-                    </CardTitle>
+                    <div className="flex items-start gap-3">
+                      {/* Imagem da atividade como miniatura */}
+                      {request.activityImage && (
+                        <div className="flex-shrink-0 w-12 h-12 rounded-md overflow-hidden border">
+                          <img 
+                            src={request.activityImage} 
+                            alt="Miniatura do pedido" 
+                            className="w-full h-full object-cover"
+                            onError={(e) => (e.currentTarget.style.display = 'none')}
+                          />
+                        </div>
+                      )}
+                      <div>
+                        <CardTitle className="text-base">
+                          {request.activityTitle || `Pedido #${request.activityId}`}
+                        </CardTitle>
+                        <CardDescription className="text-xs">
+                          Solicitado por: {request.requestedBy} em {new Date(request.requestedAt).toLocaleDateString()}
+                        </CardDescription>
+                      </div>
+                    </div>
                     <div className="flex space-x-2">
                       {getPriorityBadge(request.priority)}
                       {getStatusBadge(request.status)}
                     </div>
                   </div>
-                  <CardDescription className="text-xs">
-                    Solicitado por: {request.requestedBy} em {new Date(request.requestedAt).toLocaleDateString()}
-                  </CardDescription>
                 </CardHeader>
                 <CardContent className="p-3 pt-0">
                   <p className="text-sm truncate">{request.reason}</p>

@@ -186,11 +186,24 @@ export default function ViewReprintRequestModal({ isOpen, onClose, request }: Vi
           <Card>
             <CardHeader className="pb-2">
               <div className="flex justify-between">
-                <div>
-                  <CardTitle>Informações da Solicitação</CardTitle>
-                  <CardDescription>
-                    Criado em {new Date(request.requestedAt).toLocaleString()}
-                  </CardDescription>
+                <div className="flex items-start gap-3">
+                  {/* Imagem da atividade como miniatura */}
+                  {request.activityImage && (
+                    <div className="flex-shrink-0 w-16 h-16 rounded-md overflow-hidden border">
+                      <img 
+                        src={request.activityImage} 
+                        alt="Miniatura do pedido" 
+                        className="w-full h-full object-cover"
+                        onError={(e) => (e.currentTarget.style.display = 'none')}
+                      />
+                    </div>
+                  )}
+                  <div>
+                    <CardTitle>Informações da Solicitação</CardTitle>
+                    <CardDescription>
+                      Criado em {new Date(request.requestedAt).toLocaleString()}
+                    </CardDescription>
+                  </div>
                 </div>
                 <div className="flex flex-col gap-1 items-end">
                   {getPriorityBadge(request.priority)}
