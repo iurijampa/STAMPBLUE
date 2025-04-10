@@ -92,7 +92,7 @@ export default function ReprintRequestModal({ isOpen, onClose, activity, onSucce
     enabled: !activity, // Só busca se não tiver atividade específica
   });
 
-  // Função para lidar com o envio do formulário
+  // Função para lidar com o envio do formulário - VERSÃO MODO DEUS
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     
@@ -104,80 +104,137 @@ export default function ReprintRequestModal({ isOpen, onClose, activity, onSucce
         throw new Error("Nenhuma atividade selecionada para reimpressão");
       }
       
-      console.log("Atividade selecionada para reimpressão:", activity);
-      console.log("ID da atividade:", activity.id, "Título:", activity.title);
+      // Garantir que temos um ID válido
+      if (!activity.id || isNaN(Number(activity.id))) {
+        throw new Error("ID da atividade inválido ou não encontrado");
+      }
       
-      // Obter valores do formulário preenchidos pelo usuário
-      const userFormValues = form.getValues();
+      // Inicialização segura de dados
+      const activityId = Number(activity.id);
+      const formData = form.getValues();
       
-      // Criar objeto explícito com exatamente os campos esperados pelo backend
+      // Validar campos obrigatórios manualmente
+      if (!formData.requestedBy || formData.requestedBy.trim() === "") {
+        toast({
+          title: "Campo obrigatório",
+          description: "Informe quem está solicitando a reimpressão",
+          variant: "destructive",
+        });
+        setIsSubmitting(false);
+        return;
+      }
+      
+      if (!formData.reason || formData.reason.trim() === "") {
+        toast({
+          title: "Campo obrigatório",
+          description: "Informe o motivo da reimpressão",
+          variant: "destructive",
+        });
+        setIsSubmitting(false);
+        return;
+      }
+      
+      // Preparar dados no formato exato que o backend espera
       const dataToSubmit = {
-        activityId: parseInt(String(activity.id)), // Garantir que é um número
-        requestedBy: userFormValues.requestedBy,
-        reason: userFormValues.reason,
-        details: userFormValues.details || "",
-        quantity: parseInt(String(userFormValues.quantity)) || 1,
-        priority: userFormValues.priority || "normal",
+        activityId: activityId,
+        requestedBy: formData.requestedBy.trim(),
+        reason: formData.reason.trim(),
+        details: (formData.details || "").trim(),
+        quantity: formData.quantity ? parseInt(String(formData.quantity)) : 1,
+        priority: formData.priority || "normal",
         fromDepartment: "batida",
         toDepartment: "impressao"
       };
       
-      console.log("Enviando solicitação (dados processados):", dataToSubmit);
-      console.log("activityId tipo:", typeof dataToSubmit.activityId, "valor:", dataToSubmit.activityId);
+      console.log("MODO DEUS - Dados sendo enviados:", JSON.stringify(dataToSubmit, null, 2));
       
-      // Fazer a requisição diretamente em vez de usar a mutação
-      const response = await fetch("/api/reprint-requests", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(dataToSubmit),
-      });
+      // Fazer a requisição com tratamento robusto de erro
+      let response;
+      try {
+        response = await fetch("/api/reprint-requests", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(dataToSubmit),
+          // Evitar cache e garantir conclusão da requisição
+          cache: "no-cache",
+          credentials: "same-origin",
+        });
+      } catch (networkError) {
+        console.error("Erro de rede ao enviar solicitação:", networkError);
+        throw new Error("Falha na conexão com o servidor. Verifique sua internet.");
+      }
       
-      // Capturar tanto o texto quanto o objeto de erro
-      const responseText = await response.text();
-      console.log("Resposta do servidor:", responseText);
+      // Capturar a resposta texto para diagnóstico completo
+      let responseText;
+      try {
+        responseText = await response.text();
+        console.log("MODO DEUS - Resposta completa do servidor:", responseText);
+      } catch (readError) {
+        console.error("Erro ao ler resposta do servidor:", readError);
+        throw new Error("Falha ao processar resposta do servidor");
+      }
       
-      // Se não for OK, tentar parsear como JSON ou usar o texto como mensagem
+      // Validar resposta HTTP
       if (!response.ok) {
-        let errorMessage = "Erro ao enviar solicitação";
+        let errorMessage = `Erro ${response.status}: Falha ao enviar solicitação`;
+        
+        // Tentar extrair mensagem de erro do JSON
         try {
           const errorData = JSON.parse(responseText);
           errorMessage = errorData.message || errorMessage;
         } catch (parseError) {
-          errorMessage = responseText || errorMessage;
+          // Se não for JSON, usar o texto como está se tiver conteúdo
+          if (responseText && responseText.trim() !== "") {
+            errorMessage = responseText;
+          }
         }
+        
+        console.error("MODO DEUS - Erro detalhado:", {
+          status: response.status,
+          statusText: response.statusText,
+          errorMessage,
+          responseText
+        });
+        
         throw new Error(errorMessage);
       }
       
-      // Parsear resultado (se necessário)
+      // Sucesso! Processar resultado
       let result;
       try {
         result = JSON.parse(responseText);
-        console.log("Solicitação enviada com sucesso!", result);
-      } catch (e) {
-        console.log("Resposta não é um JSON válido, mas requisição foi bem-sucedida");
+        console.log("MODO DEUS - Solicitação processada com sucesso:", result);
+      } catch (parseError) {
+        // Mesmo se não conseguirmos parsear o JSON, a requisição foi bem-sucedida
+        console.log("Resposta não é JSON válido, mas requisição foi bem-sucedida");
       }
       
-      // Invalidar a lista de solicitações para atualizar automaticamente
+      // Atualizações de UI e limpeza
       queryClient.invalidateQueries({ queryKey: ['/api/reprint-requests/from-department/batida'] });
       
-      // Exibir mensagem de sucesso
+      // Exibir confirmação visual
       toast({
-        title: "Solicitação enviada com sucesso",
-        description: "O setor de impressão foi notificado da sua solicitação.",
+        title: "✅ Solicitação enviada com sucesso",
+        description: "O setor de impressão foi notificado sobre sua solicitação de reimpressão.",
         variant: "default",
       });
       
-      // Fechar modal e executar callback de sucesso
-      onSuccess();
-      onClose();
+      // Fechar o modal e limpar estado
+      setTimeout(() => {
+        onSuccess();
+        onClose();
+      }, 500); // Pequeno delay para garantir que o usuário vê a confirmação
+      
     } catch (error) {
-      console.error("Erro ao enviar solicitação:", error);
+      console.error("MODO DEUS - Erro capturado:", error);
       setIsSubmitting(false);
+      
+      // Garantir feedback claro para o usuário
       toast({
         title: "Erro ao enviar solicitação",
-        description: error instanceof Error ? error.message : "Falha ao conectar com o servidor",
+        description: error instanceof Error ? error.message : "Falha desconhecida ao conectar com o servidor",
         variant: "destructive",
       });
     }
