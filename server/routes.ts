@@ -941,14 +941,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
         requestedAt: new Date()
       };
       
-      // Validar os dados usando o schema
+      // Validar os dados usando o schema de forma mais segura
       let reprintRequest;
       try {
-        const validatedData = insertReprintRequestSchema.parse(reprintData);
+        // Log detalhado dos dados antes da validação
+        console.log("Dados para reimpressão:", JSON.stringify(reprintData, null, 2));
+        
+        // Validar e garantir que todos os campos obrigatórios estão presentes
+        const validatedData = {
+          activityId: temporaryActivity.id,
+          quantity: parseInt(quantity) || 1,
+          reason: reason || "Solicitação de reimpressão independente",
+          details: req.body.details || "",
+          priority: priority || "normal",
+          requestedBy: requestedBy,
+          requestedDepartment: "batida",
+          targetDepartment: "impressao",
+          status: "pending",
+          requestedAt: new Date()
+        };
+        
         reprintRequest = await storage.createReprintRequest(validatedData);
-      } catch (validationError) {
-        console.error("Erro de validação:", validationError);
-        throw new Error("Dados inválidos para solicitação de reimpressão");
+        console.log("Reimpressão criada com sucesso:", reprintRequest.id);
+      } catch (error) {
+        console.error("Erro detalhado ao criar reimpressão:", error);
+        if (error instanceof Error) {
+          console.error("Mensagem de erro:", error.message);
+          console.error("Stack trace:", error.stack);
+        }
+        throw new Error("Erro ao criar solicitação de reimpressão: " + (error instanceof Error ? error.message : "erro desconhecido"));
       }
       
       // Notificar o setor de impressão
