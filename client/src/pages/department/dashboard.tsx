@@ -6,7 +6,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useCallback, useEffect, useState, useRef } from "react";
 import { User, Activity } from "@shared/schema";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, CalendarClock, Clock, Eye, RefreshCw, RotateCcw } from "lucide-react";
+import { Loader2, CalendarClock, Clock, Eye, RefreshCw, RotateCcw, Printer } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +15,8 @@ import Layout from "@/components/Layout";
 import ViewActivityModal from "@/components/view-activity-modal";
 import CompleteActivityModal from "@/components/complete-activity-modal";
 import ReturnActivityModal from "@/components/return-activity-modal";
+import ReprintRequestModal from "@/components/reprint-request-modal";
+import ReprintRequestsList from "@/components/reprint-requests-list";
 import { ActivitySkeleton, StatsSkeleton } from "@/components/activity-skeleton";
 import { SoundToggleButton, SoundTestButton } from "@/components/SoundManagerSimples";
 
@@ -37,6 +39,8 @@ export default function DepartmentDashboard() {
   const [viewActivity, setViewActivity] = useState<ActivityWithNotes | null>(null);
   const [completeActivity, setCompleteActivity] = useState<ActivityWithNotes | null>(null);
   const [returnActivity, setReturnActivity] = useState<ActivityWithNotes | null>(null);
+  const [reprintActivity, setReprintActivity] = useState<ActivityWithNotes | null>(null);
+  const [showReprintRequests, setShowReprintRequests] = useState(false);
   
   // Obtendo o departamento da URL
   const department = params.department;
@@ -418,6 +422,18 @@ export default function DepartmentDashboard() {
     refetchActivities();
     refetchStats();
   };
+  
+  // Função para tratar o sucesso da solicitação de reimpressão
+  const handleReprintRequested = () => {
+    toast({
+      title: "Solicitação enviada",
+      description: "A solicitação de reimpressão foi enviada para o setor de impressão.",
+    });
+    setReprintActivity(null);
+    
+    // Recarregar dados após a solicitação de reimpressão
+    setShowReprintRequests(true); // Mostrar lista de solicitações após criar uma nova
+  };
 
   // Função para capitalizar a primeira letra
   const capitalize = (text: string) => {
@@ -705,6 +721,19 @@ export default function DepartmentDashboard() {
                             <RotateCcw className="h-4 w-4 mr-1" />
                             <span>Retornar</span>
                           </Button>
+                          
+                          {/* Botão de solicitar reimpressão (apenas para o setor de Batida) */}
+                          {userDepartment === "batida" && (
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              className="flex items-center text-blue-600 hover:text-blue-700"
+                              onClick={() => setReprintActivity(activity)}
+                            >
+                              <Printer className="h-4 w-4 mr-1" />
+                              <span>Solicitar Reimpressão</span>
+                            </Button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -740,6 +769,33 @@ export default function DepartmentDashboard() {
             activityId={returnActivity?.id || null}
             onSuccess={handleActivityReturned}
           />
+          
+          {/* Modal de solicitação de reimpressão */}
+          <ReprintRequestModal
+            isOpen={!!reprintActivity}
+            onClose={() => setReprintActivity(null)}
+            activity={reprintActivity}
+            onSuccess={handleReprintRequested}
+          />
+          
+          {/* Seção de solicitações de reimpressão (apenas para o setor de Batida) */}
+          {userDepartment === "batida" && (
+            <div className="mt-8">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold">Sistema de Reimpressão</h3>
+                <Button 
+                  variant="outline"
+                  onClick={() => setShowReprintRequests(!showReprintRequests)}
+                >
+                  {showReprintRequests ? "Ocultar Solicitações" : "Ver Solicitações"}
+                </Button>
+              </div>
+              
+              {showReprintRequests && (
+                <ReprintRequestsList department={userDepartment} />
+              )}
+            </div>
+          )}
         </>
       )}
     </Layout>
