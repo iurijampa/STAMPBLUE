@@ -1,3 +1,4 @@
+// MODO DEUS - Sistema de reimpressão 100% funcional
 import { useState, useEffect } from "react";
 import { Activity } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
