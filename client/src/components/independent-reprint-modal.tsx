@@ -79,7 +79,7 @@ export default function IndependentReprintModal({
       submitData.append("requestedBy", formData.requestedBy);
       submitData.append("quantity", formData.quantity);
       submitData.append("priority", formData.priority);
-      submitData.append("details", formData.details);
+      submitData.append("details", formData.details || "");
       submitData.append("reason", formData.reason);
       submitData.append("department", user?.department || "batida");
       
@@ -87,6 +87,16 @@ export default function IndependentReprintModal({
       if (selectedImage) {
         submitData.append("image", selectedImage);
       }
+
+      console.log("Enviando dados para reimpressão independente:", {
+        title: formData.title,
+        description: formData.description,
+        requestedBy: formData.requestedBy,
+        quantity: formData.quantity,
+        priority: formData.priority,
+        details: formData.details || "",
+        reason: formData.reason,
+      });
 
       // Enviar solicitação para o backend
       const response = await fetch("/api/reprint-requests/independent", {

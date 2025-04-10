@@ -142,18 +142,26 @@ export const reprintRequests = pgTable("reprint_requests", {
   receivedAt: timestamp("received_at"),
 });
 
-export const insertReprintRequestSchema = createInsertSchema(reprintRequests).pick({
-  activityId: true,
-  quantity: true,
-  reason: true,
-  details: true,
-  requestedBy: true,
-  requestedDepartment: true, 
-  targetDepartment: true,
-  priority: true,
-  status: true,
-  requestedAt: true,
-});
+export const insertReprintRequestSchema = createInsertSchema(reprintRequests)
+  .pick({
+    activityId: true,
+    quantity: true,
+    reason: true,
+    details: true,
+    requestedBy: true,
+    requestedDepartment: true, 
+    targetDepartment: true,
+    priority: true,
+    status: true,
+    requestedAt: true,
+  })
+  .extend({
+    // Permitir que esses campos sejam opcionais com valores padrão
+    details: z.string().optional().nullable(),
+    priority: z.enum(["normal", "urgent"]).optional().default("normal"),
+    status: z.enum(["pending", "completed", "cancelled"]).optional().default("pending"),
+    requestedAt: z.date().optional().default(() => new Date()),
+  });
 
 // Export types
 export type User = typeof users.$inferSelect;
