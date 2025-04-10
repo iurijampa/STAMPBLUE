@@ -40,6 +40,7 @@ interface ReprintRequest {
   id: number;
   activityId: number;
   activityTitle?: string;
+  activityImage?: string;
   requestedBy: string;
   reason: string;
   details?: string;
