@@ -87,7 +87,7 @@ export default function ReprintRequestModal({ isOpen, onClose, activity, onSucce
   }, [activity, form]);
 
   // Buscar atividades caso não tenha uma atividade específica
-  const { data: activities = [], isLoading: isLoadingActivities } = useQuery({
+  const { data: activities = [], isLoading: isLoadingActivities } = useQuery<Activity[]>({
     queryKey: ["/api/activities"],
     enabled: !activity, // Só busca se não tiver atividade específica
   });
@@ -99,28 +99,21 @@ export default function ReprintRequestModal({ isOpen, onClose, activity, onSucce
     try {
       setIsSubmitting(true);
       
-      // Obter valores do formulário
+      // Garantir que temos uma atividade válida
+      if (!activity) {
+        throw new Error("Nenhuma atividade selecionada para reimpressão");
+      }
+      
+      console.log("Atividade selecionada para reimpressão:", activity);
+      console.log("ID da atividade:", activity.id, "Título:", activity.title);
+      
+      // Obter valores do formulário, mas substitua o activityId pelo valor correto
       const formValues = form.getValues();
       
-      // Garantir que a atividade está definida corretamente
-      let activityId = formValues.activityId;
-      
-      if (activity) {
-        activityId = activity.id;
-        console.log("Usando ID da atividade do prop:", activityId);
-      } else {
-        console.log("Usando ID da atividade do formulário:", activityId);
-      }
-
-      // Validar se a atividade existe
-      if (!activityId || activityId === 0) {
-        throw new Error("Selecione um pedido válido");
-      }
-      
-      // Garantir que os departamentos estão definidos
+      // Garantir que os departamentos estão definidos e o ID da atividade é o correto
       const dataToSubmit = {
         ...formValues,
-        activityId: activityId,
+        activityId: activity.id, // Usar explicitamente o ID da atividade do prop
         fromDepartment: "batida",
         toDepartment: "impressao"
       };
@@ -206,7 +199,7 @@ export default function ReprintRequestModal({ isOpen, onClose, activity, onSucce
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {activities && activities.length > 0 && activities.map((act: Activity) => (
+                        {Array.isArray(activities) && activities.length > 0 && activities.map((act: Activity) => (
                           <SelectItem key={act.id} value={act.id.toString()}>
                             {act.title}
                           </SelectItem>

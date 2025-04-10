@@ -591,19 +591,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Log para debug
-      console.log("Recebido pedido de reimpressão:", req.body);
+      console.log("Recebido pedido de reimpressão:", JSON.stringify(req.body, null, 2));
       
       // Verificar se o activityId foi fornecido
-      if (!req.body.activityId || typeof req.body.activityId !== 'number') {
+      if (req.body.activityId === undefined || req.body.activityId === null) {
         return res.status(400).json({ 
-          message: "ID da atividade inválido ou não informado", 
+          message: "ID da atividade não informado", 
           receivedType: typeof req.body.activityId,
           receivedValue: req.body.activityId 
         });
       }
       
-      // Verificar primeiro se a atividade existe
-      const activityId = parseInt(req.body.activityId.toString(), 10);
+      // Garantir que temos um número para o ID
+      let activityId: number;
+      
+      if (typeof req.body.activityId === 'number') {
+        activityId = req.body.activityId;
+      } else if (typeof req.body.activityId === 'string') {
+        activityId = parseInt(req.body.activityId, 10);
+        if (isNaN(activityId)) {
+          return res.status(400).json({
+            message: "ID da atividade deve ser um número válido",
+            receivedValue: req.body.activityId
+          });
+        }
+      } else {
+        return res.status(400).json({
+          message: "Formato de ID inválido",
+          receivedType: typeof req.body.activityId
+        });
+      }
+      
+      console.log(`Buscando atividade com ID ${activityId} no banco de dados`);
+      
+      // Verificar se a atividade existe
       const activity = await storage.getActivity(activityId);
       
       if (!activity) {
