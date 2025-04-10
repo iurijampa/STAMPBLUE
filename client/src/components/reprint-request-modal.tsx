@@ -1,58 +1,68 @@
 import { useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Activity } from "@shared/schema";
-import { apiRequest } from "@/lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
+import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Loader2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
+import { Activity } from "@shared/schema";
+
+// Extensão da interface Activity para aceitar ActivityWithNotes
+interface ActivityWithExtras extends Activity {
+  previousNotes?: string | null;
+  previousDepartment?: string | null;
+  previousCompletedBy?: string | null;
+  wasReturned?: boolean;
+  returnedBy?: string | null;
+  returnNotes?: string | null;
+  returnedAt?: Date | null;
+}
 
 interface ReprintRequestModalProps {
   isOpen: boolean;
   onClose: () => void;
-  activity: Activity;
+  activity: ActivityWithExtras | null;
 }
 
 export default function ReprintRequestModal({ isOpen, onClose, activity }: ReprintRequestModalProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
+  // Estados para os campos do formulário
   const [quantity, setQuantity] = useState<number>(1);
   const [reason, setReason] = useState<string>("");
   const [details, setDetails] = useState<string>("");
+  const [priority, setPriority] = useState<string>("normal");
   const [requestedBy, setRequestedBy] = useState<string>("");
-  const [priority, setPriority] = useState<"normal" | "urgent">("normal");
   
-  const reprintMutation = useMutation({
+  // Mutação para criar uma solicitação de reimpressão
+  const createRequestMutation = useMutation({
     mutationFn: async (data: {
       activityId: number;
       quantity: number;
       reason: string;
       details?: string;
+      priority: string;
       requestedBy: string;
-      priority: "normal" | "urgent";
     }) => {
       const res = await apiRequest("POST", "/api/reprint-requests", data);
       return await res.json();
     },
     onSuccess: () => {
       toast({
-        title: "Solicitação de reimpressão enviada",
-        description: "O setor de impressão foi notificado e irá processar sua solicitação.",
+        title: "Solicitação enviada",
+        description: "A solicitação de reimpressão foi enviada com sucesso.",
       });
       
-      // Invalidar qualquer cache relacionado a reimpressões
+      // Invalidar queries para atualizar os dados
       queryClient.invalidateQueries({ queryKey: ["/api/department/batida/reprint-requests"] });
       
-      // Limpar o formulário
-      setQuantity(1);
-      setReason("");
-      setDetails("");
-      setRequestedBy("");
-      setPriority("normal");
+      // Resetar o formulário
+      resetForm();
       
       // Fechar o modal
       onClose();
@@ -60,35 +70,35 @@ export default function ReprintRequestModal({ isOpen, onClose, activity }: Repri
     onError: (error) => {
       toast({
         title: "Erro ao solicitar reimpressão",
-        description: error.message || "Ocorreu um erro ao solicitar a reimpressão. Tente novamente.",
+        description: error.message || "Ocorreu um erro ao enviar a solicitação.",
         variant: "destructive",
       });
     },
   });
   
+  // Função para limpar o formulário
+  const resetForm = () => {
+    setQuantity(1);
+    setReason("");
+    setDetails("");
+    setPriority("normal");
+    setRequestedBy("");
+  };
+  
+  // Lógica para o envio do formulário
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validação básica
-    if (!requestedBy.trim()) {
+    if (!activity) {
       toast({
-        title: "Campo obrigatório",
-        description: "Por favor, informe quem está solicitando a reimpressão.",
+        title: "Erro",
+        description: "Nenhuma atividade selecionada.",
         variant: "destructive",
       });
       return;
     }
     
-    if (!reason.trim()) {
-      toast({
-        title: "Campo obrigatório",
-        description: "Por favor, informe o motivo da reimpressão.",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    if (quantity < 1) {
+    if (quantity <= 0) {
       toast({
         title: "Quantidade inválida",
         description: "A quantidade deve ser maior que zero.",
@@ -97,103 +107,148 @@ export default function ReprintRequestModal({ isOpen, onClose, activity }: Repri
       return;
     }
     
+    if (!reason.trim()) {
+      toast({
+        title: "Motivo obrigatório",
+        description: "Por favor, informe o motivo da reimpressão.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (!requestedBy.trim()) {
+      toast({
+        title: "Nome obrigatório",
+        description: "Por favor, informe quem está solicitando a reimpressão.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     // Enviar solicitação
-    reprintMutation.mutate({
+    createRequestMutation.mutate({
       activityId: activity.id,
       quantity,
       reason,
       details: details || undefined,
-      requestedBy,
       priority,
+      requestedBy,
     });
   };
   
+  // Se não tiver atividade, não renderiza nada
+  if (!activity) return null;
+  
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={() => {
+      // Ao fechar, limpar o formulário
+      if (isOpen) resetForm();
+      onClose();
+    }}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>Solicitar Reimpressão</DialogTitle>
         </DialogHeader>
         
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid gap-2">
-            <Label htmlFor="activity-title">Pedido</Label>
+          {/* Informações da atividade */}
+          <div className="bg-muted/30 p-3 rounded-md">
+            <h3 className="font-medium mb-1">{activity.title}</h3>
+            <p className="text-sm text-muted-foreground">{activity.description}</p>
+          </div>
+          
+          {/* Quantidade */}
+          <div className="space-y-2">
+            <Label htmlFor="quantity" className="required">Quantidade</Label>
             <Input 
-              id="activity-title" 
-              value={activity.title} 
-              disabled
-              className="bg-muted"
+              id="quantity"
+              type="number"
+              value={quantity}
+              onChange={(e) => setQuantity(parseInt(e.target.value) || 0)}
+              min={1}
+              required
             />
+            <p className="text-xs text-muted-foreground">
+              Número de peças que precisam ser reimpressas.
+            </p>
           </div>
           
-          <div className="grid grid-cols-2 gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="requested-by" className="required">Solicitado por</Label>
-              <Input 
-                id="requested-by" 
-                value={requestedBy} 
-                onChange={(e) => setRequestedBy(e.target.value)}
-                placeholder="Nome do solicitante"
-                required
-              />
-            </div>
-            
-            <div className="grid gap-2">
-              <Label htmlFor="quantity" className="required">Quantidade</Label>
-              <Input 
-                id="quantity" 
-                type="number" 
-                min={1}
-                max={activity.quantity}
-                value={quantity} 
-                onChange={(e) => setQuantity(Number(e.target.value))}
-                required
-              />
-            </div>
-          </div>
-          
-          <div className="grid gap-2">
-            <Label htmlFor="priority">Prioridade</Label>
-            <RadioGroup defaultValue="normal" value={priority} onValueChange={(val: "normal" | "urgent") => setPriority(val)}>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="normal" id="normal" />
-                <Label htmlFor="normal">Normal</Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="urgent" id="urgent" />
-                <Label htmlFor="urgent">Urgente</Label>
-              </div>
-            </RadioGroup>
-          </div>
-          
-          <div className="grid gap-2">
-            <Label htmlFor="reason" className="required">Motivo da reimpressão</Label>
-            <Textarea 
-              id="reason" 
-              placeholder="Ex: Peça com defeito, erro na impressão, etc."
-              value={reason} 
+          {/* Motivo */}
+          <div className="space-y-2">
+            <Label htmlFor="reason" className="required">Motivo</Label>
+            <Input 
+              id="reason"
+              placeholder="Motivo da reimpressão"
+              value={reason}
               onChange={(e) => setReason(e.target.value)}
               required
             />
+            <p className="text-xs text-muted-foreground">
+              Motivo principal pelo qual as peças precisam ser reimpressas.
+            </p>
           </div>
           
-          <div className="grid gap-2">
+          {/* Detalhes adicionais */}
+          <div className="space-y-2">
             <Label htmlFor="details">Detalhes adicionais</Label>
             <Textarea 
-              id="details" 
-              placeholder="Informações adicionais que possam ajudar o setor de impressão"
-              value={details} 
+              id="details"
+              placeholder="Detalhes adicionais sobre o problema"
+              value={details}
               onChange={(e) => setDetails(e.target.value)}
+              rows={3}
             />
+            <p className="text-xs text-muted-foreground">
+              Informações adicionais que possam ajudar na reimpressão.
+            </p>
+          </div>
+          
+          {/* Prioridade */}
+          <div className="space-y-2">
+            <Label>Prioridade</Label>
+            <RadioGroup value={priority} onValueChange={setPriority} className="flex gap-4">
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="normal" id="normal" />
+                <Label htmlFor="normal" className="font-normal">Normal</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="urgent" id="urgent" />
+                <Label htmlFor="urgent" className="font-normal">Urgente</Label>
+              </div>
+            </RadioGroup>
+            <p className="text-xs text-muted-foreground">
+              Selecione "Urgente" apenas para casos que realmente precisam de atenção imediata.
+            </p>
+          </div>
+          
+          {/* Solicitado por */}
+          <div className="space-y-2">
+            <Label htmlFor="requested-by" className="required">Solicitado por</Label>
+            <Input 
+              id="requested-by"
+              placeholder="Seu nome"
+              value={requestedBy}
+              onChange={(e) => setRequestedBy(e.target.value)}
+              required
+            />
+            <p className="text-xs text-muted-foreground">
+              Informe seu nome para identificação.
+            </p>
           </div>
           
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
             <Button 
-              type="submit" 
-              disabled={reprintMutation.isPending}
+              type="button" 
+              variant="outline" 
+              onClick={onClose}
             >
-              {reprintMutation.isPending ? (
+              Cancelar
+            </Button>
+            <Button 
+              type="submit"
+              disabled={createRequestMutation.isPending}
+            >
+              {createRequestMutation.isPending ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Enviando...

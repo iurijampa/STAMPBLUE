@@ -1,16 +1,28 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { Loader2, CheckCircle2, AlertTriangle, Clock } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
-import { ptBR } from "date-fns/locale";
+import { 
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
+} from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
+import { Badge } from "@/components/ui/badge";
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogFooter 
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Loader2, CheckCircle2, XCircle, AlertTriangle, ArrowRight } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Activity } from "@shared/schema";
 
 interface ReprintRequest {
@@ -40,403 +52,349 @@ export default function ReprintRequestsList({ department }: ReprintRequestsListP
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [selectedRequest, setSelectedRequest] = useState<ReprintRequest | null>(null);
-  const [isCompletingRequest, setIsCompletingRequest] = useState(false);
-  const [isConfirmingReceipt, setIsConfirmingReceipt] = useState(false);
+  const [completeModalOpen, setCompleteModalOpen] = useState(false);
+  const [receiveModalOpen, setReceiveModalOpen] = useState(false);
   const [completedBy, setCompletedBy] = useState("");
   const [receivedBy, setReceivedBy] = useState("");
-  
-  // Buscar solicitações de reimpressão para este departamento
-  const { data: requests, isLoading, error } = useQuery<ReprintRequest[]>({
-    queryKey: [`/api/department/${department}/reprint-requests`],
-    staleTime: 5000,
+
+  // Determinar URL com base no departamento
+  const queryUrl = department === "impressao" 
+    ? "/api/reprint-requests/department/impressao/pending"
+    : "/api/reprint-requests/department/batida";
+
+  // Buscar solicitações de reimpressão
+  const { data: reprintRequests = [], isLoading } = useQuery({
+    queryKey: [queryUrl],
+    queryFn: async () => {
+      const response = await fetch(queryUrl, {
+        credentials: 'include'
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Erro ao buscar reimpressões: ${response.statusText}`);
+      }
+      
+      return await response.json() as ReprintRequest[];
+    }
   });
-  
-  // Filtrar solicitações pendentes e completadas
-  const pendingRequests = requests?.filter(req => req.status === "pending") || [];
-  const completedRequests = requests?.filter(req => req.status === "completed") || [];
-  
-  // Mutação para completar uma solicitação (setor de impressão)
+
+  // Mutação para concluir uma solicitação (setor de impressão)
   const completeRequestMutation = useMutation({
-    mutationFn: async ({ id, completedBy }: { id: number; completedBy: string }) => {
-      const res = await apiRequest("POST", `/api/reprint-requests/${id}/complete`, { completedBy });
-      return await res.json();
+    mutationFn: async (data: { id: number, completedBy: string }) => {
+      const response = await apiRequest("POST", `/api/reprint-requests/${data.id}/complete`, { completedBy: data.completedBy });
+      return response.json();
     },
     onSuccess: () => {
       toast({
         title: "Reimpressão concluída",
-        description: "A solicitação de reimpressão foi marcada como concluída.",
+        description: "A reimpressão foi marcada como concluída com sucesso."
       });
       
-      // Invalidar queries para atualizar os dados
-      queryClient.invalidateQueries({ queryKey: [`/api/department/${department}/reprint-requests`] });
+      // Invalidar cache para atualizar dados
+      queryClient.invalidateQueries({ queryKey: [queryUrl] });
       
-      // Resetar estado
+      // Fechar modal
+      setCompleteModalOpen(false);
       setSelectedRequest(null);
       setCompletedBy("");
-      setIsCompletingRequest(false);
     },
     onError: (error) => {
       toast({
         title: "Erro ao concluir reimpressão",
-        description: error.message || "Ocorreu um erro ao completar a solicitação.",
-        variant: "destructive",
+        description: error.message,
+        variant: "destructive"
       });
-    },
+    }
   });
-  
+
   // Mutação para confirmar recebimento (setor de batida)
   const confirmReceiptMutation = useMutation({
-    mutationFn: async ({ id, receivedBy }: { id: number; receivedBy: string }) => {
-      const res = await apiRequest("POST", `/api/reprint-requests/${id}/confirm-received`, { receivedBy });
-      return await res.json();
+    mutationFn: async (data: { id: number, receivedBy: string }) => {
+      const response = await apiRequest("POST", `/api/reprint-requests/${data.id}/receive`, { receivedBy: data.receivedBy });
+      return response.json();
     },
     onSuccess: () => {
       toast({
         title: "Recebimento confirmado",
-        description: "O recebimento da reimpressão foi confirmado com sucesso.",
+        description: "O recebimento da reimpressão foi confirmado com sucesso."
       });
       
-      // Invalidar queries para atualizar os dados
-      queryClient.invalidateQueries({ queryKey: [`/api/department/${department}/reprint-requests`] });
+      // Invalidar cache para atualizar dados
+      queryClient.invalidateQueries({ queryKey: [queryUrl] });
       
-      // Resetar estado
+      // Fechar modal
+      setReceiveModalOpen(false);
       setSelectedRequest(null);
       setReceivedBy("");
-      setIsConfirmingReceipt(false);
     },
     onError: (error) => {
       toast({
         title: "Erro ao confirmar recebimento",
-        description: error.message || "Ocorreu um erro ao confirmar o recebimento.",
-        variant: "destructive",
+        description: error.message,
+        variant: "destructive"
       });
-    },
+    }
   });
-  
-  // Handle para completar uma solicitação
+
+  // Função para formatar data
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  // Funções para abrir modais
   const handleCompleteRequest = (request: ReprintRequest) => {
     setSelectedRequest(request);
-    setIsCompletingRequest(true);
+    setCompleteModalOpen(true);
   };
-  
-  // Handle para confirmar recebimento
+
   const handleConfirmReceipt = (request: ReprintRequest) => {
     setSelectedRequest(request);
-    setIsConfirmingReceipt(true);
+    setReceiveModalOpen(true);
   };
-  
-  // Submit para completar solicitação
-  const submitCompleteRequest = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!selectedRequest) return;
-    
-    if (!completedBy.trim()) {
-      toast({
-        title: "Campo obrigatório",
-        description: "Por favor, informe quem está completando a reimpressão.",
-        variant: "destructive",
-      });
-      return;
+
+  // Renderizar badge de status
+  const renderStatusBadge = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return <Badge variant="outline" className="bg-yellow-100 text-yellow-800 hover:bg-yellow-200">Pendente</Badge>;
+      case 'completed':
+        return <Badge variant="outline" className="bg-green-100 text-green-800 hover:bg-green-200">Concluído</Badge>;
+      case 'cancelled':
+        return <Badge variant="outline" className="bg-red-100 text-red-800 hover:bg-red-200">Cancelado</Badge>;
+      default:
+        return <Badge variant="outline">{status}</Badge>;
     }
-    
-    completeRequestMutation.mutate({
-      id: selectedRequest.id,
-      completedBy,
-    });
   };
-  
-  // Submit para confirmar recebimento
-  const submitConfirmReceipt = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!selectedRequest) return;
-    
-    if (!receivedBy.trim()) {
-      toast({
-        title: "Campo obrigatório",
-        description: "Por favor, informe quem está recebendo a reimpressão.",
-        variant: "destructive",
-      });
-      return;
+
+  // Renderizar badge de prioridade
+  const renderPriorityBadge = (priority: string) => {
+    switch (priority) {
+      case 'urgent':
+        return <Badge variant="outline" className="bg-red-100 text-red-800 hover:bg-red-200">Urgente</Badge>;
+      case 'normal':
+      default:
+        return <Badge variant="outline" className="bg-blue-100 text-blue-800 hover:bg-blue-200">Normal</Badge>;
     }
-    
-    confirmReceiptMutation.mutate({
-      id: selectedRequest.id,
-      receivedBy,
-    });
   };
-  
+
   if (isLoading) {
     return (
-      <div className="py-4 flex justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-gray-500" />
+      <div className="flex justify-center items-center py-8">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     );
   }
-  
-  if (error) {
+
+  if (reprintRequests.length === 0) {
     return (
-      <div className="py-4 text-center text-red-500">
-        <AlertTriangle className="h-6 w-6 mx-auto mb-2" />
-        <p>Erro ao carregar solicitações de reimpressão.</p>
+      <div className="text-center py-8 text-muted-foreground">
+        {department === "impressao" 
+          ? "Não há solicitações de reimpressão pendentes." 
+          : "Você ainda não tem solicitações de reimpressão."
+        }
       </div>
     );
   }
-  
-  // Determinar o que mostrar com base no departamento
-  const showPendingRequests = department === "impressao" ? pendingRequests : [];
-  const showCompletedRequests = department === "batida" 
-    ? completedRequests.filter(req => !req.receivedBy) 
-    : department === "impressao" 
-      ? completedRequests 
-      : [];
-  
-  if (showPendingRequests.length === 0 && showCompletedRequests.length === 0) {
-    return (
-      <div className="py-4 text-center text-gray-500">
-        <p>Não há solicitações de reimpressão {department === "impressao" ? "pendentes" : "para receber"}.</p>
-      </div>
-    );
-  }
-  
+
   return (
-    <div className="space-y-4">
-      {/* Setor de Impressão - Solicitações Pendentes */}
-      {department === "impressao" && showPendingRequests.length > 0 && (
-        <div className="space-y-4">
-          <h3 className="text-lg font-semibold">Solicitações Pendentes</h3>
-          
-          <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2">
-            {showPendingRequests.map(request => (
-              <Card key={request.id} className={request.priority === "urgent" ? "border-red-400" : ""}>
-                <CardHeader className="pb-2">
-                  <div className="flex justify-between items-start">
-                    <CardTitle className="text-base">{request.activity?.title}</CardTitle>
-                    <Badge variant={request.priority === "urgent" ? "destructive" : "outline"}>
-                      {request.priority === "urgent" ? "URGENTE" : "Normal"}
-                    </Badge>
-                  </div>
-                  <CardDescription>
-                    Quantidade: {request.quantity} peças
-                  </CardDescription>
-                </CardHeader>
-                
-                <CardContent className="pb-2 text-sm">
-                  <p className="font-semibold mb-1">Motivo:</p>
-                  <p>{request.reason}</p>
-                  
-                  {request.details && (
-                    <>
-                      <p className="font-semibold mt-2 mb-1">Detalhes:</p>
-                      <p>{request.details}</p>
-                    </>
-                  )}
-                  
-                  <div className="mt-2 text-sm text-muted-foreground">
-                    <p>Solicitado por: <span className="font-medium">{request.requestedBy}</span></p>
-                    <p>
-                      <Clock className="inline h-3 w-3 mr-1" />
-                      {formatDistanceToNow(new Date(request.requestedAt), { 
-                        addSuffix: true, locale: ptBR 
-                      })}
-                    </p>
-                  </div>
-                </CardContent>
-                
-                <CardFooter>
+    <div>
+      <Table>
+        <TableCaption>
+          {department === "impressao" 
+            ? "Lista de reimpressões solicitadas pelo setor de batida" 
+            : "Suas solicitações de reimpressão"
+          }
+        </TableCaption>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Pedido</TableHead>
+            <TableHead>Quantidade</TableHead>
+            <TableHead>Motivo</TableHead>
+            <TableHead>Prioridade</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead>Solicitado em</TableHead>
+            <TableHead>Ações</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {reprintRequests.map((request) => (
+            <TableRow key={request.id}>
+              <TableCell className="font-medium">
+                {request.activity?.title || `Pedido #${request.activityId}`}
+              </TableCell>
+              <TableCell>{request.quantity}</TableCell>
+              <TableCell>
+                <span className="max-w-[150px] truncate block" title={request.reason}>
+                  {request.reason}
+                </span>
+              </TableCell>
+              <TableCell>{renderPriorityBadge(request.priority)}</TableCell>
+              <TableCell>{renderStatusBadge(request.status)}</TableCell>
+              <TableCell>{formatDate(request.requestedAt)}</TableCell>
+              <TableCell>
+                {department === "impressao" && request.status === "pending" && (
                   <Button 
+                    size="sm" 
                     onClick={() => handleCompleteRequest(request)}
-                    className="w-full"
+                    className="flex items-center"
                   >
-                    <CheckCircle2 className="mr-2 h-4 w-4" />
-                    Concluir Reimpressão
+                    <CheckCircle2 className="h-4 w-4 mr-1" />
+                    Concluir
                   </Button>
-                </CardFooter>
-              </Card>
-            ))}
-          </div>
-        </div>
-      )}
-      
-      {/* Setor de Batida - Reimpressões para Receber */}
-      {department === "batida" && showCompletedRequests.length > 0 && (
-        <div className="space-y-4">
-          <h3 className="text-lg font-semibold">Reimpressões para Receber</h3>
-          
-          <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2">
-            {showCompletedRequests.map(request => (
-              <Card key={request.id} className={request.priority === "urgent" ? "border-red-400" : ""}>
-                <CardHeader className="pb-2">
-                  <div className="flex justify-between items-start">
-                    <CardTitle className="text-base">{request.activity?.title}</CardTitle>
-                    <Badge variant={request.priority === "urgent" ? "destructive" : "outline"}>
-                      {request.priority === "urgent" ? "URGENTE" : "Normal"}
-                    </Badge>
-                  </div>
-                  <CardDescription>
-                    Quantidade: {request.quantity} peças
-                  </CardDescription>
-                </CardHeader>
+                )}
                 
-                <CardContent className="pb-2 text-sm">
-                  <p className="font-semibold mb-1">Motivo da solicitação:</p>
-                  <p>{request.reason}</p>
-                  
-                  <div className="mt-2 text-sm">
-                    <p>Solicitado por: <span className="font-medium">{request.requestedBy}</span></p>
-                    <p>Concluído por: <span className="font-medium">{request.completedBy}</span></p>
-                    <p className="text-muted-foreground">
-                      <Clock className="inline h-3 w-3 mr-1" />
-                      Concluído {formatDistanceToNow(new Date(request.completedAt!), { 
-                        addSuffix: true, locale: ptBR 
-                      })}
-                    </p>
-                  </div>
-                </CardContent>
-                
-                <CardFooter>
+                {department === "batida" && request.status === "completed" && !request.receivedBy && (
                   <Button 
+                    size="sm" 
+                    variant="outline"
                     onClick={() => handleConfirmReceipt(request)}
-                    className="w-full"
+                    className="flex items-center"
                   >
-                    <CheckCircle2 className="mr-2 h-4 w-4" />
+                    <ArrowRight className="h-4 w-4 mr-1" />
                     Confirmar Recebimento
                   </Button>
-                </CardFooter>
-              </Card>
-            ))}
-          </div>
-        </div>
-      )}
-      
-      {/* Setor de Impressão - Solicitações Completadas (histórico) */}
-      {department === "impressao" && completedRequests.length > 0 && (
-        <div className="space-y-4 mt-8">
-          <h3 className="text-lg font-semibold">Histórico de Reimpressões</h3>
-          
-          <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2">
-            {completedRequests.map(request => (
-              <Card key={request.id} className="opacity-75">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base">{request.activity?.title}</CardTitle>
-                  <CardDescription>
-                    Quantidade: {request.quantity} peças
-                  </CardDescription>
-                </CardHeader>
+                )}
                 
-                <CardContent className="pb-2 text-sm">
-                  <p>{request.reason}</p>
-                  
-                  <div className="mt-2 text-sm text-muted-foreground">
-                    <p>Solicitado por: {request.requestedBy}</p>
-                    <p>Concluído por: {request.completedBy}</p>
-                    <p>
-                      <Clock className="inline h-3 w-3 mr-1" />
-                      {formatDistanceToNow(new Date(request.completedAt!), { 
-                        addSuffix: true, locale: ptBR 
-                      })}
-                    </p>
-                    {request.receivedBy && (
-                      <p>Recebido por: {request.receivedBy}</p>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      )}
-      
-      {/* Modal para completar solicitação (impressão) */}
-      <Dialog open={isCompletingRequest} onOpenChange={() => setIsCompletingRequest(false)}>
+                {request.status === "completed" && request.receivedBy && (
+                  <span className="text-sm text-muted-foreground flex items-center">
+                    <CheckCircle2 className="h-4 w-4 mr-1 text-green-600" />
+                    Recebido por: {request.receivedBy}
+                  </span>
+                )}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+
+      {/* Modal para concluir reimpressão */}
+      <Dialog open={completeModalOpen} onOpenChange={setCompleteModalOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle>Concluir Reimpressão</DialogTitle>
           </DialogHeader>
           
-          <form onSubmit={submitCompleteRequest} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="completed-by" className="required">Concluído por</Label>
-              <Input 
-                id="completed-by"
-                placeholder="Nome de quem fez a reimpressão"
-                value={completedBy}
-                onChange={(e) => setCompletedBy(e.target.value)}
-                required
-              />
-              <p className="text-xs text-muted-foreground">
-                Informe o nome de quem realizou a reimpressão.
-              </p>
+          <div className="py-4">
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="completedBy" className="required">Concluído por</Label>
+                <Input
+                  id="completedBy"
+                  placeholder="Seu nome"
+                  value={completedBy}
+                  onChange={(e) => setCompletedBy(e.target.value)}
+                  className="mt-1"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Informe seu nome para registrar quem concluiu a reimpressão.
+                </p>
+              </div>
+              
+              {selectedRequest && (
+                <div className="bg-muted/30 p-3 rounded-md mt-4">
+                  <h4 className="font-medium mb-1">Detalhes da solicitação:</h4>
+                  <p className="text-sm"><strong>Pedido:</strong> {selectedRequest.activity?.title || `#${selectedRequest.activityId}`}</p>
+                  <p className="text-sm"><strong>Quantidade:</strong> {selectedRequest.quantity}</p>
+                  <p className="text-sm"><strong>Motivo:</strong> {selectedRequest.reason}</p>
+                  {selectedRequest.details && (
+                    <p className="text-sm"><strong>Detalhes:</strong> {selectedRequest.details}</p>
+                  )}
+                  <p className="text-sm"><strong>Solicitado por:</strong> {selectedRequest.requestedBy}</p>
+                </div>
+              )}
             </div>
-            
-            <DialogFooter>
-              <Button 
-                type="button" 
-                variant="outline" 
-                onClick={() => setIsCompletingRequest(false)}
-              >
-                Cancelar
-              </Button>
-              <Button 
-                type="submit"
-                disabled={completeRequestMutation.isPending}
-              >
-                {completeRequestMutation.isPending ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Salvando...
-                  </>
-                ) : "Concluir Reimpressão"}
-              </Button>
-            </DialogFooter>
-          </form>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCompleteModalOpen(false)}>
+              Cancelar
+            </Button>
+            <Button 
+              disabled={!completedBy.trim() || completeRequestMutation.isPending}
+              onClick={() => {
+                if (selectedRequest && completedBy.trim()) {
+                  completeRequestMutation.mutate({
+                    id: selectedRequest.id,
+                    completedBy: completedBy.trim()
+                  });
+                }
+              }}
+            >
+              {completeRequestMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Concluindo...
+                </>
+              ) : "Confirmar Conclusão"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
       
-      {/* Modal para confirmar recebimento (batida) */}
-      <Dialog open={isConfirmingReceipt} onOpenChange={() => setIsConfirmingReceipt(false)}>
+      {/* Modal para confirmar recebimento */}
+      <Dialog open={receiveModalOpen} onOpenChange={setReceiveModalOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle>Confirmar Recebimento</DialogTitle>
           </DialogHeader>
           
-          <form onSubmit={submitConfirmReceipt} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="received-by" className="required">Recebido por</Label>
-              <Input 
-                id="received-by"
-                placeholder="Nome de quem está recebendo"
-                value={receivedBy}
-                onChange={(e) => setReceivedBy(e.target.value)}
-                required
-              />
-              <p className="text-xs text-muted-foreground">
-                Informe o nome de quem está recebendo as peças reimpressas.
-              </p>
+          <div className="py-4">
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="receivedBy" className="required">Recebido por</Label>
+                <Input
+                  id="receivedBy"
+                  placeholder="Seu nome"
+                  value={receivedBy}
+                  onChange={(e) => setReceivedBy(e.target.value)}
+                  className="mt-1"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Informe seu nome para registrar quem recebeu a reimpressão.
+                </p>
+              </div>
+              
+              {selectedRequest && (
+                <div className="bg-muted/30 p-3 rounded-md mt-4">
+                  <h4 className="font-medium mb-1">Detalhes da reimpressão:</h4>
+                  <p className="text-sm"><strong>Pedido:</strong> {selectedRequest.activity?.title || `#${selectedRequest.activityId}`}</p>
+                  <p className="text-sm"><strong>Quantidade:</strong> {selectedRequest.quantity}</p>
+                  <p className="text-sm"><strong>Concluído por:</strong> {selectedRequest.completedBy}</p>
+                  <p className="text-sm"><strong>Concluído em:</strong> {selectedRequest.completedAt ? formatDate(selectedRequest.completedAt) : 'N/A'}</p>
+                </div>
+              )}
             </div>
-            
-            <DialogFooter>
-              <Button 
-                type="button" 
-                variant="outline" 
-                onClick={() => setIsConfirmingReceipt(false)}
-              >
-                Cancelar
-              </Button>
-              <Button 
-                type="submit"
-                disabled={confirmReceiptMutation.isPending}
-              >
-                {confirmReceiptMutation.isPending ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Salvando...
-                  </>
-                ) : "Confirmar Recebimento"}
-              </Button>
-            </DialogFooter>
-          </form>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReceiveModalOpen(false)}>
+              Cancelar
+            </Button>
+            <Button 
+              disabled={!receivedBy.trim() || confirmReceiptMutation.isPending}
+              onClick={() => {
+                if (selectedRequest && receivedBy.trim()) {
+                  confirmReceiptMutation.mutate({
+                    id: selectedRequest.id,
+                    receivedBy: receivedBy.trim()
+                  });
+                }
+              }}
+            >
+              {confirmReceiptMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Confirmando...
+                </>
+              ) : "Confirmar Recebimento"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
