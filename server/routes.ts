@@ -626,10 +626,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.status(201).json(reprintRequest);
     } catch (error) {
-      if (error instanceof Error) {
+      if (error instanceof z.ZodError) {
         const validationError = fromZodError(error);
         res.status(400).json({ message: validationError.message });
       } else {
+        console.error("Erro ao criar solicitação de reimpressão:", error);
         res.status(500).json({ message: "Erro ao criar solicitação de reimpressão" });
       }
     }
@@ -702,7 +703,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // Atualizar o status de uma solicitação de reimpressão
-  app.post("/api/reprint-requests/:id/status", isAuthenticated, async (req, res) => {
+  app.patch("/api/reprint-requests/:id/status", isAuthenticated, async (req, res) => {
     try {
       const requestId = parseInt(req.params.id);
       const department = req.user.role;
