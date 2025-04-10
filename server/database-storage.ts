@@ -633,25 +633,48 @@ export class DatabaseStorage implements IStorage {
   // ===== MÉTODOS DE SOLICITAÇÃO DE REIMPRESSÃO =====
   
   async createReprintRequest(requestData: InsertReprintRequest): Promise<ReprintRequest> {
-    const [request] = await db
-      .insert(reprintRequests)
-      .values({
-        ...requestData,
-        requestedAt: new Date(),
-        status: 'pending',
-        completedBy: null,
-        completedAt: null,
-        receivedBy: null,
-        receivedAt: null
-      })
-      .returning();
+    console.log("DatabaseStorage.createReprintRequest recebeu:", JSON.stringify(requestData, null, 2));
     
-    // Limpar qualquer cache relacionado
-    clearCacheByPattern(`reprint_requests`);
-    clearCacheByPattern(`reprint_requests_dept_${requestData.fromDepartment}`);
-    clearCacheByPattern(`reprint_requests_dept_${requestData.toDepartment}`);
+    // Garantir que o ID da atividade é um número
+    const activityId = typeof requestData.activityId === 'string' 
+      ? parseInt(requestData.activityId, 10) 
+      : requestData.activityId;
     
-    return request;
+    // Verificar se a atividade realmente existe
+    const activity = await this.getActivity(activityId);
+    if (!activity) {
+      console.error(`Atividade ${activityId} não existe, não é possível criar solicitação de reimpressão`);
+      throw new Error(`Atividade ${activityId} não encontrada`);
+    }
+    
+    console.log(`Atividade ${activityId} encontrada: ${activity.title}. Criando solicitação de reimpressão...`);
+    
+    try {
+      const [request] = await db
+        .insert(reprintRequests)
+        .values({
+          ...requestData,
+          activityId: activityId, // Usar o ID convertido
+          requestedAt: new Date(),
+          status: 'pending',
+          completedBy: null,
+          completedAt: null,
+          receivedBy: null,
+          receivedAt: null
+        })
+        .returning();
+      
+      // Limpar qualquer cache relacionado
+      clearCacheByPattern(`reprint_requests`);
+      clearCacheByPattern(`reprint_requests_dept_${requestData.fromDepartment}`);
+      clearCacheByPattern(`reprint_requests_dept_${requestData.toDepartment}`);
+      
+      console.log("Solicitação de reimpressão criada com sucesso:", request.id);
+      return request;
+    } catch (error) {
+      console.error("Erro ao inserir solicitação de reimpressão no banco:", error);
+      throw error;
+    }
   }
   
   async getReprintRequest(id: number): Promise<ReprintRequest | undefined> {
