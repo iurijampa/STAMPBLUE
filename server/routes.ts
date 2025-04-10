@@ -830,6 +830,105 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ===== ROTAS PARA SISTEMA DE REIMPRESSÃO =====
   
+  // Criar solicitação de reimpressão independente (sem atividade associada)
+  app.post("/api/reprint-requests/independent", isAuthenticated, async (req, res) => {
+    try {
+      // Só o setor de batida pode solicitar reimpressões
+      if (req.user && req.user.role !== "batida" && req.user.role !== "admin") {
+        return res.status(403).json({ 
+          message: "Apenas o setor de batida pode solicitar reimpressões" 
+        });
+      }
+      
+      // Verificar campos obrigatórios
+      const { title, requestedBy, reason, quantity, priority } = req.body;
+      
+      if (!title || !requestedBy || !reason) {
+        return res.status(400).json({ 
+          message: "Dados incompletos. Título, solicitante e motivo são obrigatórios." 
+        });
+      }
+      
+      let imageUrl = null;
+      
+      // Processar upload de imagem se existir
+      if (req.files && Object.keys(req.files).length > 0) {
+        const imageFile = req.files.image;
+        const uploadPath = path.join(__dirname, '..', 'uploads', `reprint_${Date.now()}_${imageFile.name}`);
+        
+        await new Promise((resolve, reject) => {
+          imageFile.mv(uploadPath, (err) => {
+            if (err) return reject(err);
+            resolve(null);
+          });
+        });
+        
+        // Gerar URL relativa para a imagem
+        imageUrl = `/uploads/${path.basename(uploadPath)}`;
+      }
+      
+      // Criar uma nova "atividade temporária" para associar à reimpressão
+      const temporaryActivity = await storage.createActivity({
+        title,
+        description: req.body.description || "Solicitação de reimpressão independente",
+        status: "pending",
+        priority: priority || "normal",
+        department: "impressao", // Destino imediato
+        previousDepartment: "batida", // Origem
+        createdBy: req.user?.username || "sistema",
+        image: imageUrl,
+        deadline: null,
+        isReprintRequest: true // Flag especial para marcar como solicitação independente
+      });
+      
+      // Criar solicitação de reimpressão associada à atividade temporária
+      const reprintRequest = await storage.createReprintRequest({
+        activityId: temporaryActivity.id,
+        quantity: parseInt(quantity) || 1,
+        reason,
+        details: req.body.details || "",
+        priority: priority || "normal",
+        requestedBy,
+        requestedDepartment: "batida",
+        targetDepartment: "impressao",
+        status: "pending",
+        requestedAt: new Date()
+      });
+      
+      // Notificar o setor de impressão
+      // Criar notificação para o setor de impressão
+      const impressaoUsers = await storage.getUsersByRole("impressao");
+      for (const user of impressaoUsers) {
+        await storage.createNotification({
+          userId: user.id,
+          activityId: temporaryActivity.id,
+          department: "impressao",
+          type: "reprint_request",
+          message: `REIMPRESSÃO SOLICITADA: ${title} - Quantidade: ${quantity} - Solicitado por: ${requestedBy}${reason ? ` - Motivo: ${reason}` : ''}`
+        });
+      }
+      
+      // Notificar via WebSocket
+      if ((global as any).wsNotifications) {
+        (global as any).wsNotifications.notifyDepartment("impressao", {
+          type: "new_reprint_request",
+          message: `Nova solicitação de reimpressão recebida do setor de batida`,
+          reprintRequest,
+          activity: temporaryActivity
+        });
+      }
+      
+      res.status(201).json({
+        success: true,
+        reprintRequest,
+        activity: temporaryActivity
+      });
+    } catch (error) {
+      console.error("Erro ao criar solicitação de reimpressão independente:", error);
+      res.status(500).json({ message: "Erro ao criar solicitação de reimpressão" });
+    }
+  });
+  
   // Criar nova solicitação de reimpressão
   app.post("/api/reprint-requests", isAuthenticated, async (req, res) => {
     try {

@@ -6,7 +6,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useCallback, useEffect, useState, useRef } from "react";
 import { User, Activity } from "@shared/schema";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, CalendarClock, Clock, Eye, RefreshCw, RotateCcw, Printer } from "lucide-react";
+import { Loader2, CalendarClock, Clock, Eye, RefreshCw, RotateCcw, Printer, FileText, Plus } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +17,7 @@ import ViewActivityModal from "@/components/view-activity-modal";
 import CompleteActivityModal from "@/components/complete-activity-modal";
 import ReturnActivityModal from "@/components/return-activity-modal";
 import ReprintRequestModal from "@/components/reprint-request-modal";
+import IndependentReprintModal from "@/components/independent-reprint-modal";
 import ReprintRequestsList from "@/components/reprint-requests-list";
 import { ActivitySkeleton, StatsSkeleton } from "@/components/activity-skeleton";
 import { SoundToggleButton, SoundTestButton } from "@/components/SoundManagerSimples";
@@ -41,6 +42,7 @@ export default function DepartmentDashboard() {
   const [completeActivity, setCompleteActivity] = useState<ActivityWithNotes | null>(null);
   const [returnActivity, setReturnActivity] = useState<ActivityWithNotes | null>(null);
   const [reprintActivity, setReprintActivity] = useState<ActivityWithNotes | null>(null);
+  const [showIndependentReprintModal, setShowIndependentReprintModal] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<string>("pendingActivities");
   
   // Obtendo o departamento da URL
