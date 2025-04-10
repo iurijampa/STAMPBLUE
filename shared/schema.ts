@@ -5,6 +5,12 @@ import { z } from "zod";
 // User role enum
 export const roleEnum = pgEnum('role', ['admin', 'gabarito', 'impressao', 'batida', 'costura', 'embalagem', 'user']);
 
+// Reprint request status enum
+export const reprintStatusEnum = pgEnum('reprint_status', ['pending', 'completed', 'cancelled']);
+
+// Reprint priority enum
+export const reprintPriorityEnum = pgEnum('reprint_priority', ['normal', 'urgent']);
+
 // Sequential departments for workflow
 export const DEPARTMENTS = ['admin', 'gabarito', 'impressao', 'batida', 'costura', 'embalagem'] as const;
 export type Department = typeof DEPARTMENTS[number];
@@ -98,12 +104,50 @@ export const notifications = pgTable("notifications", {
   message: text("message").notNull(),
   read: boolean("read").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  department: roleEnum("department"),
+  type: text("type"),
+  metadata: text("metadata"),
+  title: text("title"),
 });
 
 export const insertNotificationSchema = createInsertSchema(notifications).pick({
   userId: true,
   activityId: true,
   message: true,
+  department: true,
+  type: true,
+  metadata: true,
+  title: true,
+});
+
+// Reprint requests table
+export const reprintRequests = pgTable("reprint_requests", {
+  id: serial("id").primaryKey(),
+  activityId: integer("activity_id").notNull(),
+  quantity: integer("quantity").notNull(),
+  reason: text("reason").notNull(),
+  details: text("details"),
+  requestedBy: text("requested_by").notNull(),
+  requestedDepartment: roleEnum("requested_department").notNull(),
+  targetDepartment: roleEnum("target_department").notNull(),
+  priority: reprintPriorityEnum("priority").notNull().default("normal"),
+  status: reprintStatusEnum("status").notNull().default("pending"),
+  completedBy: text("completed_by"),
+  requestedAt: timestamp("requested_at").notNull().defaultNow(),
+  completedAt: timestamp("completed_at"),
+  receivedBy: text("received_by"),
+  receivedAt: timestamp("received_at"),
+});
+
+export const insertReprintRequestSchema = createInsertSchema(reprintRequests).pick({
+  activityId: true,
+  quantity: true,
+  reason: true,
+  details: true,
+  requestedBy: true,
+  requestedDepartment: true, 
+  targetDepartment: true,
+  priority: true,
 });
 
 // Export types
@@ -115,3 +159,5 @@ export type ActivityProgress = typeof activityProgress.$inferSelect;
 export type InsertActivityProgress = z.infer<typeof insertActivityProgressSchema>;
 export type Notification = typeof notifications.$inferSelect;
 export type InsertNotification = z.infer<typeof insertNotificationSchema>;
+export type ReprintRequest = typeof reprintRequests.$inferSelect;
+export type InsertReprintRequest = z.infer<typeof insertReprintRequestSchema>;
