@@ -454,15 +454,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Update progress - USANDO MÉTODO EMERGENCIAL para todos os departamentos
-      console.log(`[EMERGENCIA] Usando método direto para completar atividade ${activityId} no departamento ${department}`);
+      console.log(`[DIAGNÓSTICO] Chamando completarProgressoAtividadeEmergencia com:
+        - activityId: ${activityId} (${typeof activityId})
+        - department: ${department} (${typeof department})
+        - completedBy: ${req.body.completedBy} (${typeof req.body.completedBy})
+        - notes: ${req.body.notes} (${typeof req.body.notes})
+      `);
+      
       try {
+        // Verificando se os departamentos estão configurados corretamente
+        console.log(`[DIAGNÓSTICO] DEPARTMENTS disponíveis: ${JSON.stringify(DEPARTMENTS)}`);
+        console.log(`[DIAGNÓSTICO] Índice do departamento atual: ${DEPARTMENTS.indexOf(department as any)}`);
+        
         const completedProgress = await completarProgressoAtividadeEmergencia(
           activityId, 
           department, 
           req.body.completedBy,
           req.body.notes
         );
-        console.log(`[EMERGENCIA] Atividade ${activityId} concluída com sucesso no departamento ${department}`);
+        console.log(`[SUCESSO] Atividade ${activityId} concluída com sucesso no departamento ${department}`);
         
         // Não precisamos mais criar manualmente o próximo progresso pois a função emergencial já faz isso
         // Apenas obtemos o índice do departamento para notificações
@@ -540,7 +550,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         res.json(completedProgress);
       } catch (error) {
-        res.status(500).json({ message: "Erro ao concluir pedido" });
+        console.error("[ERRO CRÍTICO] Falha ao completar atividade:", error);
+        
+        // Gerar mensagem de erro mais detalhada para facilitar diagnóstico
+        const errorMessage = error instanceof Error 
+          ? `Erro ao concluir pedido: ${error.message}` 
+          : "Erro desconhecido ao concluir pedido";
+          
+        // Registrar a pilha de chamadas para análise
+        if (error instanceof Error && error.stack) {
+          console.error("[STACK TRACE]", error.stack);
+        }
+        
+        res.status(500).json({ 
+          message: errorMessage,
+          details: process.env.NODE_ENV !== 'production' ? String(error) : undefined 
+        });
       }
     } catch (error) {
       console.error("Erro ao completar atividade:", error);

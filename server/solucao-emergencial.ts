@@ -267,9 +267,23 @@ export async function completarProgressoAtividadeEmergencia(
   completedBy: string,
   notes?: string
 ) {
-  // Minimizar logging em produção
-  if (process.env.NODE_ENV !== 'production') {
-    console.log(`[OTIMIZAÇÃO] Completando atividade #${activityId} no departamento ${department}`);
+  // Log detalhado para diagnóstico do erro 500
+  console.log(`[DEBUG] Completando atividade #${activityId} no departamento ${department} por ${completedBy}`);
+  
+  // Verificar valores de entrada
+  if (!activityId) {
+    console.error('[ERRO] ID da atividade não fornecido');
+    throw new Error('ID da atividade é obrigatório');
+  }
+  
+  if (!department) {
+    console.error('[ERRO] Departamento não fornecido');
+    throw new Error('Departamento é obrigatório');
+  }
+  
+  if (!completedBy) {
+    console.error('[ERRO] Nome do responsável não fornecido');
+    throw new Error('Nome do responsável é obrigatório');
   }
   
   try {
@@ -305,10 +319,20 @@ export async function completarProgressoAtividadeEmergencia(
       }
       
       // 2. OTIMIZAÇÃO: Usar cache departamental pre-computado para lookup em O(1)
+      // Verificar se o departamento é válido e está no cache
+      if (!DEPARTMENTS.includes(department as any)) {
+        console.error(`[ERRO CRÍTICO] Departamento '${department}' inválido. Departamentos válidos: ${DEPARTMENTS.join(', ')}`);
+        throw new Error(`Departamento '${department}' inválido`);
+      }
+      
       const departmentIndex = departmentCache[department];
+      if (departmentIndex === undefined) {
+        console.error(`[ERRO CRÍTICO] Departamento '${department}' não encontrado no cache`);
+        throw new Error(`Departamento '${department}' não encontrado no cache`);
+      }
       
       // Verificar se existe próximo departamento em O(1) usando cache
-      if (departmentIndex !== undefined && departmentIndex < DEPARTMENTS.length - 1) {
+      if (departmentIndex < DEPARTMENTS.length - 1) {
         const proximoDepartamento = DEPARTMENTS[departmentIndex + 1];
         
         // SUPER-OTIMIZAÇÃO: Implementar UPSERT em uma única query para minimizar round-trips
@@ -376,15 +400,22 @@ export async function completarProgressoAtividadeEmergencia(
       // Retornar o progresso atualizado
       return progressoAtualizado;
     }).finally(() => {
-      // Invalidar cache de forma eficiente, focando apenas nos departamentos afetados
-      // Isso evita invalidação excessiva enquanto garante dados atualizados
-      clearCacheByPattern(`activities_dept_${department}`);
-      
-      // Se houver próximo departamento, invalidar seu cache também
-      const departmentIndex = departmentCache[department];
-      if (departmentIndex !== undefined && departmentIndex < DEPARTMENTS.length - 1) {
-        const proximoDepartamento = DEPARTMENTS[departmentIndex + 1];
-        clearCacheByPattern(`activities_dept_${proximoDepartamento}`);
+      try {
+        // Invalidar cache de forma eficiente, focando apenas nos departamentos afetados
+        // Isso evita invalidação excessiva enquanto garante dados atualizados
+        clearCacheByPattern(`activities_dept_${department}`);
+        
+        // Se este departamento estiver no cache, invalidar o próximo departamento também
+        const departmentIndex = departmentCache[department];
+        if (departmentIndex !== undefined && departmentIndex < DEPARTMENTS.length - 1) {
+          const proximoDepartamento = DEPARTMENTS[departmentIndex + 1];
+          clearCacheByPattern(`activities_dept_${proximoDepartamento}`);
+        }
+        
+        console.log(`[CACHE] Cache invalidado para departamento ${department} e próximo (se existir)`);
+      } catch (error) {
+        // Falha na invalidação de cache não deve quebrar o fluxo principal
+        console.error('[CACHE] Erro ao invalidar cache:', error);
       }
     });
   } catch (error) {
