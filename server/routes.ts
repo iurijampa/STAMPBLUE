@@ -860,32 +860,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Processar upload de imagem se existir
       if (req.files && Object.keys(req.files).length > 0) {
-        const imageFile = req.files.image;
-        const uploadPath = path.join(__dirname, '..', 'uploads', `reprint_${Date.now()}_${imageFile.name}`);
+        // Garantir que estamos tratando de um único arquivo
+        const file = req.files.image;
+        let imageFile;
         
-        await new Promise((resolve, reject) => {
-          imageFile.mv(uploadPath, (err) => {
-            if (err) return reject(err);
-            resolve(null);
-          });
-        });
+        if (Array.isArray(file)) {
+          // Se for um array, pegar apenas o primeiro arquivo
+          imageFile = file[0];
+        } else {
+          // Se for um único arquivo
+          imageFile = file;
+        }
         
-        // Gerar URL relativa para a imagem
-        imageUrl = `/uploads/${path.basename(uploadPath)}`;
+        if (imageFile && imageFile.name) {
+          // Criar nome de arquivo seguro
+          const timestamp = Date.now();
+          const safeFilename = imageFile.name.replace(/[^a-zA-Z0-9.]/g, '_');
+          const uploadPath = path.join(__dirname, '..', 'uploads', `reprint_${timestamp}_${safeFilename}`);
+          
+          try {
+            await new Promise((resolve, reject) => {
+              imageFile.mv(uploadPath, (err: any) => {
+                if (err) return reject(err);
+                resolve(null);
+              });
+            });
+            
+            // Gerar URL relativa para a imagem
+            imageUrl = `/uploads/${path.basename(uploadPath)}`;
+            console.log(`Arquivo salvo com sucesso em: ${uploadPath}`);
+          } catch (error) {
+            console.error("Erro ao salvar arquivo:", error);
+          }
+        }
       }
       
       // Criar uma nova "atividade temporária" para associar à reimpressão
+      const notes = "SOLICITAÇÃO DE REIMPRESSÃO INDEPENDENTE - De: Batida - Origem: " + 
+                  (req.user?.username || "sistema") + " - Solicitado por: " + requestedBy;
+      
       const temporaryActivity = await storage.createActivity({
         title,
         description: req.body.description || "Solicitação de reimpressão independente",
-        status: "pending",
         priority: priority || "normal",
-        department: "impressao", // Destino imediato
-        previousDepartment: "batida", // Origem
-        createdBy: req.user?.username || "sistema",
-        image: imageUrl,
-        deadline: null,
-        isReprintRequest: true // Flag especial para marcar como solicitação independente
+        createdBy: (req.user?.id ? parseInt(req.user.id.toString()) : 1),
+        image: imageUrl || "",
+        quantity: parseInt(quantity) || 1,
+        notes: notes,
+        clientName: "Reimpressão"
       });
       
       // Criar solicitação de reimpressão associada à atividade temporária

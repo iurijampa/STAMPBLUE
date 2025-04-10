@@ -3,11 +3,13 @@ import {
   Activity, InsertActivity, 
   ActivityProgress, InsertActivityProgress, 
   Notification, InsertNotification,
+  ReprintRequest, InsertReprintRequest,
   DEPARTMENTS,
   users,
   activities,
   activityProgress,
-  notifications
+  notifications,
+  reprintRequests
 } from "@shared/schema";
 import session from "express-session";
 import { db, sql as postgresClient, cachedQuery, clearCacheByPattern } from "./db";
