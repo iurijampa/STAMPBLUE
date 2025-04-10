@@ -191,14 +191,87 @@ export async function criarReimpressaoEmergencia(req: Request, res: Response) {
   }
 }
 
+// Função ultra-simplificada para solicitação com um clique
+export async function criarReimpressaoSimples(req: Request, res: Response) {
+  try {
+    console.log("[REIMPRESSAO-SIMPLES] Recebendo solicitação ultra-simplificada", req.body);
+    
+    // Criar atividade diretamente com dados mínimos
+    const atividade = await storage.createActivity({
+      title: "⚠️ REIMPRESSÃO URGENTE - BATIDA",
+      description: "Solicitação simplificada de reimpressão do setor de batida",
+      image: null,
+      additionalImages: [],
+      quantity: 1,
+      clientName: null,
+      priority: "high",
+      deadline: null,
+      notes: `REIMPRESSÃO SOLICITADA ÀS ${new Date().toLocaleTimeString()} - Peça com defeito na batida, precisa ser reimpressa com urgência.`,
+      createdBy: "Setor de Batida",
+      isReprintRequest: true
+    });
+    
+    console.log("[REIMPRESSAO-SIMPLES] Atividade criada:", atividade.id);
+    
+    // Enviar diretamente para o setor de impressão
+    await storage.createActivityProgress({
+      activityId: atividade.id,
+      department: "impressao",
+      status: "pending",
+      notes: "⚠️ REIMPRESSÃO URGENTE - Solicitação do setor de batida"
+    });
+    
+    console.log("[REIMPRESSAO-SIMPLES] Progresso criado para impressão");
+    
+    // Notificar usuários de impressão
+    const usuariosImpressao = await storage.getUsersByRole("impressao");
+    for (const usuario of usuariosImpressao) {
+      await storage.createNotification({
+        userId: usuario.id,
+        activityId: atividade.id,
+        department: "impressao",
+        type: "reprint_request",
+        message: "⚠️ REIMPRESSÃO URGENTE da Batida"
+      });
+    }
+    
+    console.log("[REIMPRESSAO-SIMPLES] Notificações enviadas para impressão");
+    
+    // Notificar via WebSocket
+    if ((global as any).wsNotifications) {
+      (global as any).wsNotifications.notifyDepartment("impressao", {
+        type: "new_activity",
+        message: "⚠️ NOVA REIMPRESSÃO URGENTE da Batida",
+        activityId: atividade.id
+      });
+    }
+    
+    return res.status(201).json({
+      success: true,
+      message: "Reimpressão solicitada com sucesso!",
+      id: atividade.id
+    });
+    
+  } catch (erro) {
+    console.error("[REIMPRESSAO-SIMPLES] Erro:", erro);
+    return res.status(500).json({
+      success: false,
+      message: "Erro ao processar solicitação simples",
+    });
+  }
+}
+
 // Função para registrar a rota no Express
 export function registrarRotasReimpressao(app: Express) {
   console.log("[REIMPRESSAO] Registrando rotas de reimpressão");
   
-  // Rota normal
+  // Nova rota ultra simplificada (um clique)
+  app.post("/api/reimpressao-simples", (req, res) => criarReimpressaoSimples(req, res));
+  
+  // Rota normal (antiga)
   app.post("/api/reimpressao-independente", (req, res) => criarReimpressaoIndependente(req, res));
   
-  // Rota de emergência (ultra simplificada)
+  // Rota de emergência (ultra simplificada, antigo)
   app.post("/api/reimpressao-emergencia", (req, res) => criarReimpressaoEmergencia(req, res));
   
   // Rota de fallback para compatibilidade

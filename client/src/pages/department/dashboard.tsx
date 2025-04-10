@@ -19,6 +19,7 @@ import CompleteActivityModal from "@/components/complete-activity-modal";
 import ReturnActivityModal from "@/components/return-activity-modal";
 import ReprintRequestModal from "@/components/reprint-request-modal";
 import IndependentReprintModal from "@/components/independent-reprint-modal";
+import { UrgentReprintButton } from "@/components/urgent-reprint-button";
 import ReprintRequestsList from "@/components/reprint-requests-list";
 import { ActivitySkeleton, StatsSkeleton } from "@/components/activity-skeleton";
 import { SoundToggleButton, SoundTestButton } from "@/components/SoundManagerSimples";
@@ -746,24 +747,52 @@ export default function DepartmentDashboard() {
           
           {/* Seção de Reimpressão para o setor de BATIDA - separada como uma seção completa */}
           {userDepartment === "batida" && (
-            <div className="mt-12 pb-6">
+            <div className="mt-8 pb-6">
+              <div className="flex justify-between items-center mb-4">
+                <div className="flex items-center gap-2">
+                  <Printer className="h-5 w-5 text-red-600" />
+                  <h2 className="text-xl font-semibold">Sistema de Reimpressão Urgente</h2>
+                </div>
+              </div>
+              
+              {/* Card com explicação e botão de ação única */}
+              <Card className="bg-red-50 border-red-200 mb-6">
+                <CardHeader>
+                  <CardTitle className="text-red-700">Reimpressão Rápida</CardTitle>
+                  <CardDescription className="text-red-600">
+                    Se você encontrou problemas com alguma peça durante a batida e precisa solicitar uma reimpressão urgente
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-center py-2">
+                    <p className="text-neutral-600 mb-4">
+                      Clique no botão abaixo para enviar uma solicitação de reimpressão
+                      urgente diretamente para o setor de impressão.
+                    </p>
+                    
+                    {/* Botão ultra simplificado */}
+                    <UrgentReprintButton />
+                  </div>
+                </CardContent>
+              </Card>
+              
               <div className="flex justify-between items-center mb-4">
                 <div className="flex items-center gap-2">
                   <Printer className="h-5 w-5 text-blue-600" />
-                  <h2 className="text-xl font-semibold">Sistema de Reimpressão</h2>
+                  <h2 className="text-xl font-semibold">Sistema de Reimpressão Anterior</h2>
                 </div>
                 
-                {/* Botão destacado para nova solicitação de reimpressão */}
+                {/* Botão para o antigo sistema de reimpressão */}
                 <Button 
-                  variant="default" 
-                  className="flex items-center bg-blue-600 hover:bg-blue-700"
+                  variant="outline" 
+                  className="flex items-center text-blue-600"
                   onClick={() => {
                     // Abrir modal de reimpressão independente
                     setShowIndependentReprintModal(true);
                   }}
                 >
                   <Plus className="h-4 w-4 mr-2" />
-                  Nova Solicitação
+                  Usar Sistema Anterior
                 </Button>
               </div>
               
