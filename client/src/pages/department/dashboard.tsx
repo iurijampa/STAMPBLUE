@@ -20,7 +20,7 @@ import ReprintRequestsList from "@/components/reprint-requests-list";
 import ReprintRequestsForDepartment from "@/components/reprint-requests-for-department";
 import { ActivitySkeleton, StatsSkeleton } from "@/components/activity-skeleton";
 import { SoundToggleButton, SoundTestButton } from "@/components/SoundManagerSimples";
-import ListaEmergencial from "@/components/lista-emergencial";
+import ListaEmergencialIndependente from "@/components/lista-emergencial-independente";
 
 // Estendendo a interface Activity para incluir os campos que estamos recebendo do backend
 interface ActivityWithNotes extends Activity {
@@ -831,11 +831,7 @@ export default function DepartmentDashboard() {
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <ListaEmergencial 
-                      department={userDepartment}
-                      activities={activitiesData}
-                      refreshInterval={5000}
-                    />
+                    <ListaEmergencialIndependente />
                   </CardContent>
                 </Card>
               </div>
