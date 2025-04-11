@@ -210,16 +210,13 @@ export default function ListaUltraSimples() {
               
               <CardContent className="py-2">
                 <div className="flex gap-4">
-                  {solicitacao.activityImage && (
-                    <div className="flex-shrink-0 w-16 h-16 rounded-md overflow-hidden border">
-                      <img 
-                        src={solicitacao.activityImage} 
-                        alt="Miniatura do pedido" 
-                        className="w-full h-full object-cover"
-                        onError={(e) => (e.currentTarget.style.display = 'none')}
-                      />
-                    </div>
-                  )}
+                  <div className="flex-shrink-0 w-16 h-16 rounded-md overflow-hidden border">
+                    <img 
+                      src="/logo.svg" 
+                      alt="Miniatura do pedido" 
+                      className="w-full h-full object-cover bg-blue-600"
+                    />
+                  </div>
                   
                   <div className="flex-1 text-sm space-y-1">
                     <p><span className="font-medium">Motivo:</span> {solicitacao.reason}</p>
