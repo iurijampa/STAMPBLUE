@@ -47,16 +47,26 @@ export default function ReprintRequestsForDepartment({ department }: ReprintRequ
   const [selectedRequest, setSelectedRequest] = useState<ReprintRequest | null>(null);
   const [activeTab, setActiveTab] = useState("pending");
 
-  // Buscar solicitações para o departamento atual com atualização automática
+  // MODO EMERGENCIAL: Buscar solicitações usando a API emergencial
   const { data: requests, isLoading, error, refetch } = useQuery({
-    queryKey: ["/api/reprint-requests/for-department", department],
+    queryKey: ["/api/reimpressao-emergencial/listar"],
     queryFn: async () => {
       try {
-        const response = await fetch(`/api/reprint-requests/for-department/${department}`);
+        console.log("Buscando solicitações emergenciais para o setor de impressão");
+        const response = await fetch(`/api/reimpressao-emergencial/listar`);
         if (!response.ok) {
           throw new Error("Erro ao buscar solicitações de reimpressão");
         }
-        return await response.json() as ReprintRequest[];
+        
+        const allRequests = await response.json() as ReprintRequest[];
+        
+        // Filtramos apenas as solicitações destinadas a este departamento
+        const filteredRequests = allRequests.filter(req => 
+          req.toDepartment === department
+        );
+        
+        console.log(`Encontradas ${filteredRequests.length} solicitações emergenciais para o setor ${department}`);
+        return filteredRequests;
       } catch (error) {
         console.error("Erro ao buscar solicitações:", error);
         throw error;
@@ -91,7 +101,7 @@ export default function ReprintRequestsForDepartment({ department }: ReprintRequ
   const handleCloseModal = () => {
     setIsViewModalOpen(false);
     // Recarregar dados após fechar o modal para obter atualizações
-    queryClient.invalidateQueries({ queryKey: ["/api/reprint-requests/for-department", department] });
+    queryClient.invalidateQueries({ queryKey: ["/api/reimpressao-emergencial/listar"] });
   };
 
   // Formatação condicional com base na prioridade
