@@ -21,6 +21,7 @@ import ReprintRequestsForDepartment from "@/components/reprint-requests-for-depa
 import { ActivitySkeleton, StatsSkeleton } from "@/components/activity-skeleton";
 import { SoundToggleButton, SoundTestButton } from "@/components/SoundManagerSimples";
 import ListaUltraSimples from "@/components/lista-ultrasimples";
+import SolucaoEmergencial from "@/components/solucao-emergencial";
 
 // Estendendo a interface Activity para incluir os campos que estamos recebendo do backend
 interface ActivityWithNotes extends Activity {
@@ -818,7 +819,11 @@ export default function DepartmentDashboard() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <ListaUltraSimples />
+                  {userDepartment === "impressao" ? (
+                    <SolucaoEmergencial departamento="impressao" />
+                  ) : (
+                    <SolucaoEmergencial departamento="batida" modoVisualizacao={true} />
+                  )}
                 </CardContent>
               </Card>
             </div>
