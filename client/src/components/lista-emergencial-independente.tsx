@@ -66,6 +66,9 @@ export default function ListaEmergencialIndependente() {
       const data = await response.json();
       console.log(`✅ Encontradas ${data.length} solicitações emergenciais para o setor impressao`);
       
+      // Adicionar console.log para depuração
+      console.log('Dados recebidos da API:', JSON.stringify(data));
+      
       setSolicitacoes(data);
     } catch (err) {
       console.error("❌ Erro ao carregar solicitações:", err);
@@ -187,8 +190,8 @@ export default function ListaEmergencialIndependente() {
   return (
     <div>
       <div className="p-0">
-        <div className="p-4 border-b flex items-center justify-between">
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <div className="p-4 border-b flex items-center justify-between">
             <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="pendentes" className="relative">
                 Pendentes
@@ -201,38 +204,37 @@ export default function ListaEmergencialIndependente() {
               <TabsTrigger value="concluidas">Concluídas</TabsTrigger>
               <TabsTrigger value="rejeitadas">Rejeitadas</TabsTrigger>
             </TabsList>
-          </Tabs>
-          
-          <Button variant="outline" size="sm" onClick={() => setRefreshKey(prev => prev + 1)} className="ml-2 flex-shrink-0">
-            <RefreshCw className="h-4 w-4 mr-1" />
-            Atualizar
-          </Button>
-        </div>
-        
-        {loading ? (
-          <div className="py-10 flex flex-col items-center justify-center">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mb-2" />
-            <p className="text-sm text-muted-foreground">Carregando solicitações...</p>
-          </div>
-        ) : error ? (
-          <div className="py-10 flex flex-col items-center justify-center">
-            <AlertCircle className="h-8 w-8 text-red-500 mb-2" />
-            <p className="text-sm text-red-500 mb-2">{error}</p>
-            <Button variant="outline" size="sm" onClick={() => setRefreshKey(prev => prev + 1)}>
-              Tentar novamente
+            
+            <Button variant="outline" size="sm" onClick={() => setRefreshKey(prev => prev + 1)} className="ml-2 flex-shrink-0">
+              <RefreshCw className="h-4 w-4 mr-1" />
+              Atualizar
             </Button>
           </div>
-        ) : (
-          <>
-            <TabsContent value="pendentes" className="m-0">
-              {pendentes.length === 0 ? (
-                <div className="py-10 text-center text-muted-foreground">
-                  <Info className="h-8 w-8 mx-auto mb-2" />
-                  <p>Não há solicitações pendentes no momento.</p>
-                </div>
-              ) : (
-                <div className="divide-y">
-                  {pendentes.map(solicitacao => (
+          
+          {loading ? (
+            <div className="py-10 flex flex-col items-center justify-center">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mb-2" />
+              <p className="text-sm text-muted-foreground">Carregando solicitações...</p>
+            </div>
+          ) : error ? (
+            <div className="py-10 flex flex-col items-center justify-center">
+              <AlertCircle className="h-8 w-8 text-red-500 mb-2" />
+              <p className="text-sm text-red-500 mb-2">{error}</p>
+              <Button variant="outline" size="sm" onClick={() => setRefreshKey(prev => prev + 1)}>
+                Tentar novamente
+              </Button>
+            </div>
+          ) : (
+            <>
+              <TabsContent value="pendentes" className="m-0">
+                {pendentes.length === 0 ? (
+                  <div className="py-10 text-center text-muted-foreground">
+                    <Info className="h-8 w-8 mx-auto mb-2" />
+                    <p>Não há solicitações pendentes no momento.</p>
+                  </div>
+                ) : (
+                  <div className="divide-y">
+                    {pendentes.map(solicitacao => (
                     <div key={solicitacao.id} className="p-4 hover:bg-slate-50 dark:hover:bg-slate-900/10">
                       <div className="flex justify-between items-start mb-2">
                         <div className="flex items-start gap-3">
