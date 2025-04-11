@@ -1,30 +1,17 @@
 // Módulo de reimpressão ultra-básico (sem banco de dados, sem autenticação)
 // Implementação mais simples possível para garantir funcionamento
-// Armazena dados em memória apenas
+// Armazena dados em memória compartilhada
 
 import express, { Router, Request, Response } from 'express';
+import { 
+  EmergencyReprintRequest, 
+  getAllRequests, 
+  getRequestById, 
+  addRequest, 
+  updateRequest 
+} from './emergency-storage';
+
 const router: Router = express.Router();
-
-// Interfaces para tipagem
-interface ReprintRequest {
-  id: number;
-  activityId: number;
-  activityTitle?: string;
-  activityImage?: string | null;
-  requestedBy: string;
-  reason: string;
-  details?: string;
-  quantity: number;
-  status: string;
-  createdAt: string;
-  fromDepartment: string;
-  toDepartment: string;
-  processedBy?: string;
-  processedAt?: string;
-}
-
-// Armazenamento em memória para as solicitações
-const solicitacoes: ReprintRequest[] = [];
 
 // Função para obter imagem da atividade
 async function getActivityImage(activityId: number): Promise<string | null> {
@@ -69,7 +56,7 @@ router.post('/criar', async (req: Request, res: Response) => {
     const activityImage = await getActivityImage(Number(activityId));
     
     // Criar solicitação
-    const novaSolicitacao: ReprintRequest = {
+    const novaSolicitacao: EmergencyReprintRequest = {
       id: Date.now(),
       activityId: Number(activityId),
       activityTitle,
@@ -84,11 +71,10 @@ router.post('/criar', async (req: Request, res: Response) => {
       toDepartment: 'impressao'
     };
     
-    // Adicionar à lista
-    solicitacoes.push(novaSolicitacao);
+    // Adicionar à lista compartilhada
+    addRequest(novaSolicitacao);
     
     console.log('✅ Solicitação emergencial criada com sucesso:', novaSolicitacao);
-    console.log('✅ Total de solicitações emergenciais:', solicitacoes.length);
     
     // Retornar resposta
     return res.status(201).json({
@@ -109,7 +95,7 @@ router.post('/criar', async (req: Request, res: Response) => {
 // Rota para listar solicitações (GET /api/reimpressao-emergencial/listar)
 router.get('/listar', (req: Request, res: Response) => {
   console.log('💡 Requisição para listar solicitações emergenciais');
-  return res.status(200).json(solicitacoes);
+  return res.status(200).json(getAllRequests());
 });
 
 // Rota para obter uma solicitação específica (GET /api/reimpressao-emergencial/:id)
@@ -117,7 +103,7 @@ router.get('/:id', (req: Request, res: Response) => {
   const id = parseInt(req.params.id);
   console.log(`💡 Requisição para obter solicitação emergencial #${id}`);
   
-  const solicitacao = solicitacoes.find(s => s.id === id);
+  const solicitacao = getRequestById(id);
   
   if (!solicitacao) {
     return res.status(404).json({
@@ -143,36 +129,33 @@ router.post('/:id/processar', (req: Request, res: Response) => {
     });
   }
   
-  const index = solicitacoes.findIndex(s => s.id === id);
+  // Atualizar solicitação usando o storage compartilhado
+  const solicitacaoAtualizada = updateRequest(id, {
+    status,
+    processedBy,
+    processedAt: new Date().toISOString()
+  });
   
-  if (index === -1) {
+  if (!solicitacaoAtualizada) {
     return res.status(404).json({
       success: false,
       message: 'Solicitação não encontrada'
     });
   }
   
-  // Atualizar solicitação
-  solicitacoes[index] = {
-    ...solicitacoes[index],
-    status,
-    processedBy,
-    processedAt: new Date().toISOString()
-  };
-  
-  console.log(`✅ Solicitação emergencial #${id} processada com sucesso:`, solicitacoes[index]);
+  console.log(`✅ Solicitação emergencial #${id} processada com sucesso:`, solicitacaoAtualizada);
   
   return res.status(200).json({
     success: true,
     message: 'Solicitação processada com sucesso',
-    data: solicitacoes[index]
+    data: solicitacaoAtualizada
   });
 });
 
-// Função para listar solicitações de reimpressão
-export function listarSolicitacoesReimpressao(): ReprintRequest[] {
-  console.log('📋 Retornando solicitações da memória:', solicitacoes.length);
-  return solicitacoes;
+// Função para listar solicitações de reimpressão 
+// Mantido para compatibilidade, mas usando o storage compartilhado
+export function listarSolicitacoesReimpressao(): EmergencyReprintRequest[] {
+  return getAllRequests();
 }
 
 export default router;
