@@ -8,6 +8,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Loader2, CheckCircle, X, RefreshCw, Info, AlertCircle, Clock, Send } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
+import CreateReprintRequest from "./create-reprint";
 import {
   Dialog,
   DialogContent,
