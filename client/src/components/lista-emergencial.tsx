@@ -81,6 +81,8 @@ export default function ListaEmergencial({ department, activities, refreshInterv
       
       const data = await response.json();
       console.log("📋 Solicitações carregadas:", data);
+      console.log("🔍 isImpressao:", isImpressao);
+      console.log("🔍 Departamento atual:", department);
       
       setSolicitacoes(data);
     } catch (err) {
@@ -185,23 +187,19 @@ export default function ListaEmergencial({ department, activities, refreshInterv
     }
   };
   
-  // Filtrar solicitações com base no departamento e status
+  // Classificar solicitações com base no status
   const filtrarSolicitacoes = () => {
-    if (isImpressao) {
-      // Para setor de impressão, mostrar solicitações que o Batida enviou
-      const pendentes = solicitacoes.filter(s => s.toDepartment === "impressao" && s.status === "pendente");
-      const concluidas = solicitacoes.filter(s => s.toDepartment === "impressao" && s.status === "concluida");
-      const rejeitadas = solicitacoes.filter(s => s.toDepartment === "impressao" && s.status === "rejeitada");
-      
-      return { pendentes, concluidas, rejeitadas };
-    } else {
-      // Para setor de batida, mostrar solicitações que eles enviaram
-      const pendentes = solicitacoes.filter(s => s.fromDepartment === "batida" && s.status === "pendente");
-      const concluidas = solicitacoes.filter(s => s.fromDepartment === "batida" && s.status === "concluida");
-      const rejeitadas = solicitacoes.filter(s => s.fromDepartment === "batida" && s.status === "rejeitada");
-      
-      return { pendentes, concluidas, rejeitadas };
-    }
+    // Separar por status apenas, sem filtrar por departamento
+    const pendentes = solicitacoes.filter(s => s.status === "pendente");
+    const concluidas = solicitacoes.filter(s => s.status === "concluida");
+    const rejeitadas = solicitacoes.filter(s => s.status === "rejeitada");
+    
+    console.log("✅ Total de solicitações:", solicitacoes.length);
+    console.log("✅ Solicitações pendentes:", pendentes.length);
+    console.log("✅ Solicitações concluídas:", concluidas.length);
+    console.log("✅ Solicitações rejeitadas:", rejeitadas.length);
+    
+    return { pendentes, concluidas, rejeitadas };
   };
   
   const { pendentes, concluidas, rejeitadas } = filtrarSolicitacoes();
