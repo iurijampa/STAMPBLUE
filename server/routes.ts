@@ -941,7 +941,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // Obter solicitações de reimpressão para um departamento
+  // ROTA EMERGENCIAL ESPECÍFICA PARA O SETOR DE IMPRESSÃO
+  app.get("/api/reprint-requests/for-department/impressao", isAuthenticated, async (req, res) => {
+    try {
+      console.log(`🔥 ROTA EMERGENCIAL PARA IMPRESSÃO ATIVADA`);
+      
+      // Obter solicitações da API emergencial
+      const emergencialRequests = require('./reimpressao-emergencial');
+      const allRequests = emergencialRequests.listarSolicitacoesReimpressao();
+      
+      // Filtra apenas as solicitações para este departamento
+      const filteredRequests = allRequests.filter(req => req.toDepartment === "impressao");
+      
+      console.log(`🔥 Retornando ${filteredRequests.length} solicitações emergenciais para IMPRESSÃO`);
+      return res.json(filteredRequests);
+      
+    } catch (error) {
+      console.error("🔥 Erro na rota emergencial IMPRESSÃO:", error);
+      res.status(500).json({ message: "Erro ao buscar solicitações de reimpressão" });
+    }
+  });
+  
+  // Obter solicitações de reimpressão para outros departamentos
   app.get("/api/reprint-requests/for-department/:department", isAuthenticated, async (req, res) => {
     try {
       let department = req.params.department;
@@ -951,22 +972,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         department = req.user.role;
       }
       
-      const requests = await storage.getReprintRequestsForDepartment(department);
+      console.log(`REDIRECIONANDO PARA API EMERGENCIAL: departamento ${department}`);
       
-      // Enriquecer os dados com informações da atividade
-      const enrichedRequests = [];
+      // SOLUÇÃO EMERGENCIAL: Redirecionando para API emergencial
+      const emergencialRequests = require('./reimpressao-emergencial');
+      const allRequests = emergencialRequests.listarSolicitacoesReimpressao();
       
-      for (const request of requests) {
-        const activity = await storage.getActivity(request.activityId);
-        if (activity) {
-          enrichedRequests.push({
-            ...request,
-            activityTitle: activity.title,
-            activityDeadline: activity.deadline
-          });
-        }
-      }
+      // Filtra apenas as solicitações para este departamento
+      const filteredRequests = allRequests.filter(req => req.toDepartment === department);
       
+      // Enriquecer os dados com informações da atividade (já estão incluídas na solução emergencial)
+      const enrichedRequests = filteredRequests;
+      
+      console.log(`Retornando ${enrichedRequests.length} solicitações emergenciais para o departamento ${department}`);
       res.json(enrichedRequests);
     } catch (error) {
       console.error("Erro ao buscar solicitações de reimpressão:", error);

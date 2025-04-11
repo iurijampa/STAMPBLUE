@@ -151,4 +151,11 @@ router.post('/:id/processar', (req, res) => {
   });
 });
 
+// Exportar as funções para acesso direto em rotas padrão
+function listarSolicitacoesReimpressao() {
+  console.log('📋 Retornando solicitações da memória:', solicitacoes.length);
+  return solicitacoes;
+}
+
 module.exports = router;
+module.exports.listarSolicitacoesReimpressao = listarSolicitacoesReimpressao;
