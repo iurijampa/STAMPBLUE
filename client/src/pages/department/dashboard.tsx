@@ -20,6 +20,7 @@ import ReprintRequestsList from "@/components/reprint-requests-list";
 import ReprintRequestsForDepartment from "@/components/reprint-requests-for-department";
 import { ActivitySkeleton, StatsSkeleton } from "@/components/activity-skeleton";
 import { SoundToggleButton, SoundTestButton } from "@/components/SoundManagerSimples";
+import ListaEmergencial from "@/components/lista-emergencial";
 
 // Estendendo a interface Activity para incluir os campos que estamos recebendo do backend
 interface ActivityWithNotes extends Activity {
