@@ -831,7 +831,7 @@ export default function DepartmentDashboard() {
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <ListaEmergencialIndependente />
+                    <ListaUltraSimples />
                   </CardContent>
                 </Card>
               </div>
