@@ -1,5 +1,4 @@
-import type { IStorage } from './storage-interface';
-import { DatabaseStorage } from './database-storage';
+// Este arquivo exporta o storage para uso em outros módulos
+import { storage } from './storage';
 
-// Usar armazenamento em banco de dados para persistência
-export const storage: IStorage = new DatabaseStorage();
+export { storage };

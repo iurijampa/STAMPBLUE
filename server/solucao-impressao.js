@@ -13,6 +13,9 @@ router.get('/listar', (req, res) => {
   console.log('📋 SOLUÇÃO IMPRESSÃO: Requisição para listar solicitações');
   
   try {
+    // Definir explicitamente o tipo de conteúdo como JSON
+    res.setHeader('Content-Type', 'application/json');
+    
     // Obter todas as solicitações
     const allRequests = emergencialApi.listarSolicitacoesReimpressao();
     

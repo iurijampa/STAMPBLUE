@@ -18,6 +18,8 @@ import path from 'path';
 import { db } from "./db";
 import { createBackup } from "./backup";
 import { and, eq, sql } from "drizzle-orm";
+import impressaoRouter from "./solucao-impressao";
+import emergencialRouter, { listarSolicitacoesReimpressao } from "./reimpressao-emergencial";
 import { 
   buscarAtividadesPorDepartamentoEmergencia, 
   criarProgressoProximoDepartamentoEmergencia, 
@@ -56,7 +58,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // Se for uma rota para a página de teste ou API simplificada, pular autenticação
     if (req.path.startsWith('/api/reimpressao-simples') || 
         req.path.startsWith('/api/reimpressao-ultrabasico') ||
-        req.path.startsWith('/api/reimpressao-emergencial')) {
+        req.path.startsWith('/api/reimpressao-emergencial') ||
+        req.path.startsWith('/api/impressao-emergencial')) {
       req.isAuthenticated = () => true; // Fingir que está autenticado
       console.log(`[AUTH_BYPASS] Autenticação pulada para: ${req.path}`);
       return next();
@@ -64,6 +67,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // Caso contrário, seguir o fluxo normal
     next();
   });
+  
+  // Registrar rota específica para o setor de impressão
+  app.use('/api/impressao-emergencial', impressaoRouter);
   
   // Rotas de reimpressão emergencial (em memória)
   // Variável global para armazenar solicitações em memória

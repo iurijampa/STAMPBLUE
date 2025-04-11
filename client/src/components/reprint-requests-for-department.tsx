@@ -47,23 +47,30 @@ export default function ReprintRequestsForDepartment({ department }: ReprintRequ
   const [selectedRequest, setSelectedRequest] = useState<ReprintRequest | null>(null);
   const [activeTab, setActiveTab] = useState("pending");
 
-  // MODO EMERGENCIAL: Buscar solicitações usando a API emergencial
+  // MODO HIPER-EMERGENCIAL: Usar API específica para impressão ou genérica para outros setores
+  const apiEndpoint = department === 'impressao' 
+    ? '/api/impressao-emergencial/listar'
+    : '/api/reimpressao-emergencial/listar';
+    
   const { data: requests, isLoading, error, refetch } = useQuery({
-    queryKey: ["/api/reimpressao-emergencial/listar"],
+    queryKey: [apiEndpoint],
     queryFn: async () => {
       try {
-        console.log("Buscando solicitações emergenciais para o setor de impressão");
-        const response = await fetch(`/api/reimpressao-emergencial/listar`);
+        console.log(`Buscando solicitações emergenciais para o setor ${department}`);
+        
+        // Usar a API específica para impressão ou a genérica para outros departamentos
+        const response = await fetch(apiEndpoint);
+        
         if (!response.ok) {
           throw new Error("Erro ao buscar solicitações de reimpressão");
         }
         
         const allRequests = await response.json() as ReprintRequest[];
         
-        // Filtramos apenas as solicitações destinadas a este departamento
-        const filteredRequests = allRequests.filter(req => 
-          req.toDepartment === department
-        );
+        // Para a API específica de impressão não precisamos filtrar, para a genérica sim
+        const filteredRequests = department === 'impressao' 
+          ? allRequests 
+          : allRequests.filter(req => req.toDepartment === department);
         
         console.log(`Encontradas ${filteredRequests.length} solicitações emergenciais para o setor ${department}`);
         return filteredRequests;
@@ -101,7 +108,7 @@ export default function ReprintRequestsForDepartment({ department }: ReprintRequ
   const handleCloseModal = () => {
     setIsViewModalOpen(false);
     // Recarregar dados após fechar o modal para obter atualizações
-    queryClient.invalidateQueries({ queryKey: ["/api/reimpressao-emergencial/listar"] });
+    queryClient.invalidateQueries({ queryKey: [apiEndpoint] });
   };
 
   // Formatação condicional com base na prioridade
