@@ -800,41 +800,27 @@ export default function DepartmentDashboard() {
                 <h3 className="text-lg font-semibold">Gerenciamento de Reimpressões</h3>
               </div>
               
-              {/* Solicitações sempre visíveis */}
-              <div className="mt-6">
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-lg">Solicitações de Reimpressão</CardTitle>
-                    <CardDescription>
-                      Gerencie as solicitações recebidas do setor de Batida
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    {/* Componente para o setor de impressão gerenciar solicitações */}
-                    <ReprintRequestsForDepartment department={userDepartment} />
-                  </CardContent>
-                </Card>
-                
-                {/* SOLUÇÃO EMERGENCIAL DE REIMPRESSÃO */}
-                <Card className="mt-6">
-                  <CardHeader className="pb-3 bg-blue-50 dark:bg-blue-900/20">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <CardTitle className="text-lg">Sistema Emergencial de Reimpressão</CardTitle>
-                        <CardDescription>
-                          Solução ultra-rápida para processar solicitações de reimpressão
-                        </CardDescription>
-                      </div>
-                      <Badge variant="outline" className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100">
-                        ULTRA RÁPIDO
-                      </Badge>
+              {/* Componente simplificado removido - usamos apenas a versão ultraSimples */}
+              
+              {/* SOLUÇÃO EMERGENCIAL DE REIMPRESSÃO */}
+              <Card className="mt-6">
+                <CardHeader className="pb-3 bg-blue-50 dark:bg-blue-900/20">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="text-lg">Sistema Emergencial de Reimpressão</CardTitle>
+                      <CardDescription>
+                        Solução ultra-rápida para processar solicitações de reimpressão
+                      </CardDescription>
                     </div>
-                  </CardHeader>
-                  <CardContent>
-                    <ListaUltraSimples />
-                  </CardContent>
-                </Card>
-              </div>
+                    <Badge variant="outline" className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100">
+                      ULTRA RÁPIDO
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <ListaUltraSimples />
+                </CardContent>
+              </Card>
             </div>
           )}
         </>
