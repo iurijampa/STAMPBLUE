@@ -35,14 +35,15 @@ export default function ReimpressaoProcessamento() {
       setIsLoading(true);
       setError(null);
       
-      const response = await fetch("/api/reimpressao-simples/listar");
+      // Usando o endpoint de API compartilhado do sistema emergencial
+      const response = await fetch("/api/impressao-emergencial/listar");
       
       if (!response.ok) {
         throw new Error("Falha ao buscar solicitações");
       }
       
       const data = await response.json();
-      // Filtrar apenas pendentes para o setor de impressão
+      // Filtrar apenas pendentes para o setor de impressão (o endpoint já filtra mas garantimos aqui)
       const pendentes = data.filter((s: SolicitacaoReimpressao) => 
         s.status === "pendente" && s.toDepartment === "impressao"
       );
@@ -85,8 +86,8 @@ export default function ReimpressaoProcessamento() {
     try {
       setIsLoading(true);
       
-      // Enviar solicitação para API
-      const response = await fetch(`/api/reimpressao-simples/${selectedRequest.id}/processar`, {
+      // Enviar solicitação para API emergencial compartilhada
+      const response = await fetch(`/api/impressao-emergencial/${selectedRequest.id}/processar`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
