@@ -67,7 +67,13 @@ export default function ListaEmergencial({ department, activities, refreshInterv
     try {
       setError(null);
       
-      const response = await fetch("/api/reimpressao-emergencial/listar");
+      // Usar endpoint específico com base no departamento
+      const endpoint = isImpressao 
+        ? "/api/impressao-emergencial/listar" 
+        : "/api/reimpressao-emergencial/listar";
+      
+      console.log(`🔍 Buscando solicitações no endpoint: ${endpoint}`);
+      const response = await fetch(endpoint);
       
       if (!response.ok) {
         throw new Error("Erro ao carregar solicitações");
@@ -128,7 +134,13 @@ export default function ListaEmergencial({ department, activities, refreshInterv
     setProcessing(true);
     
     try {
-      const response = await fetch(`/api/reimpressao-emergencial/${selectedSolicitacao.id}/processar`, {
+      // Usar endpoint específico com base no departamento
+      const endpoint = isImpressao 
+        ? `/api/impressao-emergencial/${selectedSolicitacao.id}/processar`
+        : `/api/reimpressao-emergencial/${selectedSolicitacao.id}/processar`;
+      
+      console.log(`🔄 Processando solicitação via endpoint: ${endpoint}`);
+      const response = await fetch(endpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
