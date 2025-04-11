@@ -212,9 +212,14 @@ export default function ListaUltraSimples() {
                 <div className="flex gap-4">
                   <div className="flex-shrink-0 w-16 h-16 rounded-md overflow-hidden border">
                     <img 
-                      src="/logo.svg" 
+                      src={solicitacao.activityImage || "/logo.svg"} 
                       alt="Miniatura do pedido" 
-                      className="w-full h-full object-cover bg-blue-600"
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        // Caso a imagem não carregue, substituir pela logo
+                        e.currentTarget.src = "/logo.svg";
+                        e.currentTarget.classList.add("bg-blue-600");
+                      }}
                     />
                   </div>
                   
