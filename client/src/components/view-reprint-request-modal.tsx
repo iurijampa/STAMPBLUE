@@ -200,20 +200,8 @@ export default function ViewReprintRequestModal({ isOpen, onClose, request }: Vi
                   {/* Imagem da atividade como miniatura */}
                   <div className="flex-shrink-0 w-16 h-16 rounded-md overflow-hidden border bg-slate-50 flex items-center justify-center">
                     <img 
-                      src={
-                        // Caso 1: Caminho direto para a imagem (mostrar diretamente)
-                        request.activityId === 53 
-                          ? "/uploads/activity_53.jpg" 
-                          : request.activityId === 49 
-                            ? "/uploads/activity_49.jpg"
-                            : request.activityId === 48
-                              ? "/iphone-icon.svg"
-                              // Caso 2: Use a URL da imagem da activity se existir
-                              : request.activityImage?.startsWith("/uploads") || request.activityImage?.startsWith("/iphone-icon.svg")
-                                ? request.activityImage
-                                // Caso 3: Fallback para ícone genérico
-                                : "/no-image.svg"
-                      }
+                      // Usar API que busca a imagem diretamente do banco de dados
+                      src={`/api/activity-image/${request.activityId}`}
                       alt={request.activityTitle || `Pedido ${request.activityId}`} 
                       className="w-full h-full object-contain"
                       onError={(e) => {
