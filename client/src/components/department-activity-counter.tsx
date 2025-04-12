@@ -114,7 +114,10 @@ export default function DepartmentActivityCounter() {
         ) : (
           <div className="space-y-4">
             <div className="grid gap-4 md:grid-cols-5">
-              {counts && Object.entries(counts).map(([dept, count]) => (
+              {counts && Object.entries(counts)
+                // Filtrar departamentos que não estão na lista de departamentos permitidos
+                .filter(([dept]) => departmentNames[dept as keyof typeof departmentNames])
+                .map(([dept, count]) => (
                 <Card key={dept} className="border-2 overflow-hidden">
                   <CardContent className="p-6">
                     <div className="flex flex-col items-center text-center">
