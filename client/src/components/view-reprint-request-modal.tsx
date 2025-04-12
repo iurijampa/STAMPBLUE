@@ -4,6 +4,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { apiRequest } from "@/lib/queryClient";
+import { ImageIcon, Loader2 } from "lucide-react";
 
 import {
   Dialog,
@@ -32,7 +33,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 
 // Interface para representar a solicitação de reimpressão
