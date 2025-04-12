@@ -196,6 +196,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             return {
               ...activity,
               currentDepartment,
+              clientInfo: activity.clientDetails || activity.clientInfo || null, // Adiciona informações adicionais do cliente
               progress: progresses
             };
           })

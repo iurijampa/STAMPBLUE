@@ -601,19 +601,6 @@ function ActivitiesList() {
                   <th className="px-4 py-3 font-medium text-sm">Título</th>
                   <th className="px-4 py-3 font-medium text-sm">Cliente</th>
                   <th className="px-4 py-3 font-medium text-sm">Setor Atual</th>
-                  <th className="px-4 py-3 font-medium text-sm">
-                    <div className="flex items-center">
-                      Entrega
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="ml-1 h-6 w-6"
-                        onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
-                      >
-                        {sortOrder === "asc" ? <ArrowUpCircle className="h-4 w-4" /> : <ArrowDownCircle className="h-4 w-4" />}
-                      </Button>
-                    </div>
-                  </th>
                   <th className="px-4 py-3 font-medium text-sm text-right">Ações</th>
                 </tr>
               </thead>
@@ -627,7 +614,14 @@ function ActivitiesList() {
                     <td className="px-4 py-3">
                       <div className="font-medium">{activity.title}</div>
                     </td>
-                    <td className="px-4 py-3">{activity.client}</td>
+                    <td className="px-4 py-3">
+                      <div className="font-medium">{activity.client}</div>
+                      {activity.clientInfo && (
+                        <div className="text-sm text-muted-foreground mt-1">
+                          {activity.clientInfo}
+                        </div>
+                      )}
+                    </td>
                     <td className="px-4 py-3">
                       <div className={`px-3 py-1 text-center text-white rounded-md text-sm ${
                         currentDept === 'gabarito' ? 'bg-blue-600' : 
@@ -641,11 +635,6 @@ function ActivitiesList() {
                          currentDept === 'batida' ? 'Batida' : 
                          currentDept === 'costura' ? 'Costura' : 
                          currentDept === 'embalagem' ? 'Embalagem' : 'Pendente'}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className={`px-3 py-1 text-center rounded-md ${getPriorityClass(activity.deadline)}`}>
-                        {activity.deadline ? new Date(activity.deadline).toLocaleDateString('pt-BR') : '-'}
                       </div>
                     </td>
                     <td className="px-4 py-3 text-right">
