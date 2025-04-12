@@ -160,28 +160,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: 'ID inválido' });
       }
       
-      const activity = await storage.getActivity(activityId);
-      if (!activity) {
-        return res.status(404).json({ message: 'Atividade não encontrada' });
+      // Primeiro, vamos tentar buscar da lista de departamentos que contém os dados completos
+      // Isso é necessário porque a API de atividades individuais não retorna a imagem completa
+      // Tentaremos primeiro com o departamento atual da atividade
+      let activityWithImage = null;
+      
+      // Verificar em qual departamento a atividade está atualmente
+      const allProgresses = await storage.getActivityProgress(activityId);
+      const pendingProgress = allProgresses
+        .filter(p => p.status === 'pending')
+        .sort((a, b) => {
+          const deptOrder = ['gabarito', 'impressao', 'batida', 'costura', 'embalagem'];
+          return deptOrder.indexOf(a.department as any) - deptOrder.indexOf(b.department as any);
+        })[0];
+      
+      const currentDepartment = pendingProgress ? pendingProgress.department : 'gabarito';
+      
+      // Buscar a atividade da lista do departamento atual
+      const departmentActivities = await buscarAtividadesPorDepartamentoEmergencia(currentDepartment);
+      activityWithImage = departmentActivities.find(act => act.id === activityId);
+      
+      // Se não encontrou, vamos tentar com todos os departamentos
+      if (!activityWithImage) {
+        for (const dept of ['gabarito', 'impressao', 'batida', 'costura', 'embalagem']) {
+          const deptActivities = await buscarAtividadesPorDepartamentoEmergencia(dept);
+          const foundActivity = deptActivities.find(act => act.id === activityId);
+          if (foundActivity && foundActivity.image) {
+            activityWithImage = foundActivity;
+            break;
+          }
+        }
       }
       
-      if (!activity.image) {
+      // Se ainda não encontrou, vamos buscar da atividade diretamente
+      if (!activityWithImage) {
+        activityWithImage = await storage.getActivity(activityId);
+      }
+      
+      if (!activityWithImage || !activityWithImage.image) {
+        // Casos especiais para IDs conhecidos (failsafe)
+        if (activityId === 48) {
+          return res.redirect('/iphone-icon.svg');
+        } else if (activityId === 49) {
+          return res.redirect('/uploads/activity_49.jpg');
+        } else if (activityId === 53) {
+          return res.redirect('/uploads/activity_53.jpg');
+        }
+        
         return res.redirect('/no-image.svg');
       }
       
-      // Casos especiais para IDs conhecidos (failsafe)
-      if (activityId === 48) {
-        return res.redirect('/iphone-icon.svg');
-      } else if (activityId === 49) {
-        return res.redirect('/uploads/activity_49.jpg');
-      } else if (activityId === 53) {
-        return res.redirect('/uploads/activity_53.jpg');
-      }
-      
       // Redirecionar para a imagem da atividade
-      if (activity.image.startsWith('data:')) {
+      if (activityWithImage.image.startsWith('data:')) {
         // É uma string base64, envia como imagem
-        const matches = activity.image.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+        const matches = activityWithImage.image.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
         if (matches && matches.length === 3) {
           const type = matches[1];
           const data = Buffer.from(matches[2], 'base64');
@@ -191,7 +223,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // É uma URL, redireciona
-      return res.redirect(activity.image);
+      return res.redirect(activityWithImage.image);
     } catch (error) {
       console.error('Erro ao buscar imagem da atividade:', error);
       return res.status(500).json({ message: 'Erro ao buscar imagem da atividade' });
