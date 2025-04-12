@@ -97,7 +97,8 @@ export default function AdminDashboard() {
           
           <TabsContent value="all-activities">
             <div className="space-y-6">
-              <ActivitiesList />
+              {/* Lista de todas as atividades */}
+              {ActivitiesList()}
             </div>
           </TabsContent>
           
@@ -107,7 +108,8 @@ export default function AdminDashboard() {
           
           <TabsContent value="notifications">
             <div className="space-y-6">
-              <NotificationsList />
+              {/* Lista de notificações */}
+              {NotificationsList()}
             </div>
           </TabsContent>
           
