@@ -131,9 +131,6 @@ export default function DepartmentActivityCounter() {
                         <div className="text-2xl font-bold">
                           {count}
                         </div>
-                        <p className="text-xs text-muted-foreground">
-                          atividades pendentes
-                        </p>
                       </div>
                     </div>
                   </CardContent>
@@ -148,13 +145,7 @@ export default function DepartmentActivityCounter() {
                 </Card>
               ))}
             </div>
-            
-            {/* Resumo */}
-            <div className="mt-4 text-center p-3 border rounded-md bg-gray-50">
-              <p>
-                <span className="font-medium">Total:</span> {totalActivities} atividades pendentes em todos os departamentos
-              </p>
-            </div>
+
           </div>
         )}
       </CardContent>
