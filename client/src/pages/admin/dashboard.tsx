@@ -478,8 +478,10 @@ function ActivitiesList() {
           (activity.client && activity.client.toLowerCase().includes(searchLower));
         
         // Filtra por status/departamento
-        const matchesStatus = !filterStatus || activity.currentDepartment === filterStatus;
+        const matchesStatus = !filterStatus || 
+          (activity.currentDepartment && activity.currentDepartment === filterStatus);
         
+        console.log(`Filtrando atividade ${activity.id} - Departamento atual: ${activity.currentDepartment}, Filtro: ${filterStatus}, Match: ${matchesStatus}`);
         return matchesSearch && matchesStatus;
       })
       .slice(0, 100); // Limitar a 100 itens para melhorar performance
@@ -572,13 +574,20 @@ function ActivitiesList() {
                 {sortOrder === "asc" ? <ArrowUpCircle className="h-4 w-4" /> : <ArrowDownCircle className="h-4 w-4" />}
               </Button>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2 mb-4">
               {departmentOptions.map(option => (
                 <Badge
                   key={option.value || "all"}
                   variant="outline"
-                  className={`cursor-pointer px-2 py-1 ${getFilterBgColor(option.value)}`}
-                  onClick={() => setFilterStatus(option.value)}
+                  className={`cursor-pointer px-3 py-2 text-base ${
+                    filterStatus === option.value 
+                      ? 'bg-primary text-primary-foreground font-medium' 
+                      : 'bg-background hover:bg-secondary'
+                  }`}
+                  onClick={() => {
+                    console.log(`Filtro alterado para: ${option.value || 'Todos'}`);
+                    setFilterStatus(option.value);
+                  }}
                 >
                   {option.label}
                 </Badge>
