@@ -113,11 +113,11 @@ router.post('/criar', async (req, res) => {
     
     // Força uso da imagem específica para o GS iPhone (ID 48)
     // IMPORTANTE: Este é um trecho fundamental para corrigir problemas de exibição de imagens
-    let finalImageUrl = activityImage;
+    // Aqui garantimos que SEMPRE usaremos o arquivo SVG para o iPhone
+    let finalImageUrl = "/no-image.svg"; // Padrão para qualquer atividade
     if (Number(activityId) === 48) {
-      const logoUrl = "/iphone-icon.svg";
-      console.log(`🍎 Forçando uso da imagem específica para o GS iPhone (ID 48): ${logoUrl}`);
-      finalImageUrl = logoUrl;
+      finalImageUrl = "/iphone-icon.svg";
+      console.log(`🍎 Forçando uso da imagem específica para o GS iPhone (ID 48): ${finalImageUrl}`);
     }
     
     // Criar solicitação
@@ -169,7 +169,32 @@ router.post('/criar', async (req, res) => {
 // Rota para listar solicitações (GET /api/reimpressao-emergencial/listar)
 router.get('/listar', (req, res) => {
   console.log('💡 Requisição para listar solicitações emergenciais');
-  return res.status(200).json(solicitacoes);
+  
+  // Antes de enviar a resposta, corrigir todas as URLs de imagens
+  const solicitacoesCorrigidas = solicitacoes.map(solicitacao => {
+    // Se for o GS iPhone (ID 48), sempre usar o ícone SVG correto
+    if (solicitacao.activityId === 48) {
+      console.log(`🍎 Corrigindo imagem para GS iPhone (ID 48) na listagem`);
+      return {
+        ...solicitacao,
+        activityImage: "/iphone-icon.svg"
+      };
+    }
+    
+    // Para outras solicitações, usar a imagem no-image.svg como fallback
+    if (!solicitacao.activityImage || solicitacao.activityImage.includes('/uploads/')) {
+      console.log(`⚠️ Substituindo imagem inválida para atividade ${solicitacao.activityId} na listagem`);
+      return {
+        ...solicitacao,
+        activityImage: "/no-image.svg"
+      };
+    }
+    
+    return solicitacao;
+  });
+  
+  console.log('🌐 EMERGENCY STORAGE: Retornando solicitações com imagens corrigidas');
+  return res.status(200).json(solicitacoesCorrigidas);
 });
 
 // Rota para obter a imagem de uma atividade (GET /api/reimpressao-emergencial/imagem/:activityId)
