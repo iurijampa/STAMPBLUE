@@ -171,38 +171,44 @@ router.get('/listar', (req, res) => {
   return res.status(200).json(solicitacoes);
 });
 
-// Rota para obter uma solicitação específica (GET /api/reimpressao-emergencial/:id)
-router.get('/:id', (req, res) => {
-  const id = parseInt(req.params.id);
-  console.log(`💡 Requisição para obter solicitação emergencial #${id}`);
-  
-  const solicitacao = solicitacoes.find(s => s.id === id);
-  
-  if (!solicitacao) {
-    return res.status(404).json({
-      success: false,
-      message: 'Solicitação não encontrada'
-    });
-  }
-  
-  // Aplicar caso especial para GS iPhone (ID 48)
-  if (solicitacao.activityId === 48) {
-    console.log(`🍎 Alterando URL de imagem para atividade GS iPhone (ID 48) ao fazer GET da solicitação`);
-    solicitacao.activityImage = "https://static.vecteezy.com/system/resources/previews/020/336/393/original/iphone-logo-icon-free-png.png";
-  }
-  
-  return res.status(200).json(solicitacao);
-});
-
 // Rota para obter a imagem de uma atividade (GET /api/reimpressao-emergencial/imagem/:activityId)
+// IMPORTANTE: esta rota deve vir ANTES da rota /:id para evitar problemas de ordem
 router.get('/imagem/:activityId', async (req, res) => {
   const activityId = parseInt(req.params.activityId);
   console.log(`💡 Requisição para obter imagem da atividade #${activityId}`);
   
   // Caso especial para o GS iPhone (ID 48)
   if (activityId === 48) {
-    console.log(`🍎 Redirecionando para imagem especial do GS iPhone`);
-    return res.redirect("https://static.vecteezy.com/system/resources/previews/020/336/393/original/iphone-logo-icon-free-png.png");
+    console.log(`🍎 Retornando HTML com imagem embutida do GS iPhone`);
+    // Em vez de redirecionar, vamos retornar um HTML com a imagem embutida
+    return res.send(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>GS iPhone</title>
+          <style>
+            body { 
+              display: flex; 
+              justify-content: center; 
+              align-items: center; 
+              height: 100vh; 
+              margin: 0; 
+              background: #f5f5f5; 
+            }
+            img { 
+              max-width: 80%; 
+              max-height: 80%; 
+              object-fit: contain;
+              border: none;
+            }
+          </style>
+        </head>
+        <body>
+          <img src="https://static.vecteezy.com/system/resources/previews/020/336/393/original/iphone-logo-icon-free-png.png" 
+               alt="GS iPhone Logo" />
+        </body>
+      </html>
+    `);
   }
   
   try {
@@ -227,6 +233,29 @@ router.get('/imagem/:activityId', async (req, res) => {
     console.error(`❌ Erro ao buscar imagem para atividade ${activityId}:`, error);
     return res.redirect('https://placehold.co/200x200/ffebee/d32f2f?text=Erro');
   }
+});
+
+// Rota para obter uma solicitação específica (GET /api/reimpressao-emergencial/:id)
+router.get('/:id', (req, res) => {
+  const id = parseInt(req.params.id);
+  console.log(`💡 Requisição para obter solicitação emergencial #${id}`);
+  
+  const solicitacao = solicitacoes.find(s => s.id === id);
+  
+  if (!solicitacao) {
+    return res.status(404).json({
+      success: false,
+      message: 'Solicitação não encontrada'
+    });
+  }
+  
+  // Aplicar caso especial para GS iPhone (ID 48)
+  if (solicitacao.activityId === 48) {
+    console.log(`🍎 Alterando URL de imagem para atividade GS iPhone (ID 48) ao fazer GET da solicitação`);
+    solicitacao.activityImage = "https://static.vecteezy.com/system/resources/previews/020/336/393/original/iphone-logo-icon-free-png.png";
+  }
+  
+  return res.status(200).json(solicitacao);
 });
 
 // Rota para processar solicitação (POST /api/reimpressao-emergencial/:id/processar)
