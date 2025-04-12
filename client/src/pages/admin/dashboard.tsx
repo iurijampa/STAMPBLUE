@@ -12,7 +12,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import Layout from "@/components/Layout";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import DepartmentActivityCounter from "@/components/department-activity-counter";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
