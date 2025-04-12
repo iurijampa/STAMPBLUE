@@ -630,9 +630,18 @@ function ActivitiesList() {
                     </td>
                     <td className="px-4 py-3">{activity.client}</td>
                     <td className="px-4 py-3">
-                      <div className="px-3 py-1 text-center text-white rounded-md text-sm bg-gray-600">
-                        {/* Exibir "Pendente" conforme solicitado na imagem */}
-                        Pendente
+                      <div className={`px-3 py-1 text-center text-white rounded-md text-sm ${
+                        currentDept === 'gabarito' ? 'bg-blue-600' : 
+                        currentDept === 'impressao' ? 'bg-violet-600' : 
+                        currentDept === 'batida' ? 'bg-amber-600' : 
+                        currentDept === 'costura' ? 'bg-emerald-600' : 
+                        currentDept === 'embalagem' ? 'bg-slate-600' : 'bg-gray-600'
+                      }`}>
+                        {currentDept === 'gabarito' ? 'Gabarito' : 
+                         currentDept === 'impressao' ? 'Impressão' : 
+                         currentDept === 'batida' ? 'Batida' : 
+                         currentDept === 'costura' ? 'Costura' : 
+                         currentDept === 'embalagem' ? 'Embalagem' : 'Pendente'}
                       </div>
                     </td>
                     <td className="px-4 py-3">
