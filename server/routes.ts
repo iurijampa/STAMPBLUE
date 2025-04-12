@@ -81,15 +81,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Activities
   app.get("/api/activities", isAuthenticated, async (req, res) => {
     try {
+      // Adiciona cabeçalhos de cache para o navegador
+      res.setHeader('Cache-Control', 'private, max-age=15');
+      
+      // Cria uma chave de cache baseada no usuário
+      const cacheKey = `activities_main_${req.user.role}_${req.user.id}`;
+      const cachedData = cache.get(cacheKey);
+      
+      // Se tiver em cache, retorna imediatamente (grande ganho de performance)
+      if (cachedData) {
+        console.log(`[CACHE] Usando dados em cache para ${cacheKey}`);
+        return res.json(cachedData);
+      }
+      
       if (req.user && req.user.role === "admin") {
+        // Otimização para o admin - cache por 15 segundos
         const activities = await storage.getAllActivities();
+        
+        // Guardar em cache por 15 segundos
+        cache.set(cacheKey, activities, 15000);
+        
         return res.json(activities);
       } else if (req.user) {
         const department = req.user.role;
         console.log(`[DEBUG] Usuario ${req.user.username} (${department}) solicitando atividades`);
+        
         // Usar a solução emergencial para TODOS os departamentos
         console.log(`[EMERGENCIA] Usando método direto para buscar atividades do departamento ${department}`);
         const activities = await buscarAtividadesPorDepartamentoEmergencia(department);
+        
+        // Guardar em cache por 15 segundos
+        cache.set(cacheKey, activities, 15000);
+        
         return res.json(activities);
       } else {
         return res.status(401).json({ message: "Usuário não autenticado" });
@@ -1100,13 +1123,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Rota para obter o contador de atividades por departamento (para o dashboard admin)
   app.get("/api/stats/department-counts", isAdmin, async (req, res) => {
     try {
+      // Adiciona cabeçalhos de cache para o navegador
+      res.setHeader('Cache-Control', 'public, max-age=30');
+      
+      // Verifica cache em memória para evitar consultas repetidas
+      const cacheKey = 'department_counts_global';
+      const cachedData = cache.get(cacheKey);
+      
+      if (cachedData) {
+        console.log(`[CACHE] Usando dados em cache para contagens de departamentos`);
+        return res.json(cachedData);
+      }
+      
       console.log(`[ADMIN] Obtendo contagem de atividades por departamento`);
       
       // Resultado final
       const result: Record<string, number> = {};
       
-      // Para cada departamento, buscar a contagem de atividades pendentes
-      for (const dept of DEPARTMENTS) {
+      // Buscas paralelas são mais rápidas que sequenciais
+      await Promise.all(DEPARTMENTS.map(async (dept) => {
         try {
           // Usar a função de emergência para obter atividades de cada departamento
           const activities = await buscarAtividadesPorDepartamentoEmergencia(dept);
@@ -1115,7 +1150,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.error(`[ERROR] Erro ao contar atividades para ${dept}:`, err);
           result[dept] = 0; // Valor padrão em caso de erro
         }
-      }
+      }));
+      
+      // Armazena resultado em cache por 30 segundos
+      cache.set(cacheKey, result, 30000);
       
       res.json(result);
     } catch (error) {

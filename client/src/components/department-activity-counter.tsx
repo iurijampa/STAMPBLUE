@@ -42,29 +42,73 @@ export default function DepartmentActivityCounter() {
   const { toast } = useToast();
   
   useEffect(() => {
+    // Cache local para evitar múltiplas chamadas em um curto período
+    const cacheKey = `department_counts_${refreshKey}`;
+    const cachedData = sessionStorage.getItem(cacheKey);
+    
+    // Se tiver dados em cache e estiverem atualizados (menos de 1 minuto), use-os
+    if (cachedData) {
+      try {
+        const { data, timestamp } = JSON.parse(cachedData);
+        const now = Date.now();
+        // Se o cache tiver menos de 30 segundos, use-o
+        if (now - timestamp < 30000) {
+          setCounts(data);
+          setLoading(false);
+          return;
+        }
+      } catch (e) {
+        // Se houver erro ao processar o cache, ignore e carregue normalmente
+      }
+    }
+    
+    const controller = new AbortController();
+    const signal = controller.signal;
+    
     const fetchCounts = async () => {
       try {
         setLoading(true);
         setError(null);
         
-        const response = await fetch("/api/stats/department-counts");
+        const response = await fetch("/api/stats/department-counts", {
+          signal,
+          headers: {
+            "Cache-Control": "max-age=30" // Sugere ao navegador cachear por 30 segundos
+          }
+        });
         
         if (!response.ok) {
           throw new Error(`Erro ao carregar contadores (${response.status})`);
         }
         
         const data = await response.json();
-        console.log("Contadores de departamentos:", data);
-        setCounts(data);
+        // Armazena no cache local
+        sessionStorage.setItem(cacheKey, JSON.stringify({
+          data,
+          timestamp: Date.now()
+        }));
+        
+        if (!signal.aborted) {
+          setCounts(data);
+        }
       } catch (err) {
-        console.error("Erro ao carregar contadores:", err);
-        setError(err instanceof Error ? err.message : "Erro desconhecido");
+        if (!signal.aborted) {
+          console.error("Erro ao carregar contadores:", err);
+          setError(err instanceof Error ? err.message : "Erro desconhecido");
+        }
       } finally {
-        setLoading(false);
+        if (!signal.aborted) {
+          setLoading(false);
+        }
       }
     };
     
     fetchCounts();
+    
+    // Limpeza do controlador em caso de desmontagem do componente
+    return () => {
+      controller.abort();
+    };
   }, [refreshKey]);
   
   // Total de atividades em todos os departamentos
