@@ -138,12 +138,14 @@ export default function AdminDashboard() {
       </div>
 
       <div className="space-y-6">
-        {/* Estatísticas gerais do sistema primeiro */}
+        {/* Visão geral - Apenas os cards de estatísticas */}
         <div>
           <h2 className="text-xl font-semibold mb-4">Visão Geral</h2>
           <StatsOverview />
-          
-          <h2 className="text-xl font-semibold mt-6 mb-4">Atividades por Departamento</h2>
+        </div>
+        
+        {/* Departamentos logo abaixo */}
+        <div>
           <DepartmentActivityCounter />
         </div>
         
