@@ -4,15 +4,31 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
-import { RefreshCw, Activity, Clock, Calendar, Users, ChevronRight, AlertTriangle, Layers, CheckCircle2, Bell } from "lucide-react";
+import { 
+  RefreshCw, Activity, Clock, Calendar, Users, ChevronRight, 
+  AlertTriangle, Layers, CheckCircle2, Bell, Eye, Edit, 
+  Trash, Plus, Loader2
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import Layout from "@/components/Layout";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import DepartmentActivityCounter from "@/components/department-activity-counter";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
+import ViewActivityModal from "@/components/view-activity-modal";
+import EditActivityModal from "@/components/edit-activity-modal";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle
+} from "@/components/ui/alert-dialog";
 
 export default function AdminDashboard() {
   const [, navigate] = useLocation();
@@ -294,64 +310,154 @@ function ActivitiesList() {
   });
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Todos os Pedidos</CardTitle>
-        <CardDescription>
-          Lista completa de pedidos no sistema
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        {isLoading ? (
-          <div className="flex justify-center py-4">
-            <div className="animate-spin h-6 w-6 border-2 border-primary border-t-transparent rounded-full"></div>
+    <>
+      <Card>
+        <CardHeader>
+          <div className="flex justify-between items-center">
+            <div>
+              <CardTitle>Todos os Pedidos</CardTitle>
+              <CardDescription>
+                Lista completa de pedidos no sistema
+              </CardDescription>
+            </div>
+            <Button 
+              onClick={() => setEditActivity({ 
+                title: '', 
+                description: '', 
+                clientName: '', 
+                priority: false,
+                deadline: new Date()
+              })}
+              className="flex items-center gap-1"
+            >
+              <Plus className="h-4 w-4" />
+              Novo Pedido
+            </Button>
           </div>
-        ) : !activities || activities.length === 0 ? (
-          <div className="text-center py-6 text-muted-foreground">
-            Nenhuma atividade encontrada.
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {activities.map((activity: any) => (
-              <div key={activity.id} className="flex items-center gap-3 pb-3 border-b">
-                <div className="w-10 h-10 rounded-md overflow-hidden border flex-shrink-0">
-                  <img 
-                    src={activity.image || "/placeholder.png"}
-                    alt={activity.title}
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      e.currentTarget.src = "/logo.svg";
-                      e.currentTarget.classList.add("bg-blue-600");
-                    }}
-                  />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <p className="font-medium truncate">{activity.title}</p>
-                    <Badge className={
-                      activity.status === 'completed' ? 'bg-green-500' : 
-                      activity.status === 'in_progress' ? 'bg-amber-500' : 'bg-blue-500'
-                    }>
-                      {activity.status === 'completed' ? 'Concluído' : 
-                       activity.status === 'in_progress' ? 'Em Andamento' : 'Pendente'}
-                    </Badge>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className="flex justify-center py-4">
+              <div className="animate-spin h-6 w-6 border-2 border-primary border-t-transparent rounded-full"></div>
+            </div>
+          ) : !activities || activities.length === 0 ? (
+            <div className="text-center py-6 text-muted-foreground">
+              Nenhuma atividade encontrada.
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {activities.map((activity: any) => (
+                <div key={activity.id} className="flex items-center gap-3 pb-3 border-b">
+                  <div className="w-10 h-10 rounded-md overflow-hidden border flex-shrink-0">
+                    <img 
+                      src={activity.image || "/placeholder.png"}
+                      alt={activity.title}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.currentTarget.src = "/logo.svg";
+                        e.currentTarget.classList.add("bg-blue-600");
+                      }}
+                    />
                   </div>
-                  <p className="text-sm text-muted-foreground">
-                    ID: #{activity.id} • {new Date(activity.createdAt).toLocaleDateString('pt-BR')}
-                    {activity.deadline && ` • Prazo: ${new Date(activity.deadline).toLocaleDateString('pt-BR')}`}
-                  </p>
-                </div>
-                {activity.priority && (
-                  <div className="bg-red-100 text-red-800 px-2 py-0.5 rounded text-xs">
-                    Prioridade
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <p className="font-medium truncate">{activity.title}</p>
+                      <Badge className={
+                        activity.status === 'completed' ? 'bg-green-500' : 
+                        activity.status === 'in_progress' ? 'bg-amber-500' : 'bg-blue-500'
+                      }>
+                        {activity.status === 'completed' ? 'Concluído' : 
+                         activity.status === 'in_progress' ? 'Em Andamento' : 'Pendente'}
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      ID: #{activity.id} • {new Date(activity.createdAt).toLocaleDateString('pt-BR')}
+                      {activity.deadline && ` • Prazo: ${new Date(activity.deadline).toLocaleDateString('pt-BR')}`}
+                    </p>
                   </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+                  <div className="flex gap-2">
+                    {activity.priority && (
+                      <div className="bg-red-100 text-red-800 px-2 py-0.5 rounded text-xs flex items-center">
+                        Prioridade
+                      </div>
+                    )}
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={() => setViewActivity(activity)} 
+                      className="text-blue-600 hover:text-blue-800"
+                    >
+                      <Eye className="h-4 w-4 mr-1" />
+                      Ver
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={() => setEditActivity(activity)} 
+                      className="text-amber-600 hover:text-amber-800"
+                    >
+                      <Edit className="h-4 w-4 mr-1" />
+                      Editar
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={() => setDeleteActivity(activity)} 
+                      className="text-red-600 hover:text-red-800"
+                    >
+                      <Trash className="h-4 w-4 mr-1" />
+                      Excluir
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+      
+      {/* Modal de visualização */}
+      <ViewActivityModal 
+        isOpen={!!viewActivity} 
+        onClose={() => setViewActivity(null)} 
+        activity={viewActivity} 
+      />
+      
+      {/* Modal de edição */}
+      <EditActivityModal 
+        isOpen={!!editActivity} 
+        onClose={() => setEditActivity(null)} 
+        activity={editActivity}
+        isCreate={!editActivity?.id}
+      />
+      
+      {/* Modal de confirmação de exclusão */}
+      <AlertDialog open={!!deleteActivity} onOpenChange={() => setDeleteActivity(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir a atividade "{deleteActivity?.title}"? 
+              Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteActivity}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {deleteActivityMutation.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Trash className="mr-2 h-4 w-4" />
+              )}
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 
