@@ -7,8 +7,9 @@ import { Separator } from "@/components/ui/separator";
 import { 
   RefreshCw, Activity, Clock, Calendar, Users, ChevronRight, 
   AlertTriangle, Layers, CheckCircle2, Bell, Eye, Edit, 
-  Trash, Plus, Loader2
+  Trash, Plus, Loader2, Search, ArrowUpCircle, ArrowDownCircle
 } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import Layout from "@/components/Layout";
@@ -383,6 +384,9 @@ function ActivitiesList() {
   const [viewModalOpen, setViewModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterStatus, setFilterStatus] = useState<string | null>(null);
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   
   const { data: activities, isLoading } = useQuery({
     queryKey: ["/api/activities"],
@@ -468,7 +472,7 @@ function ActivitiesList() {
             </div>
           ) : !activities || activities.length === 0 ? (
             <div className="text-center py-6 text-muted-foreground">
-              Nenhuma atividade encontrada.
+              Nenhum pedido encontrado.
             </div>
           ) : (
             <div className="space-y-4">
@@ -480,8 +484,9 @@ function ActivitiesList() {
                       alt={activity.title}
                       className="w-full h-full object-cover"
                       onError={(e) => {
-                        e.currentTarget.src = "/logo.svg";
-                        e.currentTarget.classList.add("bg-blue-600");
+                        const target = e.currentTarget as HTMLImageElement;
+                        target.src = "/logo.svg";
+                        target.classList.add("bg-blue-600");
                       }}
                     />
                   </div>
