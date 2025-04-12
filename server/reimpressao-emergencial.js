@@ -112,6 +112,7 @@ router.post('/criar', async (req, res) => {
     const formattedPriority = validPriorities.includes(priority) ? priority : 'normal';
     
     // Força uso da imagem específica para o GS iPhone (ID 48)
+    // IMPORTANTE: Este é um trecho fundamental para corrigir problemas de exibição de imagens
     let finalImageUrl = activityImage;
     if (Number(activityId) === 48) {
       const logoUrl = "/iphone-icon.svg";
