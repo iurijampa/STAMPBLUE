@@ -26,8 +26,10 @@ async function getActivityImage(activityId) {
     if (activityIdNumber === 48) {
       // Usar logo de exemplo para o GS iPhone
       const logoUrl = "https://static.vecteezy.com/system/resources/previews/020/336/393/original/iphone-logo-icon-free-png.png";
-      console.log(`🍎 Usando logo externa para atividade GS iPhone: ${logoUrl}`);
+      console.log(`🍎 DETECTADO ID 48! Usando logo externa para atividade GS iPhone: ${logoUrl}`);
       return logoUrl;
+    } else {
+      console.log(`🔢 ID da atividade é ${activityIdNumber}, não é o especial (48)`);
     }
     
     // Buscar a atividade no banco de dados
