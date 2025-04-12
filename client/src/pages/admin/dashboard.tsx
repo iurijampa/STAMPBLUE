@@ -619,8 +619,8 @@ function ActivitiesList() {
               </thead>
               <tbody className="divide-y">
                 {filteredActivities.map((activity: any) => {
-                  // Para a imagem está mostrando "pendente", então vamos deixar igual ao print
-                  const currentDept = 'pendente';
+                  // Busca o departamento atual da atividade
+                  const currentDept = activity.currentDepartment || 'gabarito'; // valor padrão se não for encontrado
                   
                   return (
                   <tr key={activity.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
@@ -629,8 +629,18 @@ function ActivitiesList() {
                     </td>
                     <td className="px-4 py-3">{activity.client}</td>
                     <td className="px-4 py-3">
-                      <div className="px-3 py-1 text-center text-white rounded-md text-sm bg-blue-600">
-                        Gabarito
+                      <div className={`px-3 py-1 text-center text-white rounded-md text-sm ${
+                        currentDept === 'gabarito' ? 'bg-blue-600' : 
+                        currentDept === 'impressao' ? 'bg-violet-600' : 
+                        currentDept === 'batida' ? 'bg-amber-600' : 
+                        currentDept === 'costura' ? 'bg-emerald-600' : 
+                        currentDept === 'embalagem' ? 'bg-slate-600' : 'bg-gray-600'
+                      }`}>
+                        {currentDept === 'gabarito' ? 'Gabarito' : 
+                         currentDept === 'impressao' ? 'Impressão' : 
+                         currentDept === 'batida' ? 'Batida' : 
+                         currentDept === 'costura' ? 'Costura' : 
+                         currentDept === 'embalagem' ? 'Embalagem' : 'Pendente'}
                       </div>
                     </td>
                     <td className="px-4 py-3">

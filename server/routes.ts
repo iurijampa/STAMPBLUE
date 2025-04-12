@@ -173,12 +173,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (req.user && req.user.role === "admin") {
         // Otimização para o admin - cache por 15 segundos
+        // Buscar todas as atividades
         const activities = await storage.getAllActivities();
         
-        // Guardar em cache por 15 segundos
-        cache.set(cacheKey, activities, 15000);
+        // Para cada atividade, buscar o progresso para determinar o departamento atual
+        const activitiesWithProgress = await Promise.all(
+          activities.map(async (activity) => {
+            const progresses = await storage.getActivityProgress(activity.id);
+            
+            // Ordenar os progressos por departamento e encontrar o pendente mais recente
+            // para determinar em qual departamento a atividade está atualmente
+            const pendingProgress = progresses
+              .filter(p => p.status === 'pending')
+              .sort((a, b) => {
+                const deptOrder = ['gabarito', 'impressao', 'batida', 'costura', 'embalagem'];
+                return deptOrder.indexOf(a.department as any) - deptOrder.indexOf(b.department as any);
+              })[0];
+            
+            // Adicionar o departamento atual ao objeto da atividade
+            const currentDepartment = pendingProgress ? pendingProgress.department : 'gabarito';
+            
+            return {
+              ...activity,
+              currentDepartment,
+              progress: progresses
+            };
+          })
+        );
         
-        return res.json(activities);
+        // Guardar em cache por 15 segundos
+        cache.set(cacheKey, activitiesWithProgress, 15000);
+        
+        return res.json(activitiesWithProgress);
       } else if (req.user) {
         const department = req.user.role;
         console.log(`[DEBUG] Usuario ${req.user.username} (${department}) solicitando atividades`);
