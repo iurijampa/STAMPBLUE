@@ -111,13 +111,23 @@ router.post('/criar', async (req, res) => {
     const validPriorities = ['low', 'normal', 'high', 'urgent'];
     const formattedPriority = validPriorities.includes(priority) ? priority : 'normal';
     
-    // Força uso da imagem específica para o GS iPhone (ID 48)
-    // IMPORTANTE: Este é um trecho fundamental para corrigir problemas de exibição de imagens
-    // Aqui garantimos que SEMPRE usaremos o arquivo SVG para o iPhone
-    let finalImageUrl = "/no-image.svg"; // Padrão para qualquer atividade
+    // Verificação de imagens e definição do caminho correto
+    let finalImageUrl;
+    
+    // Para atividade 48 (GS IPHONE), usar ícone SVG alternativo
     if (Number(activityId) === 48) {
       finalImageUrl = "/iphone-icon.svg";
-      console.log(`🍎 Forçando uso da imagem específica para o GS iPhone (ID 48): ${finalImageUrl}`);
+      console.log(`🍎 Usando ícone SVG para atividade GS iPhone (ID 48): ${finalImageUrl}`);
+    } 
+    // Para atividade 49 (CHAVEIRO), usar a imagem existente
+    else if (Number(activityId) === 49) {
+      finalImageUrl = "/uploads/activity_49.jpg";
+      console.log(`🖼️ Usando imagem existente para atividade Chaveiro (ID 49): ${finalImageUrl}`);
+    }
+    // Para as demais atividades, usar ícone genérico
+    else {
+      finalImageUrl = "/no-image.svg";
+      console.log(`⚠️ Usando ícone genérico para atividade ${activityId}: ${finalImageUrl}`);
     }
     
     // Criar solicitação
@@ -170,9 +180,9 @@ router.post('/criar', async (req, res) => {
 router.get('/listar', (req, res) => {
   console.log('💡 Requisição para listar solicitações emergenciais');
   
-  // Antes de enviar a resposta, corrigir todas as URLs de imagens
+  // Antes de enviar a resposta, corrigir todas as URLs de imagens para usar os caminhos corretos
   const solicitacoesCorrigidas = solicitacoes.map(solicitacao => {
-    // Se for o GS iPhone (ID 48), sempre usar o ícone SVG correto
+    // Caso especial: GS iPhone (ID 48) - usar SVG personalizado
     if (solicitacao.activityId === 48) {
       console.log(`🍎 Corrigindo imagem para GS iPhone (ID 48) na listagem`);
       return {
@@ -181,16 +191,21 @@ router.get('/listar', (req, res) => {
       };
     }
     
-    // Para outras solicitações, usar a imagem no-image.svg como fallback
-    if (!solicitacao.activityImage || solicitacao.activityImage.includes('/uploads/')) {
-      console.log(`⚠️ Substituindo imagem inválida para atividade ${solicitacao.activityId} na listagem`);
+    // Caso especial: Chaveiro (ID 49) - usar imagem real existente
+    if (solicitacao.activityId === 49) {
+      console.log(`🖼️ Usando imagem real existente para Chaveiro (ID 49) na listagem`);
       return {
         ...solicitacao,
-        activityImage: "/no-image.svg"
+        activityImage: "/uploads/activity_49.jpg"
       };
     }
     
-    return solicitacao;
+    // Para todas as outras atividades, usar o ícone genérico
+    console.log(`ℹ️ Usando ícone genérico para atividade ${solicitacao.activityId} na listagem`);
+    return {
+      ...solicitacao,
+      activityImage: "/no-image.svg"
+    };
   });
   
   console.log('🌐 EMERGENCY STORAGE: Retornando solicitações com imagens corrigidas');
@@ -253,6 +268,12 @@ router.get('/:id', (req, res) => {
     console.log(`🍎 Alterando URL de imagem para atividade GS iPhone (ID 48) ao fazer GET da solicitação`);
     // Usando caminho local para o SVG
     solicitacao.activityImage = "/iphone-icon.svg";
+  }
+  
+  // Aplicar caso especial para Chaveiro (ID 49)
+  if (solicitacao.activityId === 49) {
+    console.log(`🖼️ Usando imagem real existente para Chaveiro (ID 49) ao fazer GET da solicitação`);
+    solicitacao.activityImage = "/uploads/activity_49.jpg";
   }
   
   return res.status(200).json(solicitacao);
