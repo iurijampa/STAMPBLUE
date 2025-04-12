@@ -11,12 +11,21 @@ const solicitacoes = [];
 // Função para obter imagem da atividade
 async function getActivityImage(activityId) {
   try {
-    // Caminho base para as imagens
-    const basePath = '/uploads/';
-    return `${basePath}activity_${activityId}.jpg`;
+    // Tenta obter a atividade para buscar a imagem real
+    const { storage } = require('./storage-export');
+    const activity = await storage.getActivity(Number(activityId));
+    
+    if (activity && activity.image) {
+      console.log(`Imagem encontrada para atividade ${activityId}: ${activity.image.substring(0, 50)}...`);
+      return activity.image;
+    } else {
+      // Fallback para caminho de imagem estático (logo)
+      console.log(`Imagem não encontrada para atividade ${activityId}, usando logo padrão`);
+      return '/logo.svg';
+    }
   } catch (error) {
     console.error('Erro ao obter imagem da atividade:', error);
-    return null;
+    return '/logo.svg';
   }
 }
 
