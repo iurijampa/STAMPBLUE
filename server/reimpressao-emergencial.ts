@@ -3,6 +3,8 @@
 // Armazena dados em memória compartilhada
 
 import express, { Router, Request, Response } from 'express';
+import * as fs from 'fs';
+import * as path from 'path';
 import { 
   EmergencyReprintRequest, 
   getAllRequests, 
@@ -16,9 +18,103 @@ const router: Router = express.Router();
 // Função para obter imagem da atividade
 async function getActivityImage(activityId: number): Promise<string | null> {
   try {
-    // Caminho base para as imagens
-    const basePath = '/uploads/';
-    return `${basePath}activity_${activityId}.jpg`;
+    // Casos especiais - referências diretas para arquivos específicos
+    if (activityId === 48) {
+      return '/iphone-icon.svg';
+    } else if (activityId === 49) {
+      return '/uploads/activity_49.jpg';
+    } else if (activityId === 53) {
+      return '/uploads/activity_53.jpg';
+    }
+    
+    // Tenta extrair a imagem da atividade da lista de departamentos
+    try {
+      const { buscarAtividadesPorDepartamentoEmergencia } = await import('./solucao-emergencial');
+      
+      // Departamentos do fluxo, tente buscar do atual primeiro
+      const departments = ['gabarito', 'impressao', 'batida', 'costura', 'embalagem'];
+      
+      // Verificar em qual departamento a atividade está atualmente
+      const { storage } = await import('./storage-export');
+      const allProgresses = await storage.getActivityProgress(activityId);
+      const pendingProgress = allProgresses
+        .filter(p => p.status === 'pending')
+        .sort((a, b) => {
+          return departments.indexOf(a.department as any) - departments.indexOf(b.department as any);
+        })[0];
+      
+      const currentDepartment = pendingProgress ? pendingProgress.department : 'gabarito';
+      
+      // Buscar atividade na lista de departamentos
+      const departmentActivities = await buscarAtividadesPorDepartamentoEmergencia(currentDepartment);
+      let activity = departmentActivities.find(act => act.id === activityId);
+      
+      // Se não encontrou, tenta em todos os departamentos
+      if (!activity || !activity.image) {
+        for (const dept of departments) {
+          const deptActivities = await buscarAtividadesPorDepartamentoEmergencia(dept);
+          const foundActivity = deptActivities.find(act => act.id === activityId);
+          if (foundActivity && foundActivity.image) {
+            activity = foundActivity;
+            break;
+          }
+        }
+      }
+      
+      // Se houver imagem base64, salva em um arquivo temporário
+      if (activity && activity.image && activity.image.startsWith('data:')) {
+        // Caminho base para as imagens
+        const basePath = '/uploads/';
+        const imagePath = `${basePath}activity_${activityId}.jpg`;
+        
+        // Salvar imagem em arquivo para acesso direto
+        try {
+          // Extrai os dados base64
+          const matches = activity.image.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+          if (matches && matches.length === 3) {
+            const data = Buffer.from(matches[2], 'base64');
+            const fullPath = path.join(process.cwd(), 'client/public', imagePath);
+            console.log(`⚠️ Tentando salvar imagem em ${fullPath}`);
+            
+            // Cria o diretório se não existir
+            const dir = path.dirname(fullPath);
+            if (!fs.existsSync(dir)) {
+              fs.mkdirSync(dir, { recursive: true });
+            }
+            
+            // Salva o arquivo
+            fs.writeFileSync(fullPath, data);
+            console.log(`✅ Imagem salva em ${fullPath}`);
+            return imagePath;
+          }
+        } catch (err) {
+          console.error('Erro ao salvar imagem:', err);
+        }
+        
+        // Se não conseguiu salvar, usa a imagem da API
+        return `/api/activity-image/${activityId}`;
+      } else if (activity && activity.image) {
+        // Se não for base64, retorna a URL direta
+        return activity.image;
+      }
+    } catch (err) {
+      console.error('Erro ao buscar imagem nas atividades dos departamentos:', err);
+    }
+    
+    // Verificar se o arquivo existe (fallback)
+    try {
+      // Caminho base para as imagens
+      const basePath = '/uploads/';
+      const fullPath = path.join(process.cwd(), 'client/public', `${basePath}activity_${activityId}.jpg`);
+      if (fs.existsSync(fullPath)) {
+        return `${basePath}activity_${activityId}.jpg`;
+      }
+    } catch (err) {
+      console.error('Erro ao verificar arquivo:', err);
+    }
+    
+    // Último recurso: tentativa com a API
+    return `/api/activity-image/${activityId}`;
   } catch (error) {
     console.error('Erro ao obter imagem da atividade:', error);
     return null;
