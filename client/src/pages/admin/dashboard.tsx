@@ -494,7 +494,7 @@ function ActivitiesList() {
       .slice(0, 100); // Limitar a 100 itens para melhorar performance
   };
 
-  // Verifica se um prazo está próximo ou vencido - otimizado com memoização
+  // Verifica se um prazo está próximo ou vencido e retorna a classe de cor correspondente
   const getPriorityClass = (deadline: string | null) => {
     if (!deadline) return "";
     
@@ -502,9 +502,9 @@ function ActivitiesList() {
     const deadlineDate = new Date(deadline);
     const diffDays = Math.ceil((deadlineDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
     
-    if (diffDays < 0) return "text-red-600 font-medium"; // Vencido
-    if (diffDays <= 2) return "text-amber-600 font-medium"; // Próximo
-    return "";
+    if (diffDays < 0) return "text-white bg-red-500"; // Vencido - vermelho
+    if (diffDays <= 2) return "text-white bg-amber-500"; // Próximo - amarelo
+    return "text-white bg-green-500"; // Normal - verde
   };
 
   // Departamentos - constante movida para fora do componente para evitar recriação
@@ -626,7 +626,7 @@ function ActivitiesList() {
                     </td>
                     <td className="px-4 py-3">{activity.client}</td>
                     <td className="px-4 py-3">
-                      <Badge className={`text-white ${
+                      <div className={`px-3 py-1 text-center text-white rounded-md text-sm ${
                         activity.currentDepartment === 'gabarito' ? 'bg-blue-600' : 
                         activity.currentDepartment === 'impressao' ? 'bg-violet-600' : 
                         activity.currentDepartment === 'batida' ? 'bg-amber-600' : 
@@ -638,10 +638,12 @@ function ActivitiesList() {
                          activity.currentDepartment === 'batida' ? 'Batida' : 
                          activity.currentDepartment === 'costura' ? 'Costura' : 
                          activity.currentDepartment === 'embalagem' ? 'Embalagem' : 'Pendente'}
-                      </Badge>
+                      </div>
                     </td>
-                    <td className={`px-4 py-3 ${getPriorityClass(activity.deadline)}`}>
-                      {activity.deadline ? new Date(activity.deadline).toLocaleDateString('pt-BR') : '-'}
+                    <td className="px-4 py-3">
+                      <div className={`px-3 py-1 text-center rounded-md ${getPriorityClass(activity.deadline)}`}>
+                        {activity.deadline ? new Date(activity.deadline).toLocaleDateString('pt-BR') : '-'}
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-500">
                       {new Date(activity.createdAt).toLocaleDateString('pt-BR')}
