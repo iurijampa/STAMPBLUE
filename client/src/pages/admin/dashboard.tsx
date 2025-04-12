@@ -18,6 +18,7 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
 import ViewActivityModal from "@/components/view-activity-modal";
+import CreateActivityModal from "@/components/create-activity-modal";
 import EditActivityModal from "@/components/edit-activity-modal";
 import { Activity as ActivityType } from "@shared/schema";
 
@@ -384,6 +385,7 @@ function ActivitiesList() {
   const [selectedActivity, setSelectedActivity] = useState<ActivityType | null>(null);
   const [viewModalOpen, setViewModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
+  const [createModalOpen, setCreateModalOpen] = useState(false);
   
   const { data: activities, isLoading } = useQuery({
     queryKey: ["/api/activities"],
@@ -452,7 +454,7 @@ function ActivitiesList() {
             </div>
             <div className="flex gap-2">
               <Button 
-                onClick={() => navigate("/admin/create-activity")}
+                onClick={() => setCreateModalOpen(true)}
                 className="flex items-center gap-1"
                 variant="default"
               >
@@ -570,6 +572,19 @@ function ActivitiesList() {
           });
         }}
         activity={selectedActivity}
+      />
+      
+      <CreateActivityModal 
+        isOpen={createModalOpen}
+        onClose={() => setCreateModalOpen(false)}
+        onSuccess={() => {
+          setCreateModalOpen(false);
+          queryClient.invalidateQueries({ queryKey: ["/api/activities"] });
+          toast({
+            title: "Sucesso",
+            description: "Pedido criado com sucesso",
+          });
+        }}
       />
     </>
   );
