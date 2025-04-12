@@ -138,10 +138,10 @@ export default function AdminDashboard() {
       </div>
 
       <div className="space-y-6">
-        <Tabs defaultValue="all-activities" className="w-full">
+        <Tabs defaultValue="overview" className="w-full">
           <TabsList className="w-full mb-4">
-            <TabsTrigger value="all-activities" className="flex-1">Todos os Pedidos</TabsTrigger>
             <TabsTrigger value="overview" className="flex-1">Visão Geral</TabsTrigger>
+            <TabsTrigger value="all-activities" className="flex-1">Todos os Pedidos</TabsTrigger>
             <TabsTrigger value="notifications" className="flex-1">Notificações</TabsTrigger>
             <TabsTrigger value="users" className="flex-1">Gerenciar Usuários</TabsTrigger>
             <TabsTrigger value="stats" className="flex-1">Estatísticas</TabsTrigger>
@@ -152,8 +152,8 @@ export default function AdminDashboard() {
               {/* Estatísticas gerais do sistema */}
               <StatsOverview />
               
-              {/* Lista de atividades recentes */}
-              <RecentActivities />
+              {/* Departamentos acima */}
+              <DepartmentActivityCounter />
             </div>
           </TabsContent>
           
@@ -440,10 +440,7 @@ function ActivitiesList() {
 
   return (
     <>
-      {/* Departamentos primeiro */}
-      <DepartmentActivityCounter />
-      
-      <Card className="mt-6">
+      <Card>
         <CardHeader>
           <div className="flex justify-between items-center">
             <div>
