@@ -138,24 +138,23 @@ export default function AdminDashboard() {
       </div>
 
       <div className="space-y-6">
-        <Tabs defaultValue="overview" className="w-full">
+        {/* Estatísticas gerais do sistema primeiro */}
+        <div>
+          <h2 className="text-xl font-semibold mb-4">Visão Geral</h2>
+          <StatsOverview />
+          
+          <h2 className="text-xl font-semibold mt-6 mb-4">Atividades por Departamento</h2>
+          <DepartmentActivityCounter />
+        </div>
+        
+        {/* Abas para navegação */}
+        <Tabs defaultValue="all-activities" className="w-full mt-8">
           <TabsList className="w-full mb-4">
-            <TabsTrigger value="overview" className="flex-1">Visão Geral</TabsTrigger>
             <TabsTrigger value="all-activities" className="flex-1">Todos os Pedidos</TabsTrigger>
             <TabsTrigger value="notifications" className="flex-1">Notificações</TabsTrigger>
             <TabsTrigger value="users" className="flex-1">Gerenciar Usuários</TabsTrigger>
             <TabsTrigger value="stats" className="flex-1">Estatísticas</TabsTrigger>
           </TabsList>
-          
-          <TabsContent value="overview">
-            <div className="space-y-6">
-              {/* Estatísticas gerais do sistema */}
-              <StatsOverview />
-              
-              {/* Departamentos acima */}
-              <DepartmentActivityCounter />
-            </div>
-          </TabsContent>
           
           <TabsContent value="all-activities">
             <div className="space-y-6">
