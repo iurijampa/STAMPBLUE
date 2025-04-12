@@ -141,15 +141,20 @@ export default function AdminDashboard() {
       </div>
 
       <div className="space-y-6">
-        {/* Visão geral - Apenas os cards de estatísticas */}
+        {/* Seção combinada: Visão Geral + Contadores de Departamento */}
         <div>
           <h2 className="text-xl font-semibold mb-4">Visão Geral</h2>
-          <StatsOverview />
-        </div>
-        
-        {/* Departamentos logo abaixo */}
-        <div>
-          <DepartmentActivityCounter />
+          <div className="flex flex-col xl:flex-row gap-6 w-full">
+            {/* Cards de estatísticas */}
+            <div className="w-full xl:w-2/5">
+              <StatsOverview />
+            </div>
+            
+            {/* Cards de departamentos */}
+            <div className="w-full xl:flex-1">
+              <DepartmentActivityCounter />
+            </div>
+          </div>
         </div>
         
         {/* Lista de todas as atividades primeiro */}
@@ -246,64 +251,45 @@ function StatsOverview() {
   });
 
   return (
-    <div className="grid gap-4 grid-cols-1 md:grid-cols-3">
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium text-muted-foreground">
-            Total de Pedidos
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="text-2xl font-bold">
-            {isLoading ? "..." : stats?.total || 0}
+    <Card className="h-full">
+      <CardHeader className="bg-gray-50 dark:bg-gray-800/50 py-3">
+        <CardTitle className="text-sm">Resumo de Pedidos</CardTitle>
+      </CardHeader>
+      <CardContent className="p-3 pt-5">
+        {isLoading ? (
+          <div className="py-8 flex flex-col items-center justify-center">
+            <Loader2 className="h-6 w-6 animate-spin mb-2" />
+            <p className="text-sm text-muted-foreground">Carregando estatísticas...</p>
           </div>
-          <p className="text-xs text-muted-foreground mt-1">
-            Pedidos no sistema
-          </p>
-          <div className="mt-2">
-            <Activity className="h-4 w-4 text-primary" />
+        ) : (
+          <div className="grid gap-4 grid-cols-1 md:grid-cols-3">
+            <div className="flex flex-col items-center p-4 bg-gray-50 dark:bg-gray-800/50 rounded-md">
+              <Activity className="h-6 w-6 text-primary mb-2" />
+              <span className="text-2xl font-bold">{stats?.total || 0}</span>
+              <p className="text-xs text-muted-foreground mt-1 text-center">
+                Total de Pedidos
+              </p>
+            </div>
+            
+            <div className="flex flex-col items-center p-4 bg-amber-50 dark:bg-amber-950/50 rounded-md">
+              <Clock className="h-6 w-6 text-amber-500 mb-2" />
+              <span className="text-2xl font-bold">{stats?.inProgress || 0}</span>
+              <p className="text-xs text-muted-foreground mt-1 text-center">
+                Em Produção
+              </p>
+            </div>
+            
+            <div className="flex flex-col items-center p-4 bg-green-50 dark:bg-green-950/50 rounded-md">
+              <CheckCircle2 className="h-6 w-6 text-green-500 mb-2" />
+              <span className="text-2xl font-bold">{stats?.completed || 0}</span>
+              <p className="text-xs text-muted-foreground mt-1 text-center">
+                Concluídos
+              </p>
+            </div>
           </div>
-        </CardContent>
-      </Card>
-      
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium text-muted-foreground">
-            Em Produção
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="text-2xl font-bold">
-            {isLoading ? "..." : stats?.inProgress || 0}
-          </div>
-          <p className="text-xs text-muted-foreground mt-1">
-            Pedidos em processamento
-          </p>
-          <div className="mt-2">
-            <Clock className="h-4 w-4 text-amber-500" />
-          </div>
-        </CardContent>
-      </Card>
-      
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium text-muted-foreground">
-            Concluídos
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="text-2xl font-bold">
-            {isLoading ? "..." : stats?.completed || 0}
-          </div>
-          <p className="text-xs text-muted-foreground mt-1">
-            Pedidos finalizados
-          </p>
-          <div className="mt-2">
-            <CheckCircle2 className="h-4 w-4 text-green-500" />
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
