@@ -141,6 +141,11 @@ router.post('/criar', async (req, res) => {
         finalImageUrl = "/uploads/activity_49.jpg";
         console.log(`🔑 Usando imagem JPG para Chaveiro (ID 49): ${finalImageUrl}`);
       }
+      else if (Number(activityId) === 53) {
+        // Construtora Inovação - usar imagem JPG
+        finalImageUrl = "/uploads/activity_53.jpg";
+        console.log(`🏗️ Usando imagem JPG para Construtora Inovação (ID 53): ${finalImageUrl}`);
+      }
       else {
         // Outros pedidos - usar ícone genérico
         finalImageUrl = "/no-image.svg";
