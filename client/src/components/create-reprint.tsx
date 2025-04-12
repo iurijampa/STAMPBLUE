@@ -18,11 +18,11 @@ export default function CreateReprintRequest() {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          activityId: 48,
+          activityId: 53,
           requestedBy: "Teste Automático",
-          reason: "Teste da exibição de imagem",
-          details: "Esta solicitação testa se as imagens dos pedidos estão sendo exibidas corretamente",
-          quantity: 3,
+          reason: "Teste da exibição de imagem para Construtora",
+          details: "Esta solicitação testa se as imagens dos pedidos estão sendo exibidas corretamente - CONSTRUTORA INOVAÇÃO",
+          quantity: 1,
           priority: "normal",
           fromDepartment: "batida",
           toDepartment: "impressao"
