@@ -200,13 +200,18 @@ export default function ViewReprintRequestModal({ isOpen, onClose, request }: Vi
                   {/* Imagem da atividade como miniatura */}
                   <div className="flex-shrink-0 w-16 h-16 rounded-md overflow-hidden border bg-slate-50 flex items-center justify-center">
                     <img 
-                      // Usar API que busca a imagem diretamente do banco de dados
-                      src={`/api/activity-image/${request.activityId}`}
+                      // Usar diretamente a URL da imagem armazenada na solicitação ou a API como fallback
+                      src={request.activityImage || `/uploads/activity_${request.activityId}.jpg`}
                       alt={request.activityTitle || `Pedido ${request.activityId}`} 
                       className="w-full h-full object-contain"
                       onError={(e) => {
                         console.log('Erro ao carregar imagem no modal, usando fallback:', e.currentTarget.src);
-                        e.currentTarget.src = "/no-image.svg";
+                        // Tentativa com API alternativa
+                        if (e.currentTarget.src.includes(`/uploads/activity_${request.activityId}.jpg`)) {
+                          e.currentTarget.src = `/api/activity-image/${request.activityId}`;
+                        } else {
+                          e.currentTarget.src = "/no-image.svg";
+                        }
                       }}
                     />
                   </div>

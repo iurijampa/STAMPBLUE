@@ -173,13 +173,18 @@ export default function ReprintRequestsList({ department, activity }: ReprintReq
                       {/* Imagem da atividade como miniatura */}
                       <div className="flex-shrink-0 w-12 h-12 rounded-md overflow-hidden border bg-slate-50 flex items-center justify-center">
                         <img 
-                          // Usar API que busca a imagem diretamente do banco de dados
-                          src={`/api/activity-image/${request.activityId}`}
+                          // Usar URL direta da imagem ou caminho para o arquivo
+                          src={request.activityImage || `/uploads/activity_${request.activityId}.jpg`}
                           alt={request.activityTitle || `Pedido ${request.activityId}`}
                           className="w-full h-full object-contain"
                           onError={(e) => {
                             console.log('Erro ao carregar imagem, usando fallback:', e.currentTarget.src);
-                            e.currentTarget.src = "/no-image.svg";
+                            // Tentar com API como fallback
+                            if (e.currentTarget.src.includes(`/uploads/activity_${request.activityId}.jpg`)) {
+                              e.currentTarget.src = `/api/activity-image/${request.activityId}`;
+                            } else {
+                              e.currentTarget.src = "/no-image.svg";
+                            }
                           }}
                         />
                       </div>
