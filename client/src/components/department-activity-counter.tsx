@@ -148,17 +148,20 @@ export default function DepartmentActivityCounter() {
         ) : (
           <div className="space-y-4">
             <div className="grid gap-4 md:grid-cols-5">
-              {counts && Object.entries(counts)
-                // Filtrar departamentos que não estão na lista de departamentos permitidos
-                .filter(([dept]) => departmentNames[dept as keyof typeof departmentNames])
+              {counts && 
+                // Ordem correta da linha de produção
+                ['gabarito', 'impressao', 'batida', 'costura', 'embalagem']
+                .filter(dept => departmentNames[dept as keyof typeof departmentNames])
+                .map(dept => [dept, counts[dept as keyof typeof counts]])
                 .map(([dept, count]) => (
-                <Card key={dept} className="overflow-hidden">
+                <Card key={dept} className="overflow-hidden border-2">
                   <CardHeader className={`py-3 bg-${dept === 'gabarito' ? 'blue' : 
                     dept === 'impressao' ? 'violet' : 
                     dept === 'batida' ? 'amber' : 
                     dept === 'costura' ? 'emerald' : 
                     dept === 'embalagem' ? 'slate' : 'gray'}-600 text-white`}>
-                    <CardTitle className="text-center text-base font-medium">
+                    <CardTitle className="text-center text-base font-medium flex justify-center items-center gap-2">
+                      {departmentIcons[dept as keyof typeof departmentIcons]}
                       {departmentNames[dept as keyof typeof departmentNames]}
                     </CardTitle>
                   </CardHeader>
