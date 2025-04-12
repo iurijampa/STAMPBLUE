@@ -1054,6 +1054,79 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // Rota para buscar o histórico de atividades concluídas por um departamento específico
+  app.get("/api/activities/history/:department", isAuthenticated, async (req, res) => {
+    try {
+      let department = req.params.department;
+      
+      // Sempre usar o departamento do usuário logado se não for admin
+      if (req.user && req.user.role !== "admin") {
+        department = req.user.role;
+      }
+      
+      console.log(`[HISTÓRICO] Buscando histórico de atividades do departamento: ${department}`);
+      
+      // Verificar se o departamento é válido
+      if (!DEPARTMENTS.includes(department as any) && department !== "admin") {
+        return res.status(400).json({ message: "Departamento inválido" });
+      }
+      
+      // Buscar todas as atividades completadas pelo departamento
+      const completedActivities = await storage.getCompletedActivitiesByDepartment(department);
+      console.log(`[HISTÓRICO] Encontradas ${completedActivities.length} atividades concluídas pelo departamento: ${department}`);
+      
+      // Preparar dados para resposta
+      const processedActivities = completedActivities.map(item => {
+        const { activity, progress } = item;
+        
+        return {
+          ...activity,
+          completedBy: progress.completedBy,
+          completedAt: progress.updatedAt,
+          notes: progress.notes
+        };
+      });
+      
+      res.json(processedActivities);
+    } catch (error) {
+      console.error(`[ERROR] Erro ao buscar histórico para ${req.params.department}:`, error);
+      res.status(500).json({ 
+        message: "Erro ao buscar histórico de atividades", 
+        error: error.message 
+      });
+    }
+  });
+  
+  // Rota para obter o contador de atividades por departamento (para o dashboard admin)
+  app.get("/api/stats/department-counts", isAdmin, async (req, res) => {
+    try {
+      console.log(`[ADMIN] Obtendo contagem de atividades por departamento`);
+      
+      // Resultado final
+      const result: Record<string, number> = {};
+      
+      // Para cada departamento, buscar a contagem de atividades pendentes
+      for (const dept of DEPARTMENTS) {
+        try {
+          // Usar a função de emergência para obter atividades de cada departamento
+          const activities = await buscarAtividadesPorDepartamentoEmergencia(dept);
+          result[dept] = activities.length;
+        } catch (err) {
+          console.error(`[ERROR] Erro ao contar atividades para ${dept}:`, err);
+          result[dept] = 0; // Valor padrão em caso de erro
+        }
+      }
+      
+      res.json(result);
+    } catch (error) {
+      console.error("[ERROR] Erro ao obter contagem por departamento:", error);
+      res.status(500).json({ 
+        message: "Erro ao obter contagem por departamento", 
+        error: error.message 
+      });
+    }
+  });
+  
   // Statistics for department dashboard
   app.get("/api/department/:department/stats", isAuthenticated, async (req, res) => {
     try {
