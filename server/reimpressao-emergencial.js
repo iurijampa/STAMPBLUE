@@ -13,19 +13,41 @@ async function getActivityImage(activityId) {
   try {
     // Tenta obter a atividade para buscar a imagem real
     const { storage } = require('./storage-export');
-    const activity = await storage.getActivity(Number(activityId));
     
-    if (activity && activity.image) {
-      console.log(`Imagem encontrada para atividade ${activityId}: ${activity.image.substring(0, 50)}...`);
-      return activity.image;
-    } else {
-      // Fallback para caminho de imagem estático (logo)
-      console.log(`Imagem não encontrada para atividade ${activityId}, usando logo padrão`);
-      return '/logo.svg';
+    // Garantir que o ID é um número
+    const activityIdNumber = Number(activityId);
+    
+    if (isNaN(activityIdNumber)) {
+      console.error(`❌ ID de atividade inválido: ${activityId}`);
+      return '/no-image.jpg';
     }
+    
+    // Buscar a atividade no banco de dados
+    const activity = await storage.getActivity(activityIdNumber);
+    
+    // Verificar se a atividade e a imagem existem
+    if (activity && activity.image) {
+      console.log(`🔍 Imagem encontrada para atividade ${activityId}: ${activity.image.substring(0, 50)}...`);
+      
+      // Se a imagem for um caminho relativo, adicionar o prefixo correto
+      if (activity.image.startsWith('/')) {
+        return activity.image; // Já tem o formato correto
+      } else if (activity.image.startsWith('http')) {
+        return activity.image; // URL externa, manter como está
+      } else {
+        // Adicionar o slash inicial se não existir
+        return `/${activity.image}`;
+      }
+    }
+    
+    // Tentar caminho padrão para a imagem se não encontrada no banco de dados
+    const defaultImagePath = `/uploads/activity_${activityIdNumber}.jpg`;
+    console.log(`⚠️ Nenhuma imagem encontrada em activity.image, tentando caminho padrão: ${defaultImagePath}`);
+    
+    return defaultImagePath;
   } catch (error) {
-    console.error('Erro ao obter imagem da atividade:', error);
-    return '/logo.svg';
+    console.error(`❌ Erro ao buscar imagem para atividade ${activityId}:`, error);
+    return '/no-image.jpg';
   }
 }
 
@@ -34,7 +56,16 @@ router.post('/criar', async (req, res) => {
   console.log('💡 Requisição para criar solicitação de emergência:', req.body);
   
   try {
-    const { activityId, requestedBy, reason, details, quantity } = req.body;
+    const { 
+      activityId, 
+      requestedBy, 
+      reason, 
+      details, 
+      quantity, 
+      priority = 'normal',
+      fromDepartment = 'batida',
+      toDepartment = 'impressao'
+    } = req.body;
     
     // Validação simples
     if (!activityId || !requestedBy || !reason) {
@@ -45,11 +76,12 @@ router.post('/criar', async (req, res) => {
       });
     }
     
-    // Buscar título da atividade do "banco de dados"
+    // Buscar dados da atividade do "banco de dados"
     let activityTitle = "";
+    let activity = null;
     try {
       const { storage } = require('./storage-export');
-      const activity = await storage.getActivity(Number(activityId));
+      activity = await storage.getActivity(Number(activityId));
       activityTitle = activity ? activity.title : `Pedido #${activityId}`;
     } catch (err) {
       console.error('Erro ao buscar título da atividade:', err);
@@ -58,6 +90,10 @@ router.post('/criar', async (req, res) => {
     
     // Obter a URL da imagem da atividade
     const activityImage = await getActivityImage(activityId);
+    
+    // Formatar corretamente a prioridade
+    const validPriorities = ['low', 'normal', 'high', 'urgent'];
+    const formattedPriority = validPriorities.includes(priority) ? priority : 'normal';
     
     // Criar solicitação
     const novaSolicitacao = {
@@ -69,17 +105,25 @@ router.post('/criar', async (req, res) => {
       reason,
       details: details || '',
       quantity: Number(quantity) || 1,
-      status: 'pendente',
-      createdAt: new Date().toISOString(),
-      fromDepartment: 'batida',
-      toDepartment: 'impressao'
+      priority: formattedPriority,
+      status: 'pending', // Usamos 'pending' em vez de 'pendente' para consistência
+      requestedAt: new Date().toISOString(),
+      fromDepartment,
+      toDepartment
     };
+    
+    // Limpar lista de solicitações (para facilitar os testes)
+    if (solicitacoes.length > 0) {
+      console.log('🔄 Limpando solicitações anteriores para facilitar testes');
+      solicitacoes.length = 0;
+    }
     
     // Adicionar à lista
     solicitacoes.push(novaSolicitacao);
     
     console.log('✅ Solicitação emergencial criada com sucesso:', novaSolicitacao);
     console.log('✅ Total de solicitações emergenciais:', solicitacoes.length);
+    console.log('🌐 EMERGENCY STORAGE: URL da imagem:', novaSolicitacao.activityImage);
     
     // Retornar resposta
     return res.status(201).json({

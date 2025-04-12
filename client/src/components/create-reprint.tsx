@@ -1,16 +1,17 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Loader2 } from "lucide-react";
 
 export default function CreateReprintRequest() {
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
-  // Função para criar uma solicitação de teste
-  const createTestRequest = async () => {
-    setIsLoading(true);
-    
-    try {
+  // Mutation para criar solicitação de reimpressão
+  const createRequestMutation = useMutation({
+    mutationFn: async () => {
       const response = await fetch('/api/reimpressao-emergencial/criar', {
         method: 'POST',
         headers: {
@@ -18,50 +19,63 @@ export default function CreateReprintRequest() {
         },
         body: JSON.stringify({
           activityId: 48,
-          activityTitle: "GS IPHONE - Teste de Imagem",
-          activityImage: "/uploads/activity_48.jpg",
-          requestedBy: "Teste de Imagem",
+          requestedBy: "Teste Automático",
           reason: "Teste da exibição de imagem",
           details: "Esta solicitação testa se as imagens dos pedidos estão sendo exibidas corretamente",
           quantity: 3,
+          priority: "normal",
           fromDepartment: "batida",
           toDepartment: "impressao"
         })
       });
       
       if (!response.ok) {
-        throw new Error(`Erro ao criar solicitação: ${response.status}`);
+        const errorData = await response.json();
+        throw new Error(errorData.message || `Erro ao criar solicitação: ${response.status}`);
       }
       
-      const data = await response.json();
-      
+      return await response.json();
+    },
+    onSuccess: () => {
       toast({
         title: "Solicitação criada com sucesso",
-        description: "A solicitação de teste foi criada e deve aparecer na lista."
+        description: "A solicitação de teste foi criada e deve aparecer na lista em instantes."
       });
       
-      console.log("Solicitação criada:", data);
-    } catch (error) {
+      // Invalidar a consulta para atualizar a lista de solicitações
+      queryClient.invalidateQueries({ 
+        queryKey: ['/api/reimpressao-emergencial/listar']
+      });
+    },
+    onError: (error: Error) => {
       console.error("Erro ao criar solicitação:", error);
       
       toast({
         title: "Erro ao criar solicitação",
-        description: error instanceof Error ? error.message : "Erro desconhecido",
+        description: error.message || "Erro desconhecido ao conectar com o servidor",
         variant: "destructive"
       });
-    } finally {
-      setIsLoading(false);
     }
+  });
+
+  // Função para criar uma solicitação de teste
+  const createTestRequest = () => {
+    createRequestMutation.mutate();
   };
   
   return (
-    <div className="mt-4">
+    <div>
       <Button 
         onClick={createTestRequest} 
-        disabled={isLoading}
+        disabled={createRequestMutation.isPending}
         className="w-full bg-blue-600 hover:bg-blue-700"
       >
-        {isLoading ? "Criando..." : "Criar Solicitação de Teste"}
+        {createRequestMutation.isPending ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            Criando...
+          </>
+        ) : "Criar Solicitação de Teste"}
       </Button>
       <p className="text-xs text-muted-foreground mt-1 text-center">
         Clique para adicionar uma solicitação de teste ao sistema
