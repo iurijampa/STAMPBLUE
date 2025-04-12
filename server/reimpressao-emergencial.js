@@ -252,6 +252,7 @@ router.get('/:id', (req, res) => {
   // Aplicar caso especial para GS iPhone (ID 48)
   if (solicitacao.activityId === 48) {
     console.log(`🍎 Alterando URL de imagem para atividade GS iPhone (ID 48) ao fazer GET da solicitação`);
+    // Usando URL direta para compatibilidade com a miniatura em cards
     solicitacao.activityImage = "https://static.vecteezy.com/system/resources/previews/020/336/393/original/iphone-logo-icon-free-png.png";
   }
   

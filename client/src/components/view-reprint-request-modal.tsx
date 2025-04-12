@@ -200,15 +200,28 @@ export default function ViewReprintRequestModal({ isOpen, onClose, request }: Vi
                   {/* Imagem da atividade como miniatura usando o novo endpoint específico */}
                   <div className="flex-shrink-0 w-16 h-16 rounded-md overflow-hidden border bg-slate-50 flex items-center justify-center">
                     {request.activityId ? (
-                      <img 
-                        src={`/api/reimpressao-emergencial/imagem/${request.activityId}`}
-                        alt="Miniatura do pedido" 
-                        className="w-full h-full object-contain"
-                        onError={(e) => {
-                          console.log('Erro ao carregar imagem no modal:', request.activityId);
-                          e.currentTarget.src = 'https://placehold.co/100/e6f7ff/0077cc?text=Pedido';
-                        }}
-                      />
+                      // Verificamos primeiro se temos uma URL direta na solicitação
+                      request.activityImage && request.activityImage.startsWith('http') ? (
+                        <img 
+                          src={request.activityImage}
+                          alt="Miniatura do pedido" 
+                          className="w-full h-full object-contain"
+                          onError={(e) => {
+                            console.log('Erro ao carregar imagem direta no modal:', request.activityId);
+                            e.currentTarget.src = `https://placehold.co/100/e6f7ff/0077cc?text=Pedido+${request.activityId}`;
+                          }}
+                        />
+                      ) : (
+                        <img 
+                          src={`/api/reimpressao-emergencial/imagem/${request.activityId}`}
+                          alt="Miniatura do pedido" 
+                          className="w-full h-full object-contain"
+                          onError={(e) => {
+                            console.log('Erro ao carregar imagem no modal:', request.activityId);
+                            e.currentTarget.src = `https://placehold.co/100/e6f7ff/0077cc?text=Pedido+${request.activityId}`;
+                          }}
+                        />
+                      )
                     ) : (
                       <ImageIcon className="w-8 h-8 text-muted-foreground" />
                     )}
