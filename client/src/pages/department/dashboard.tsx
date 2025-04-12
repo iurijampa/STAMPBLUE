@@ -1,12 +1,17 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useLocation, useParams } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { useCallback, useEffect, useState, useRef } from "react";
 import { User, Activity } from "@shared/schema";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, CalendarClock, Clock, Eye, RefreshCw, RotateCcw, Printer } from "lucide-react";
+import { 
+  Loader2, CalendarClock, Clock, Eye, RefreshCw, RotateCcw, Printer,
+  ArchiveIcon, ListTodo, CheckCircle, InboxIcon, CornerUpLeft, 
+  ClipboardList, Plus, Hammer
+} from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +27,7 @@ import { ActivitySkeleton, StatsSkeleton } from "@/components/activity-skeleton"
 import { SoundToggleButton, SoundTestButton } from "@/components/SoundManagerSimples";
 import ListaUltraSimples from "@/components/lista-ultrasimples";
 import SolucaoEmergencial from "@/components/solucao-emergencial";
+import ActivityHistory from "@/components/activity-history";
 
 // Estendendo a interface Activity para incluir os campos que estamos recebendo do backend
 interface ActivityWithNotes extends Activity {
