@@ -442,6 +442,67 @@ function ActivitiesList() {
     }
   };
 
+  // Função para filtrar atividades
+  const filterActivities = (activities: any[]) => {
+    if (!activities) return [];
+    
+    return activities
+      .filter(activity => {
+        // Filtra por texto de busca
+        const matchesSearch = searchQuery === "" || 
+          activity.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          activity.id.toString().includes(searchQuery) ||
+          (activity.client && activity.client.toLowerCase().includes(searchQuery.toLowerCase()));
+        
+        // Filtra por status/departamento
+        const matchesStatus = !filterStatus || activity.currentDepartment === filterStatus;
+        
+        return matchesSearch && matchesStatus;
+      })
+      .sort((a, b) => {
+        // Ordena por data de prazo ou criação
+        const dateA = a.deadline ? new Date(a.deadline) : new Date(a.createdAt);
+        const dateB = b.deadline ? new Date(b.deadline) : new Date(b.createdAt);
+        
+        return sortOrder === "asc" ? 
+          dateA.getTime() - dateB.getTime() : 
+          dateB.getTime() - dateA.getTime();
+      });
+  };
+
+  // Verifica se um prazo está próximo ou vencido
+  const getPriorityClass = (deadline: string | null) => {
+    if (!deadline) return "";
+    
+    const today = new Date();
+    const deadlineDate = new Date(deadline);
+    const diffDays = Math.ceil((deadlineDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    
+    if (diffDays < 0) return "text-red-600 font-medium"; // Vencido
+    if (diffDays <= 2) return "text-amber-600 font-medium"; // Próximo
+    return "";
+  };
+
+  const departmentOptions = [
+    { value: null, label: "Todos os departamentos" },
+    { value: "gabarito", label: "Gabarito" },
+    { value: "impressao", label: "Impressão" },
+    { value: "batida", label: "Batida" },
+    { value: "costura", label: "Costura" },
+    { value: "embalagem", label: "Embalagem" },
+  ];
+
+  // Calcula a cor de fundo para o filtro ativo
+  const getFilterBgColor = (value: string | null) => {
+    if (value === filterStatus) {
+      return "bg-primary/20";
+    }
+    return "bg-transparent";
+  };
+
+  // Filtra a lista de atividades
+  const filteredActivities = activities ? filterActivities(activities) : [];
+
   return (
     <>
       <Card>
@@ -466,17 +527,59 @@ function ActivitiesList() {
           </div>
         </CardHeader>
         <CardContent>
+          {/* Barra de pesquisa e filtros */}
+          <div className="mb-4 space-y-4">
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  type="search"
+                  placeholder="Buscar por ID, nome do pedido ou cliente..."
+                  className="pl-8"
+                  value={searchQuery}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
+                />
+              </div>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
+                title={sortOrder === "asc" ? "Ordenação crescente" : "Ordenação decrescente"}
+              >
+                {sortOrder === "asc" ? <ArrowUpCircle className="h-4 w-4" /> : <ArrowDownCircle className="h-4 w-4" />}
+              </Button>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {departmentOptions.map(option => (
+                <Badge
+                  key={option.value || "all"}
+                  variant="outline"
+                  className={`cursor-pointer px-2 py-1 ${getFilterBgColor(option.value)}`}
+                  onClick={() => setFilterStatus(option.value)}
+                >
+                  {option.label}
+                </Badge>
+              ))}
+            </div>
+          </div>
+
           {isLoading ? (
             <div className="flex justify-center py-4">
               <div className="animate-spin h-6 w-6 border-2 border-primary border-t-transparent rounded-full"></div>
             </div>
-          ) : !activities || activities.length === 0 ? (
+          ) : !filteredActivities || filteredActivities.length === 0 ? (
             <div className="text-center py-6 text-muted-foreground">
-              Nenhum pedido encontrado.
+              {searchQuery || filterStatus ? 
+                "Nenhum pedido encontrado com os filtros aplicados." : 
+                "Nenhum pedido encontrado no sistema."}
             </div>
           ) : (
             <div className="space-y-4">
-              {activities.map((activity: any) => (
+              <div className="text-sm text-muted-foreground mb-2">
+                Exibindo {filteredActivities.length} de {activities.length} pedidos
+              </div>
+              
+              {filteredActivities.map((activity: any) => (
                 <div key={activity.id} className="flex items-center gap-3 pb-3 border-b">
                   <div className="w-10 h-10 rounded-md overflow-hidden border flex-shrink-0">
                     <img 
@@ -509,7 +612,11 @@ function ActivitiesList() {
                     </div>
                     <p className="text-sm text-muted-foreground">
                       ID: #{activity.id} • {new Date(activity.createdAt).toLocaleDateString('pt-BR')}
-                      {activity.deadline && ` • Prazo: ${new Date(activity.deadline).toLocaleDateString('pt-BR')}`}
+                      {activity.deadline && (
+                        <span className={getPriorityClass(activity.deadline)}>
+                          {` • Prazo: ${new Date(activity.deadline).toLocaleDateString('pt-BR')}`}
+                        </span>
+                      )}
                     </p>
                   </div>
                   
