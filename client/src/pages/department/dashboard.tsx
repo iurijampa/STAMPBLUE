@@ -28,6 +28,7 @@ import { SoundToggleButton, SoundTestButton } from "@/components/SoundManagerSim
 import ListaUltraSimples from "@/components/lista-ultrasimples";
 import SolucaoEmergencial from "@/components/solucao-emergencial";
 import ActivityHistory from "@/components/activity-history";
+import CreateReprintRequest from "@/components/create-reprint";
 
 // Estendendo a interface Activity para incluir os campos que estamos recebendo do backend
 interface ActivityWithNotes extends Activity {
