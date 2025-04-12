@@ -198,16 +198,21 @@ export default function ViewReprintRequestModal({ isOpen, onClose, request }: Vi
               <div className="flex justify-between">
                 <div className="flex items-start gap-3">
                   {/* Imagem da atividade como miniatura */}
-                  {request.activityImage && (
-                    <div className="flex-shrink-0 w-16 h-16 rounded-md overflow-hidden border">
+                  <div className="flex-shrink-0 w-16 h-16 rounded-md overflow-hidden border bg-slate-50 flex items-center justify-center">
+                    {request.activityImage ? (
                       <img 
                         src={request.activityImage} 
                         alt="Miniatura do pedido" 
-                        className="w-full h-full object-cover"
-                        onError={(e) => (e.currentTarget.style.display = 'none')}
+                        className="w-full h-full object-contain"
+                        onError={(e) => {
+                          console.log('Erro ao carregar imagem no modal:', request.activityImage);
+                          e.currentTarget.src = 'https://placehold.co/100/e6f7ff/0077cc?text=Pedido';
+                        }}
                       />
-                    </div>
-                  )}
+                    ) : (
+                      <ImageIcon className="w-8 h-8 text-muted-foreground" />
+                    )}
+                  </div>
                   <div>
                     <CardTitle>Informações da Solicitação</CardTitle>
                     <CardDescription>
