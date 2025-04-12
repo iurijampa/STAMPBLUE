@@ -17,11 +17,21 @@ import DepartmentActivityCounter from "@/components/department-activity-counter"
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
+import ViewActivityModal from "@/components/view-activity-modal";
+import EditActivityModal from "@/components/edit-activity-modal";
+import { Activity as ActivityType } from "@shared/schema";
 
 export default function AdminDashboard() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const { user, logout } = useAuth();
+  
+  // Estados para os modais
+  const [selectedActivity, setSelectedActivity] = useState<ActivityType | null>(null);
+  const [viewModalOpen, setViewModalOpen] = useState(false);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const queryClient = useQueryClient();
   
   // Verificar se o usuário é admin e redirecionar se não for
   useEffect(() => {
@@ -37,8 +47,14 @@ export default function AdminDashboard() {
 
   // Função para atualizar dados
   const handleRefresh = () => {
-    // Refresh all queries
-    window.location.reload();
+    queryClient.invalidateQueries({ queryKey: ["/api/activities"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/stats/department-counts"] });
+    toast({
+      title: "Atualizado",
+      description: "Dados atualizados com sucesso",
+    });
   };
 
   // Função para logout
@@ -51,6 +67,49 @@ export default function AdminDashboard() {
       });
     } catch (error) {
       console.error("Erro ao fazer logout:", error);
+    }
+  };
+  
+  // Função para abrir modal de visualização
+  const handleView = (activity: ActivityType) => {
+    setSelectedActivity(activity);
+    setViewModalOpen(true);
+  };
+  
+  // Função para abrir modal de edição
+  const handleEdit = (activity: ActivityType) => {
+    setSelectedActivity(activity);
+    setEditModalOpen(true);
+  };
+  
+  // Função para excluir atividade
+  const handleDelete = async (id: number) => {
+    if (confirm("Tem certeza que deseja excluir este pedido? Esta ação não pode ser desfeita.")) {
+      try {
+        const response = await fetch(`/api/activities/${id}`, {
+          method: 'DELETE',
+        });
+        
+        if (response.ok) {
+          toast({
+            title: "Sucesso",
+            description: "Pedido excluído com sucesso",
+          });
+          queryClient.invalidateQueries({ queryKey: ["/api/activities"] });
+        } else {
+          toast({
+            title: "Erro",
+            description: "Não foi possível excluir o pedido",
+            variant: "destructive",
+          });
+        }
+      } catch (error) {
+        toast({
+          title: "Erro",
+          description: "Erro ao excluir pedido",
+          variant: "destructive",
+        });
+      }
     }
   };
 
@@ -80,12 +139,12 @@ export default function AdminDashboard() {
       </div>
 
       <div className="space-y-6">
-        <Tabs defaultValue="overview" className="w-full">
+        <Tabs defaultValue="all-activities" className="w-full">
           <TabsList className="w-full mb-4">
-            <TabsTrigger value="overview" className="flex-1">Visão Geral</TabsTrigger>
             <TabsTrigger value="all-activities" className="flex-1">Todos os Pedidos</TabsTrigger>
-            <TabsTrigger value="department-counts" className="flex-1">Atividades por Departamento</TabsTrigger>
+            <TabsTrigger value="overview" className="flex-1">Visão Geral</TabsTrigger>
             <TabsTrigger value="notifications" className="flex-1">Notificações</TabsTrigger>
+            <TabsTrigger value="users" className="flex-1">Usuários</TabsTrigger>
             <TabsTrigger value="stats" className="flex-1">Estatísticas</TabsTrigger>
           </TabsList>
           
@@ -287,6 +346,12 @@ function RecentActivities() {
 // Componente para listar todas as atividades
 function ActivitiesList() {
   const [, navigate] = useLocation();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [selectedActivity, setSelectedActivity] = useState<ActivityType | null>(null);
+  const [viewModalOpen, setViewModalOpen] = useState(false);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  
   const { data: activities, isLoading } = useQuery({
     queryKey: ["/api/activities"],
     queryFn: async () => {
@@ -297,77 +362,186 @@ function ActivitiesList() {
       return response.json();
     }
   });
+  
+  // Função para abrir modal de visualização
+  const handleView = (activity: ActivityType) => {
+    setSelectedActivity(activity);
+    setViewModalOpen(true);
+  };
+  
+  // Função para abrir modal de edição
+  const handleEdit = (activity: ActivityType) => {
+    setSelectedActivity(activity);
+    setEditModalOpen(true);
+  };
+  
+  // Função para excluir atividade
+  const handleDelete = async (id: number) => {
+    if (confirm("Tem certeza que deseja excluir este pedido? Esta ação não pode ser desfeita.")) {
+      try {
+        const response = await fetch(`/api/activities/${id}`, {
+          method: 'DELETE',
+        });
+        
+        if (response.ok) {
+          toast({
+            title: "Sucesso",
+            description: "Pedido excluído com sucesso",
+          });
+          queryClient.invalidateQueries({ queryKey: ["/api/activities"] });
+        } else {
+          toast({
+            title: "Erro",
+            description: "Não foi possível excluir o pedido",
+            variant: "destructive",
+          });
+        }
+      } catch (error) {
+        toast({
+          title: "Erro",
+          description: "Erro ao excluir pedido",
+          variant: "destructive",
+        });
+      }
+    }
+  };
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex justify-between items-center">
-          <div>
-            <CardTitle>Todos os Pedidos</CardTitle>
-            <CardDescription>
-              Lista completa de pedidos no sistema
-            </CardDescription>
+    <>
+      {/* Departamentos primeiro */}
+      <DepartmentActivityCounter />
+      
+      <Card className="mt-6">
+        <CardHeader>
+          <div className="flex justify-between items-center">
+            <div>
+              <CardTitle>Todos os Pedidos</CardTitle>
+              <CardDescription>
+                Lista completa de pedidos no sistema
+              </CardDescription>
+            </div>
+            <div className="flex gap-2">
+              <Button 
+                onClick={() => navigate("/admin/create-activity")}
+                className="flex items-center gap-1"
+                variant="default"
+              >
+                <Plus className="h-4 w-4 mr-1" />
+                Novo Pedido
+              </Button>
+              <Button 
+                onClick={() => navigate("/admin/users")}
+                className="flex items-center gap-1"
+                variant="outline"
+              >
+                <Users className="h-4 w-4 mr-1" />
+                Gerenciar Usuários
+              </Button>
+            </div>
           </div>
-          <Button 
-            onClick={() => navigate("/admin/users")}
-            className="flex items-center gap-1"
-          >
-            <Users className="h-4 w-4 mr-1" />
-            Gerenciar Usuários
-          </Button>
-        </div>
-      </CardHeader>
-      <CardContent>
-        {isLoading ? (
-          <div className="flex justify-center py-4">
-            <div className="animate-spin h-6 w-6 border-2 border-primary border-t-transparent rounded-full"></div>
-          </div>
-        ) : !activities || activities.length === 0 ? (
-          <div className="text-center py-6 text-muted-foreground">
-            Nenhuma atividade encontrada.
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {activities.map((activity: any) => (
-              <div key={activity.id} className="flex items-center gap-3 pb-3 border-b">
-                <div className="w-10 h-10 rounded-md overflow-hidden border flex-shrink-0">
-                  <img 
-                    src={activity.image || "/placeholder.png"}
-                    alt={activity.title}
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      e.currentTarget.src = "/logo.svg";
-                      e.currentTarget.classList.add("bg-blue-600");
-                    }}
-                  />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <p className="font-medium truncate">{activity.title}</p>
-                    <Badge className={
-                      activity.status === 'completed' ? 'bg-green-500' : 
-                      activity.status === 'in_progress' ? 'bg-amber-500' : 'bg-blue-500'
-                    }>
-                      {activity.status === 'completed' ? 'Concluído' : 
-                       activity.status === 'in_progress' ? 'Em Andamento' : 'Pendente'}
-                    </Badge>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className="flex justify-center py-4">
+              <div className="animate-spin h-6 w-6 border-2 border-primary border-t-transparent rounded-full"></div>
+            </div>
+          ) : !activities || activities.length === 0 ? (
+            <div className="text-center py-6 text-muted-foreground">
+              Nenhuma atividade encontrada.
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {activities.map((activity: any) => (
+                <div key={activity.id} className="flex items-center gap-3 pb-3 border-b">
+                  <div className="w-10 h-10 rounded-md overflow-hidden border flex-shrink-0">
+                    <img 
+                      src={activity.image || "/placeholder.png"}
+                      alt={activity.title}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.currentTarget.src = "/logo.svg";
+                        e.currentTarget.classList.add("bg-blue-600");
+                      }}
+                    />
                   </div>
-                  <p className="text-sm text-muted-foreground">
-                    ID: #{activity.id} • {new Date(activity.createdAt).toLocaleDateString('pt-BR')}
-                    {activity.deadline && ` • Prazo: ${new Date(activity.deadline).toLocaleDateString('pt-BR')}`}
-                  </p>
-                </div>
-                {activity.priority && (
-                  <div className="bg-red-100 text-red-800 px-2 py-0.5 rounded text-xs flex items-center">
-                    Prioridade
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <p className="font-medium truncate">{activity.title}</p>
+                      <Badge className={
+                        activity.status === 'completed' ? 'bg-green-500' : 
+                        activity.status === 'in_progress' ? 'bg-amber-500' : 'bg-blue-500'
+                      }>
+                        {activity.status === 'completed' ? 'Concluído' : 
+                         activity.status === 'in_progress' ? 'Em Andamento' : 'Pendente'}
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      ID: #{activity.id} • {new Date(activity.createdAt).toLocaleDateString('pt-BR')}
+                      {activity.deadline && ` • Prazo: ${new Date(activity.deadline).toLocaleDateString('pt-BR')}`}
+                    </p>
                   </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+                  
+                  {/* Área de ações */}
+                  <div className="flex items-center gap-2">
+                    {activity.priority && (
+                      <div className="bg-red-100 text-red-800 px-2 py-0.5 rounded text-xs flex items-center mr-2">
+                        Prioridade
+                      </div>
+                    )}
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      onClick={() => handleView(activity as ActivityType)}
+                      title="Visualizar"
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      onClick={() => handleEdit(activity as ActivityType)}
+                      title="Editar"
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      onClick={() => handleDelete(activity.id)}
+                      title="Excluir"
+                      className="text-red-500 hover:text-red-700"
+                    >
+                      <Trash className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+      
+      {/* Modais */}
+      <ViewActivityModal
+        isOpen={viewModalOpen}
+        onClose={() => setViewModalOpen(false)}
+        activity={selectedActivity}
+      />
+      
+      <EditActivityModal
+        isOpen={editModalOpen}
+        onClose={() => setEditModalOpen(false)}
+        onSuccess={() => {
+          setEditModalOpen(false);
+          queryClient.invalidateQueries({ queryKey: ["/api/activities"] });
+          toast({
+            title: "Sucesso",
+            description: "Pedido atualizado com sucesso",
+          });
+        }}
+        activity={selectedActivity}
+      />
+    </>
   );
 }
 
