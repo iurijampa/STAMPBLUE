@@ -42,33 +42,26 @@ export default function DepartmentActivityCounter() {
   const { toast } = useToast();
   
   useEffect(() => {
-    // Cache local para evitar múltiplas chamadas em um curto período
-    const cacheKey = `department_counts_${refreshKey}`;
-    const cachedData = sessionStorage.getItem(cacheKey);
+    // Melhor variável de controle para evitar atualizações em componentes desmontados
+    let isMounted = true;
     
-    // Se tiver dados em cache e estiverem atualizados (menos de 1 minuto), use-os
-    if (cachedData) {
-      try {
-        const { data, timestamp } = JSON.parse(cachedData);
-        const now = Date.now();
-        // Se o cache tiver menos de 30 segundos, use-o
-        if (now - timestamp < 30000) {
-          setCounts(data);
-          setLoading(false);
-          return;
-        }
-      } catch (e) {
-        // Se houver erro ao processar o cache, ignore e carregue normalmente
-      }
-    }
-    
+    // Usar cache de browser para reduzir chamadas à API
     const controller = new AbortController();
     const signal = controller.signal;
     
     const fetchCounts = async () => {
       try {
-        setLoading(true);
-        setError(null);
+        if (isMounted) setLoading(true);
+        if (isMounted) setError(null);
+        
+        // Configuração otimizada para fetch com cache e timeout
+        const timeoutId = setTimeout(() => {
+          if (isMounted && loading) {
+            controller.abort();
+            setError("Tempo limite excedido ao carregar contadores");
+            setLoading(false);
+          }
+        }, 5000); // 5 segundos de timeout
         
         const response = await fetch("/api/stats/department-counts", {
           signal,
@@ -77,27 +70,23 @@ export default function DepartmentActivityCounter() {
           }
         });
         
+        clearTimeout(timeoutId);
+        
         if (!response.ok) {
           throw new Error(`Erro ao carregar contadores (${response.status})`);
         }
         
         const data = await response.json();
-        // Armazena no cache local
-        sessionStorage.setItem(cacheKey, JSON.stringify({
-          data,
-          timestamp: Date.now()
-        }));
         
-        if (!signal.aborted) {
+        // Só atualiza o estado se o componente ainda estiver montado
+        if (isMounted) {
           setCounts(data);
+          setLoading(false);
         }
       } catch (err) {
-        if (!signal.aborted) {
+        if (isMounted && !signal.aborted) {
           console.error("Erro ao carregar contadores:", err);
           setError(err instanceof Error ? err.message : "Erro desconhecido");
-        }
-      } finally {
-        if (!signal.aborted) {
           setLoading(false);
         }
       }
@@ -105,8 +94,9 @@ export default function DepartmentActivityCounter() {
     
     fetchCounts();
     
-    // Limpeza do controlador em caso de desmontagem do componente
+    // Limpeza na desmontagem do componente
     return () => {
+      isMounted = false;
       controller.abort();
     };
   }, [refreshKey]);

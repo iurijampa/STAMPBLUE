@@ -18,6 +18,83 @@ import path from 'path';
 import { db } from "./db";
 import { createBackup } from "./backup";
 import { and, eq, sql } from "drizzle-orm";
+
+// LRU Cache para otimização de performance
+class LRUCache {
+  private cache: Map<string, { value: any, expiry: number }>;
+  private maxSize: number;
+
+  constructor(maxSize: number = 100) {
+    this.cache = new Map();
+    this.maxSize = maxSize;
+  }
+
+  get(key: string): any {
+    if (!this.cache.has(key)) {
+      return null;
+    }
+
+    const item = this.cache.get(key)!;
+    
+    // Se expirou, remover do cache
+    if (item.expiry && item.expiry < Date.now()) {
+      this.cache.delete(key);
+      return null;
+    }
+
+    // Mover para o final (mais recente)
+    this.cache.delete(key);
+    this.cache.set(key, item);
+    
+    return item.value;
+  }
+
+  set(key: string, value: any, ttlMs?: number): void {
+    // Se o cache estiver cheio, remover o item mais antigo
+    if (this.cache.size >= this.maxSize) {
+      const oldestKey = this.cache.keys().next().value;
+      this.cache.delete(oldestKey);
+    }
+
+    // Adicionar novo item
+    this.cache.set(key, { 
+      value, 
+      expiry: ttlMs ? Date.now() + ttlMs : 0 
+    });
+  }
+
+  // Remover item específico
+  delete(key: string): boolean {
+    return this.cache.delete(key);
+  }
+
+  // Remover todos os itens com prefixo específico
+  deleteByPrefix(prefix: string): number {
+    let count = 0;
+    for (const key of this.cache.keys()) {
+      if (key.startsWith(prefix)) {
+        this.cache.delete(key);
+        count++;
+      }
+    }
+    return count;
+  }
+
+  // Limpar todo o cache
+  clear(): void {
+    this.cache.clear();
+  }
+
+  // Obter tamanho atual
+  size(): number {
+    return this.cache.size;
+  }
+}
+
+// Cache global para uso em toda a aplicação
+const cache = new LRUCache(500); // Suporta até 500 itens em cache
+// Expor globalmente para uso em outras partes do código
+(global as any).cache = cache;
 import impressaoRouter from "./solucao-impressao";
 import emergencialRouter, { listarSolicitacoesReimpressao } from "./reimpressao-emergencial";
 import { 
@@ -1126,15 +1203,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Adiciona cabeçalhos de cache para o navegador
       res.setHeader('Cache-Control', 'public, max-age=30');
       
-      // Verifica cache em memória para evitar consultas repetidas
-      const cacheKey = 'department_counts_global';
-      const cachedData = cache.get(cacheKey);
-      
-      if (cachedData) {
-        console.log(`[CACHE] Usando dados em cache para contagens de departamentos`);
-        return res.json(cachedData);
-      }
-      
       console.log(`[ADMIN] Obtendo contagem de atividades por departamento`);
       
       // Resultado final
@@ -1152,15 +1220,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }));
       
-      // Armazena resultado em cache por 30 segundos
-      cache.set(cacheKey, result, 30000);
-      
       res.json(result);
     } catch (error) {
       console.error("[ERROR] Erro ao obter contagem por departamento:", error);
       res.status(500).json({ 
         message: "Erro ao obter contagem por departamento", 
-        error: error.message 
+        error: error instanceof Error ? error.message : "Erro desconhecido"
       });
     }
   });
