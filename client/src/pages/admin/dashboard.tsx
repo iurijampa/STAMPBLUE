@@ -503,11 +503,28 @@ function ActivitiesList() {
   const getFilterBgColor = (value: string | null) => 
     value === filterStatus ? "bg-primary/20" : "bg-transparent";
 
-  // Filtra a lista de atividades - otimização com useMemo
-  const filteredActivities = useMemo(() => 
-    activities ? filterActivities(activities) : [],
-    [activities, searchQuery, filterStatus, sortOrder]
-  );
+  // Filtra e ordena a lista de atividades - otimização com useMemo
+  const filteredActivities = useMemo(() => {
+    if (!activities) return [];
+    
+    // Primeiro filtra as atividades conforme os critérios
+    const filtered = filterActivities(activities);
+    
+    // Depois ordena por prazo (deadline)
+    return [...filtered].sort((a, b) => {
+      // Se não tem prazo, fica por último
+      if (!a.deadline) return 1;
+      if (!b.deadline) return -1;
+      
+      const dateA = new Date(a.deadline);
+      const dateB = new Date(b.deadline);
+      
+      // Ordena por prazo (os mais próximos primeiro)
+      return sortOrder === "asc" 
+        ? dateA.getTime() - dateB.getTime() 
+        : dateB.getTime() - dateA.getTime();
+    });
+  }, [activities, searchQuery, filterStatus, sortOrder]);
 
   return (
     <>
