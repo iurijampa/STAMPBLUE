@@ -17,6 +17,10 @@ interface AuthContextType {
   login: (data: LoginData) => Promise<SelectUser>;
   register: (data: InsertUser) => Promise<SelectUser>;
   logout: () => Promise<void>;
+  logoutMutation: {
+    mutate: () => void;
+    isPending: boolean;
+  };
 }
 
 // Criando o contexto de autenticação
@@ -197,6 +201,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
   
+  // Logout mutation simulada para compatibilidade com o padrão mutations
+  const logoutMutation = {
+    mutate: () => {
+      logout().catch(err => {
+        console.error("Erro ao executar logoutMutation:", err);
+      });
+    },
+    isPending: false
+  };
+  
   // Valores do contexto
   const contextValue: AuthContextType = {
     user,
@@ -204,7 +218,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     error,
     login,
     register,
-    logout
+    logout,
+    logoutMutation
   };
 
   return (

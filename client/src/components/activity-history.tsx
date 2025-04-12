@@ -10,10 +10,22 @@ import { ptBR } from "date-fns/locale";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 
-interface HistoryActivity extends Activity {
+interface HistoryActivity {
+  id: number;
+  title: string;
+  description: string;
+  image: string;
+  additionalImages: string[] | null;
+  quantity: number;
+  clientName: string | null;
+  priority: string | null;
+  deadline: Date | null;
+  notes: string | null;
+  createdAt: Date;
+  createdBy: number;
+  status: "pending" | "in_progress" | "completed";
   completedBy: string;
   completedAt: string;
-  notes?: string | null;
 }
 
 interface ActivityHistoryProps {
@@ -56,8 +68,8 @@ export default function ActivityHistory({ department }: ActivityHistoryProps) {
   }, [department, refreshKey]);
   
   // Formatar data para exibição
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
+  const formatDate = (dateString: string | Date) => {
+    const date = typeof dateString === 'string' ? new Date(dateString) : dateString;
     return date.toLocaleString('pt-BR', {
       day: '2-digit',
       month: '2-digit',

@@ -4,17 +4,20 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
-import { RefreshCw, Activity, Clock, Calendar, Users, ChevronRight, AlertTriangle, Layers, CheckCircle2 } from "lucide-react";
+import { RefreshCw, Activity, Clock, Calendar, Users, ChevronRight, AlertTriangle, Layers, CheckCircle2, Bell } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import Layout from "@/components/Layout";
 import { useQuery } from "@tanstack/react-query";
 import DepartmentActivityCounter from "@/components/department-activity-counter";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { Badge } from "@/components/ui/badge";
 
 export default function AdminDashboard() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
-  const { user, logoutMutation } = useAuth();
+  const { user, logout } = useAuth();
   
   // Verificar se o usuário é admin e redirecionar se não for
   useEffect(() => {
@@ -37,8 +40,11 @@ export default function AdminDashboard() {
   // Função para logout
   const handleLogout = () => {
     try {
-      logoutMutation.mutate();
-      navigate("/auth");
+      logout().then(() => {
+        navigate("/auth");
+      }).catch(error => {
+        console.error("Erro ao fazer logout:", error);
+      });
     } catch (error) {
       console.error("Erro ao fazer logout:", error);
     }
@@ -73,7 +79,9 @@ export default function AdminDashboard() {
         <Tabs defaultValue="overview" className="w-full">
           <TabsList className="w-full mb-4">
             <TabsTrigger value="overview" className="flex-1">Visão Geral</TabsTrigger>
+            <TabsTrigger value="all-activities" className="flex-1">Todos os Pedidos</TabsTrigger>
             <TabsTrigger value="department-counts" className="flex-1">Atividades por Departamento</TabsTrigger>
+            <TabsTrigger value="notifications" className="flex-1">Notificações</TabsTrigger>
             <TabsTrigger value="stats" className="flex-1">Estatísticas</TabsTrigger>
           </TabsList>
           
@@ -87,8 +95,20 @@ export default function AdminDashboard() {
             </div>
           </TabsContent>
           
+          <TabsContent value="all-activities">
+            <div className="space-y-6">
+              <ActivitiesList />
+            </div>
+          </TabsContent>
+          
           <TabsContent value="department-counts">
             <DepartmentActivityCounter />
+          </TabsContent>
+          
+          <TabsContent value="notifications">
+            <div className="space-y-6">
+              <NotificationsList />
+            </div>
           </TabsContent>
           
           <TabsContent value="stats">
@@ -251,6 +271,154 @@ function RecentActivities() {
                 <ChevronRight className="h-4 w-4 ml-1" />
               </Button>
             </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// Componente para listar todas as atividades
+function ActivitiesList() {
+  const { data: activities, isLoading } = useQuery({
+    queryKey: ["/api/activities"],
+    queryFn: async () => {
+      const response = await fetch("/api/activities");
+      if (!response.ok) {
+        throw new Error("Erro ao buscar atividades");
+      }
+      return response.json();
+    }
+  });
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Todos os Pedidos</CardTitle>
+        <CardDescription>
+          Lista completa de pedidos no sistema
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="flex justify-center py-4">
+            <div className="animate-spin h-6 w-6 border-2 border-primary border-t-transparent rounded-full"></div>
+          </div>
+        ) : !activities || activities.length === 0 ? (
+          <div className="text-center py-6 text-muted-foreground">
+            Nenhuma atividade encontrada.
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {activities.map((activity: any) => (
+              <div key={activity.id} className="flex items-center gap-3 pb-3 border-b">
+                <div className="w-10 h-10 rounded-md overflow-hidden border flex-shrink-0">
+                  <img 
+                    src={activity.image || "/placeholder.png"}
+                    alt={activity.title}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      e.currentTarget.src = "/logo.svg";
+                      e.currentTarget.classList.add("bg-blue-600");
+                    }}
+                  />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between">
+                    <p className="font-medium truncate">{activity.title}</p>
+                    <Badge className={
+                      activity.status === 'completed' ? 'bg-green-500' : 
+                      activity.status === 'in_progress' ? 'bg-amber-500' : 'bg-blue-500'
+                    }>
+                      {activity.status === 'completed' ? 'Concluído' : 
+                       activity.status === 'in_progress' ? 'Em Andamento' : 'Pendente'}
+                    </Badge>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    ID: #{activity.id} • {new Date(activity.createdAt).toLocaleDateString('pt-BR')}
+                    {activity.deadline && ` • Prazo: ${new Date(activity.deadline).toLocaleDateString('pt-BR')}`}
+                  </p>
+                </div>
+                {activity.priority && (
+                  <div className="bg-red-100 text-red-800 px-2 py-0.5 rounded text-xs">
+                    Prioridade
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// Componente para listar notificações
+function NotificationsList() {
+  const { data: notifications, isLoading } = useQuery({
+    queryKey: ["/api/notifications"],
+    queryFn: async () => {
+      const response = await fetch("/api/notifications");
+      if (!response.ok) {
+        throw new Error("Erro ao buscar notificações");
+      }
+      return response.json();
+    }
+  });
+
+  // Formatar data para exibição
+  const formatDate = (dateString: string) => {
+    try {
+      const date = new Date(dateString);
+      return format(date, "dd/MM/yyyy HH:mm", { locale: ptBR });
+    } catch (error) {
+      return dateString;
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Bell className="h-5 w-5" />
+          Notificações
+        </CardTitle>
+        <CardDescription>
+          Atualizações e notificações do sistema
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="flex justify-center py-4">
+            <div className="animate-spin h-6 w-6 border-2 border-primary border-t-transparent rounded-full"></div>
+          </div>
+        ) : !notifications || notifications.length === 0 ? (
+          <div className="text-center py-6 text-muted-foreground">
+            Nenhuma notificação encontrada.
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {notifications.map((notification: any) => (
+              <div 
+                key={notification.id} 
+                className={`p-3 rounded-md border ${notification.read ? 'bg-gray-50' : 'bg-blue-50 border-blue-200'}`}
+              >
+                <div className="flex justify-between items-start">
+                  <div className="font-medium">
+                    {notification.title || "Notificação"}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {formatDate(notification.createdAt)}
+                  </div>
+                </div>
+                <p className="text-sm mt-1">{notification.message}</p>
+                {notification.activityId && (
+                  <div className="mt-2 text-xs text-muted-foreground">
+                    Pedido: #{notification.activityId}
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         )}
       </CardContent>

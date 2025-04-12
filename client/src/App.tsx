@@ -117,6 +117,7 @@ function App() {
             <Route path="/admin/dashboard" component={AdminDashboard} />
             <Route path="/admin/users" component={AdminUsers} />
             <Route path="/department/:department/dashboard" component={DepartmentDashboard} />
+            <Route path="/department/:department/history" component={DepartmentHistory} />
             <Route component={NotFound} />
           </Switch>
           <Toaster />
