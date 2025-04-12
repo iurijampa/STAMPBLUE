@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
 import { FileInput } from "@/components/ui/file-input";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { DEPARTMENTS } from "@shared/schema";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -128,6 +128,11 @@ export default function CreateActivityModal({ isOpen, onClose, onSuccess }: Crea
         const errorData = await response.json();
         throw new Error(errorData.message || "Erro ao criar atividade");
       }
+      
+      // Invalidar as consultas para atualizar as listas de atividades
+      queryClient.invalidateQueries({ queryKey: ["/api/activities"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stats/department-counts"] });
       
       toast({
         title: "Atividade criada com sucesso",
