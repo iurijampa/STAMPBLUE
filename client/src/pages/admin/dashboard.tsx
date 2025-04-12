@@ -30,7 +30,6 @@ export default function AdminDashboard() {
   const [selectedActivity, setSelectedActivity] = useState<ActivityType | null>(null);
   const [viewModalOpen, setViewModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
-  const [createModalOpen, setCreateModalOpen] = useState(false);
   const queryClient = useQueryClient();
   
   // Verificar se o usuário é admin e redirecionar se não for
@@ -144,7 +143,7 @@ export default function AdminDashboard() {
             <TabsTrigger value="all-activities" className="flex-1">Todos os Pedidos</TabsTrigger>
             <TabsTrigger value="overview" className="flex-1">Visão Geral</TabsTrigger>
             <TabsTrigger value="notifications" className="flex-1">Notificações</TabsTrigger>
-            <TabsTrigger value="users" className="flex-1">Usuários</TabsTrigger>
+            <TabsTrigger value="users" className="flex-1">Gerenciar Usuários</TabsTrigger>
             <TabsTrigger value="stats" className="flex-1">Estatísticas</TabsTrigger>
           </TabsList>
           
@@ -165,15 +164,48 @@ export default function AdminDashboard() {
             </div>
           </TabsContent>
           
-          <TabsContent value="department-counts">
-            <DepartmentActivityCounter />
-          </TabsContent>
-          
           <TabsContent value="notifications">
             <div className="space-y-6">
               {/* Lista de notificações */}
               {NotificationsList()}
             </div>
+          </TabsContent>
+          
+          <TabsContent value="users">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle>Gerenciamento de Usuários</CardTitle>
+                  <CardDescription>
+                    Administre todos os usuários do sistema
+                  </CardDescription>
+                </div>
+                <Button 
+                  onClick={() => navigate("/admin/users")}
+                  className="flex items-center gap-1"
+                >
+                  <Users className="h-4 w-4 mr-1" />
+                  Gerenciar Usuários
+                </Button>
+              </CardHeader>
+              <CardContent>
+                <div className="p-6 text-center">
+                  <Users className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                  <h3 className="text-lg font-medium mb-2">Administração de Contas</h3>
+                  <p className="text-muted-foreground mb-4">
+                    Acesse a página de gerenciamento para criar, editar e excluir usuários do sistema.
+                    Você pode definir permissões por departamento e controlar o acesso às funcionalidades.
+                  </p>
+                  <Button 
+                    onClick={() => navigate("/admin/users")}
+                    className="flex items-center gap-1 mx-auto"
+                  >
+                    Acessar Gerenciamento
+                    <ChevronRight className="h-4 w-4 ml-1" />
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
           </TabsContent>
           
           <TabsContent value="stats">
