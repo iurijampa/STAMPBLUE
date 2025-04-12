@@ -91,7 +91,8 @@ export async function buscarAtividadesPorDepartamentoEmergencia(department: stri
       image: row.image,
       additionalImages: row.additional_images,
       createdAt: row.created_at,
-      clientName: row.clientName,
+      client: row.clientName,        // Campo principal de cliente
+      clientInfo: row.description,   // Usar a descrição como informação adicional do cliente
       quantity: row.quantity,
       notes: row.notes
     }));
