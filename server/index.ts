@@ -15,7 +15,17 @@ if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
   console.log(`Diretório de uploads criado: ${uploadsDir}`);
 }
+// Servir arquivos da pasta uploads
 app.use('/uploads', express.static(uploadsDir));
+
+// Servir arquivos estáticos da pasta client/public
+const publicDir = path.join(process.cwd(), 'client/public');
+if (fs.existsSync(publicDir)) {
+  console.log(`Servindo arquivos estáticos da pasta: ${publicDir}`);
+  app.use(express.static(publicDir));
+} else {
+  console.log(`Diretório public não encontrado: ${publicDir}`);
+}
 
 app.use((req, res, next) => {
   const start = Date.now();

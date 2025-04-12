@@ -170,28 +170,31 @@ export default function ReprintRequestsList({ department, activity }: ReprintReq
                 <CardHeader className="p-3 pb-0">
                   <div className="flex justify-between items-start">
                     <div className="flex items-start gap-3">
-                      {/* Imagem da atividade como miniatura usando o novo endpoint específico */}
+                      {/* Imagem da atividade como miniatura */}
                       <div className="flex-shrink-0 w-12 h-12 rounded-md overflow-hidden border bg-slate-50 flex items-center justify-center">
                         {request.activityId ? (
-                          // Verificamos primeiro se temos uma URL direta na solicitação
-                          request.activityImage && request.activityImage.startsWith('http') ? (
+                          // Verificamos primeiro se temos uma URL de imagem na solicitação
+                          request.activityImage ? (
                             <img 
                               src={request.activityImage}
                               alt="Miniatura do pedido" 
                               className="w-full h-full object-contain"
                               onError={(e) => {
-                                console.log('Erro ao carregar imagem direta:', request.activityId);
-                                e.currentTarget.src = `https://placehold.co/100/e6f7ff/0077cc?text=Pedido+${request.activityId}`;
+                                console.log('Erro ao carregar imagem:', request.activityId);
+                                // Tentar usar SVG de fallback local
+                                e.currentTarget.src = "/no-image.svg";
                               }}
                             />
                           ) : (
+                            // Se não tiver imagem, usar o endpoint para buscar
                             <img 
                               src={`/api/reimpressao-emergencial/imagem/${request.activityId}`}
                               alt="Miniatura do pedido" 
                               className="w-full h-full object-contain"
                               onError={(e) => {
                                 console.log('Erro ao carregar imagem:', request.activityId);
-                                e.currentTarget.src = `https://placehold.co/100/e6f7ff/0077cc?text=Pedido+${request.activityId}`;
+                                // Usar SVG de fallback local
+                                e.currentTarget.src = "/no-image.svg";
                               }}
                             />
                           )

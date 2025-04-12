@@ -197,18 +197,19 @@ export default function ViewReprintRequestModal({ isOpen, onClose, request }: Vi
             <CardHeader className="pb-2">
               <div className="flex justify-between">
                 <div className="flex items-start gap-3">
-                  {/* Imagem da atividade como miniatura usando o novo endpoint específico */}
+                  {/* Imagem da atividade como miniatura */}
                   <div className="flex-shrink-0 w-16 h-16 rounded-md overflow-hidden border bg-slate-50 flex items-center justify-center">
                     {request.activityId ? (
-                      // Verificamos primeiro se temos uma URL direta na solicitação
-                      request.activityImage && request.activityImage.startsWith('http') ? (
+                      // Verificamos primeiro se temos uma URL de imagem na solicitação
+                      request.activityImage ? (
                         <img 
                           src={request.activityImage}
                           alt="Miniatura do pedido" 
                           className="w-full h-full object-contain"
                           onError={(e) => {
-                            console.log('Erro ao carregar imagem direta no modal:', request.activityId);
-                            e.currentTarget.src = `https://placehold.co/100/e6f7ff/0077cc?text=Pedido+${request.activityId}`;
+                            console.log('Erro ao carregar imagem no modal:', request.activityId);
+                            // Usar SVG de fallback local
+                            e.currentTarget.src = "/no-image.svg";
                           }}
                         />
                       ) : (
@@ -218,7 +219,8 @@ export default function ViewReprintRequestModal({ isOpen, onClose, request }: Vi
                           className="w-full h-full object-contain"
                           onError={(e) => {
                             console.log('Erro ao carregar imagem no modal:', request.activityId);
-                            e.currentTarget.src = `https://placehold.co/100/e6f7ff/0077cc?text=Pedido+${request.activityId}`;
+                            // Usar SVG de fallback local
+                            e.currentTarget.src = "/no-image.svg";
                           }}
                         />
                       )
