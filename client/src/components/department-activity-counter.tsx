@@ -81,9 +81,6 @@ export default function DepartmentActivityCounter() {
               <BarChart3 className="h-5 w-5" />
               Atividades por Departamento
             </CardTitle>
-            <CardDescription>
-              Visão geral das atividades pendentes em cada setor
-            </CardDescription>
           </div>
           <Button 
             variant="outline" 
