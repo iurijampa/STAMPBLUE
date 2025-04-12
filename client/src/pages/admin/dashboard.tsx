@@ -537,182 +537,153 @@ function ActivitiesList() {
 
   return (
     <>
-      <Card>
-        <CardHeader>
-          <div className="flex justify-between items-center">
-            <div>
-              <CardTitle>Todos os Pedidos</CardTitle>
-              <CardDescription>
-                Lista completa de pedidos no sistema
-              </CardDescription>
-            </div>
-            <div>
-              <Button 
-                onClick={() => setCreateModalOpen(true)}
-                className="flex items-center gap-1"
-                variant="default"
-              >
-                <Plus className="h-4 w-4 mr-1" />
-                Novo Pedido
-              </Button>
-            </div>
+      <div className="bg-white dark:bg-gray-900 p-6 rounded-lg shadow-sm">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-xl font-bold">Pedidos</h2>
+          <Button 
+            onClick={() => setCreateModalOpen(true)}
+            className="bg-gray-900 text-white dark:bg-primary"
+          >
+            Novo Pedido
+          </Button>
+        </div>
+        
+        {/* Barra de pesquisa */}
+        <div className="mb-6">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+            <Input
+              type="search"
+              placeholder="Buscar por título, cliente ou data de entrega..."
+              className="pl-10 border rounded-md w-full"
+              value={searchQuery}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
+            />
           </div>
-        </CardHeader>
-        <CardContent>
-          {/* Barra de pesquisa e filtros */}
-          <div className="mb-4 space-y-4">
-            <div className="flex items-center gap-2">
-              <div className="relative flex-1">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  type="search"
-                  placeholder="Buscar por ID, nome do pedido ou cliente..."
-                  className="pl-8"
-                  value={searchQuery}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
-                />
-              </div>
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
-                title={sortOrder === "asc" ? "Ordenação crescente" : "Ordenação decrescente"}
-              >
-                {sortOrder === "asc" ? <ArrowUpCircle className="h-4 w-4" /> : <ArrowDownCircle className="h-4 w-4" />}
-              </Button>
-            </div>
-            <div className="flex flex-wrap gap-2 mb-4">
-              {departmentOptions.map(option => (
-                <Badge
-                  key={option.value || "all"}
-                  variant="outline"
-                  className={`cursor-pointer px-3 py-2 text-base flex items-center ${
-                    filterStatus === option.value 
-                      ? 'bg-primary text-primary-foreground font-medium' 
-                      : 'bg-background hover:bg-secondary'
-                  }`}
-                  onClick={() => {
-                    console.log(`Filtro alterado para: ${option.value || 'Todos'}`);
-                    setFilterStatus(option.value);
-                  }}
-                >
-                  {option.icon}
-                  {option.label}
-                </Badge>
-              ))}
-            </div>
+        </div>
+        
+        {/* Filtro de departamentos */}
+        <div className="flex flex-wrap gap-2 mb-6 hidden">
+          {departmentOptions.map(option => (
+            <Badge
+              key={option.value || "all"}
+              variant="outline"
+              className={`cursor-pointer px-3 py-2 ${
+                filterStatus === option.value 
+                  ? 'bg-primary text-primary-foreground font-medium' 
+                  : 'bg-background hover:bg-secondary'
+              }`}
+              onClick={() => {
+                setFilterStatus(option.value);
+              }}
+            >
+              {option.icon}
+              {option.label}
+            </Badge>
+          ))}
+        </div>
+        
+        {isLoading ? (
+          <div className="flex justify-center py-8">
+            <div className="animate-spin h-6 w-6 border-2 border-primary border-t-transparent rounded-full"></div>
           </div>
-
-          {isLoading ? (
-            <div className="flex justify-center py-4">
-              <div className="animate-spin h-6 w-6 border-2 border-primary border-t-transparent rounded-full"></div>
-            </div>
-          ) : !filteredActivities || filteredActivities.length === 0 ? (
-            <div className="text-center py-6 text-muted-foreground">
-              {searchQuery || filterStatus ? 
-                "Nenhum pedido encontrado com os filtros aplicados." : 
-                "Nenhum pedido encontrado no sistema."}
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <div className="text-sm text-muted-foreground mb-2">
-                Exibindo {filteredActivities.length} de {activities.length} pedidos
-              </div>
-              
-              {filteredActivities.map((activity: any) => (
-                <div key={activity.id} className="flex items-center gap-3 pb-4 border-b mb-2">
-                  <div className="w-14 h-14 rounded-md overflow-hidden border flex-shrink-0">
-                    <img 
-                      src={activity.image || "/placeholder.png"}
-                      alt={activity.title}
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        const target = e.currentTarget as HTMLImageElement;
-                        target.src = "/logo.svg";
-                        target.classList.add("bg-blue-600");
-                      }}
-                    />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    {/* Nome do pedido em destaque */}
-                    <h3 className="text-lg font-bold truncate mb-1">{activity.title}</h3>
-                    
-                    {/* Informações em formato de badges para melhor visualização */}
-                    <div className="flex flex-wrap items-center gap-2 mb-1">
-                      {/* ID do pedido */}
-                      <div className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-sm">
-                        ID: #{activity.id}
-                      </div>
-                      
-                      {/* Status do setor atual em destaque */}
-                      <Badge className={`text-white font-medium px-3 py-1 ${
+        ) : !filteredActivities || filteredActivities.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground">
+            {searchQuery || filterStatus ? 
+              "Nenhum pedido encontrado com os filtros aplicados." : 
+              "Nenhum pedido encontrado no sistema."}
+          </div>
+        ) : (
+          <div className="overflow-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="bg-gray-50 dark:bg-gray-800 text-left">
+                  <th className="px-4 py-3 font-medium text-sm">Título</th>
+                  <th className="px-4 py-3 font-medium text-sm">Cliente</th>
+                  <th className="px-4 py-3 font-medium text-sm">Setor Atual</th>
+                  <th className="px-4 py-3 font-medium text-sm">
+                    <div className="flex items-center">
+                      Entrega
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="ml-1 h-6 w-6"
+                        onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
+                      >
+                        {sortOrder === "asc" ? <ArrowUpCircle className="h-4 w-4" /> : <ArrowDownCircle className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                  </th>
+                  <th className="px-4 py-3 font-medium text-sm">Criado em</th>
+                  <th className="px-4 py-3 font-medium text-sm text-right">Ações</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {filteredActivities.map((activity: any) => (
+                  <tr key={activity.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                    <td className="px-4 py-3">
+                      <div className="font-medium">{activity.title}</div>
+                    </td>
+                    <td className="px-4 py-3">{activity.client}</td>
+                    <td className="px-4 py-3">
+                      <Badge className={`text-white ${
                         activity.currentDepartment === 'gabarito' ? 'bg-blue-600' : 
                         activity.currentDepartment === 'impressao' ? 'bg-violet-600' : 
                         activity.currentDepartment === 'batida' ? 'bg-amber-600' : 
                         activity.currentDepartment === 'costura' ? 'bg-emerald-600' : 
                         activity.currentDepartment === 'embalagem' ? 'bg-slate-600' : 'bg-gray-600'
                       }`}>
-                        Setor: {activity.currentDepartment === 'gabarito' ? 'Gabarito' : 
-                               activity.currentDepartment === 'impressao' ? 'Impressão' : 
-                               activity.currentDepartment === 'batida' ? 'Batida' : 
-                               activity.currentDepartment === 'costura' ? 'Costura' : 
-                               activity.currentDepartment === 'embalagem' ? 'Embalagem' : 'Pendente'}
+                        {activity.currentDepartment === 'gabarito' ? 'Gabarito' : 
+                         activity.currentDepartment === 'impressao' ? 'Impressão' : 
+                         activity.currentDepartment === 'batida' ? 'Batida' : 
+                         activity.currentDepartment === 'costura' ? 'Costura' : 
+                         activity.currentDepartment === 'embalagem' ? 'Embalagem' : 'Pendente'}
                       </Badge>
-                      
-                      {/* Data de entrega em destaque */}
-                      {activity.deadline && (
-                        <Badge variant="outline" className={`font-medium ${getPriorityClass(activity.deadline)}`}>
-                          <Calendar className="w-3.5 h-3.5 mr-1" />
-                          Prazo: {new Date(activity.deadline).toLocaleDateString('pt-BR')}
-                        </Badge>
-                      )}
-                    </div>
-                    
-                    {/* Data de criação */}
-                    <p className="text-xs text-muted-foreground">
-                      Criado em: {new Date(activity.createdAt).toLocaleDateString('pt-BR')}
-                    </p>
-                  </div>
-                  
-                  {/* Área de ações */}
-                  <div className="flex items-center gap-2">
-                    {activity.priority && (
-                      <div className="bg-red-100 text-red-800 px-2 py-0.5 rounded text-xs flex items-center mr-2">
-                        Prioridade
+                    </td>
+                    <td className={`px-4 py-3 ${getPriorityClass(activity.deadline)}`}>
+                      {activity.deadline ? new Date(activity.deadline).toLocaleDateString('pt-BR') : '-'}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-500">
+                      {new Date(activity.createdAt).toLocaleDateString('pt-BR')}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="flex justify-end gap-2">
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          onClick={() => handleView(activity as ActivityType)}
+                          title="Visualizar"
+                          className="h-8 w-8"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          onClick={() => handleEdit(activity as ActivityType)}
+                          title="Editar"
+                          className="h-8 w-8"
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          onClick={() => handleDelete(activity.id)}
+                          title="Excluir"
+                          className="h-8 w-8 text-red-500 hover:text-red-700"
+                        >
+                          <Trash className="h-4 w-4" />
+                        </Button>
                       </div>
-                    )}
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      onClick={() => handleView(activity as ActivityType)}
-                      title="Visualizar"
-                    >
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      onClick={() => handleEdit(activity as ActivityType)}
-                      title="Editar"
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      onClick={() => handleDelete(activity.id)}
-                      title="Excluir"
-                      className="text-red-500 hover:text-red-700"
-                    >
-                      <Trash className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
       
       {/* Modais */}
       <ViewActivityModal
