@@ -399,7 +399,7 @@ function ActivitiesList() {
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState<string | null>(null);
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   
   // Otimização: Usar staleTime para reduzir as chamadas à API
   const { data: activities, isLoading } = useQuery({
