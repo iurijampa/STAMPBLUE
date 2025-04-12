@@ -449,7 +449,7 @@ function ActivitiesList() {
                 Lista completa de pedidos no sistema
               </CardDescription>
             </div>
-            <div className="flex gap-2">
+            <div>
               <Button 
                 onClick={() => setCreateModalOpen(true)}
                 className="flex items-center gap-1"
@@ -457,14 +457,6 @@ function ActivitiesList() {
               >
                 <Plus className="h-4 w-4 mr-1" />
                 Novo Pedido
-              </Button>
-              <Button 
-                onClick={() => navigate("/admin/users")}
-                className="flex items-center gap-1"
-                variant="outline"
-              >
-                <Users className="h-4 w-4 mr-1" />
-                Gerenciar Usuários
               </Button>
             </div>
           </div>
@@ -497,11 +489,17 @@ function ActivitiesList() {
                     <div className="flex items-center justify-between">
                       <p className="font-medium truncate">{activity.title}</p>
                       <Badge className={
-                        activity.status === 'completed' ? 'bg-green-500' : 
-                        activity.status === 'in_progress' ? 'bg-amber-500' : 'bg-blue-500'
+                        activity.currentDepartment === 'gabarito' ? 'bg-blue-500' : 
+                        activity.currentDepartment === 'impressao' ? 'bg-violet-500' : 
+                        activity.currentDepartment === 'batida' ? 'bg-amber-500' : 
+                        activity.currentDepartment === 'costura' ? 'bg-emerald-500' : 
+                        activity.currentDepartment === 'embalagem' ? 'bg-slate-500' : 'bg-gray-500'
                       }>
-                        {activity.status === 'completed' ? 'Concluído' : 
-                         activity.status === 'in_progress' ? 'Em Andamento' : 'Pendente'}
+                        {activity.currentDepartment === 'gabarito' ? 'Gabarito' : 
+                         activity.currentDepartment === 'impressao' ? 'Impressão' : 
+                         activity.currentDepartment === 'batida' ? 'Batida' : 
+                         activity.currentDepartment === 'costura' ? 'Costura' : 
+                         activity.currentDepartment === 'embalagem' ? 'Embalagem' : 'Pendente'}
                       </Badge>
                     </div>
                     <p className="text-sm text-muted-foreground">
