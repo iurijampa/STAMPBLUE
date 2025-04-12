@@ -7,7 +7,8 @@ import { Separator } from "@/components/ui/separator";
 import { 
   RefreshCw, Activity, Clock, Calendar, Users, ChevronRight, 
   AlertTriangle, Layers, CheckCircle2, Bell, Eye, Edit, 
-  Trash, Plus, Loader2, Search, ArrowUpCircle, ArrowDownCircle
+  Trash, Plus, Loader2, Search, ArrowUpCircle, ArrowDownCircle,
+  Briefcase, Printer, Hammer, Scissors, Package
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -377,14 +378,14 @@ function RecentActivities() {
   );
 }
 
-// Departamentos disponíveis - definido fora do componente para evitar recriação
+// Departamentos disponíveis - definido fora do componente para evitar recriação, ordenados conforme linha de produção
 const departmentOptions = [
-  { value: null, label: "Todos os departamentos" },
-  { value: "gabarito", label: "Gabarito" },
-  { value: "impressao", label: "Impressão" },
-  { value: "batida", label: "Batida" },
-  { value: "costura", label: "Costura" },
-  { value: "embalagem", label: "Embalagem" },
+  { value: null, label: "Todos os departamentos", icon: <Activity className="h-4 w-4 mr-1" /> },
+  { value: "gabarito", label: "Gabarito", icon: <Briefcase className="h-4 w-4 mr-1" /> },
+  { value: "impressao", label: "Impressão", icon: <Printer className="h-4 w-4 mr-1" /> },
+  { value: "batida", label: "Batida", icon: <Hammer className="h-4 w-4 mr-1" /> },
+  { value: "costura", label: "Costura", icon: <Scissors className="h-4 w-4 mr-1" /> },
+  { value: "embalagem", label: "Embalagem", icon: <Package className="h-4 w-4 mr-1" /> },
 ];
 
 // Componente para listar todas as atividades
@@ -479,16 +480,13 @@ function ActivitiesList() {
         
         // Filtra por status/departamento
         // Regra especial: se o filtro for nulo, mostra tudo
-        // Se não, só mostra os que correspondem ao departamento
         let matchesStatus = true;
         
         if (filterStatus) {
-          matchesStatus = activity.currentDepartment === filterStatus;
-        }
-        
-        // Logs detalhados para debug
-        if (filterStatus) {
-          console.log(`Filtrando atividade ${activity.id} - Título: ${activity.title} - Departamento: ${activity.currentDepartment}, Filtro: ${filterStatus}, Match: ${matchesStatus}`);
+          // Verificamos qual valor existe e está sendo usado na atividade
+          // Temos duas formas diferentes dependendo de como o backend envia os dados
+          const currentDept = activity.currentDepartment || activity.department || '';
+          matchesStatus = currentDept === filterStatus;
         }
         
         return matchesSearch && matchesStatus;
@@ -518,13 +516,8 @@ function ActivitiesList() {
   const filteredActivities = useMemo(() => {
     if (!activities) return [];
     
-    // PRIMEIRO VERIFICAR SE PRECISAMOS FILTRAR POR DEPARTAMENTO
-    console.log('STATUS DO FILTRO:', filterStatus);
-    
     // Primeiro filtra as atividades conforme os critérios
     const filtered = filterActivities(activities);
-    
-    console.log(`APÓS FILTRO: Encontradas ${filtered.length} atividades`);
     
     // Depois ordena por prazo (deadline)
     return [...filtered].sort((a, b) => {
@@ -593,7 +586,7 @@ function ActivitiesList() {
                 <Badge
                   key={option.value || "all"}
                   variant="outline"
-                  className={`cursor-pointer px-3 py-2 text-base ${
+                  className={`cursor-pointer px-3 py-2 text-base flex items-center ${
                     filterStatus === option.value 
                       ? 'bg-primary text-primary-foreground font-medium' 
                       : 'bg-background hover:bg-secondary'
@@ -603,6 +596,7 @@ function ActivitiesList() {
                     setFilterStatus(option.value);
                   }}
                 >
+                  {option.icon}
                   {option.label}
                 </Badge>
               ))}
