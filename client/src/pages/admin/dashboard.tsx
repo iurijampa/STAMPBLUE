@@ -601,6 +601,7 @@ function ActivitiesList() {
                   <th className="px-4 py-3 font-medium text-sm">Título</th>
                   <th className="px-4 py-3 font-medium text-sm">Cliente</th>
                   <th className="px-4 py-3 font-medium text-sm">Setor Atual</th>
+                  <th className="px-4 py-3 font-medium text-sm">Data de Entrega</th>
                   <th className="px-4 py-3 font-medium text-sm text-right">Ações</th>
                 </tr>
               </thead>
@@ -616,11 +617,6 @@ function ActivitiesList() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="font-medium">{activity.client}</div>
-                      {activity.clientInfo && (
-                        <div className="text-sm text-muted-foreground mt-1">
-                          {activity.clientInfo}
-                        </div>
-                      )}
                     </td>
                     <td className="px-4 py-3">
                       <div className={`px-3 py-1 text-center text-white rounded-md text-sm ${
@@ -636,6 +632,19 @@ function ActivitiesList() {
                          currentDept === 'costura' ? 'Costura' : 
                          currentDept === 'embalagem' ? 'Embalagem' : 'Pendente'}
                       </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      {activity.deadline ? (
+                        <div className={`font-medium ${
+                          new Date(activity.deadline) < new Date() ? 'text-red-600' : 
+                          new Date(activity.deadline) < new Date(Date.now() + 3 * 24 * 60 * 60 * 1000) ? 'text-amber-600' : 
+                          'text-green-600'
+                        }`}>
+                          {new Date(activity.deadline).toLocaleDateString('pt-BR')}
+                        </div>
+                      ) : (
+                        <div className="text-muted-foreground">Não definida</div>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex justify-end gap-2">
