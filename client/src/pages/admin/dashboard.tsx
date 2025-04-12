@@ -8,7 +8,7 @@ import {
   RefreshCw, Activity, Clock, Calendar, Users, ChevronRight, 
   AlertTriangle, Layers, CheckCircle2, Bell, Eye, Edit, 
   Trash, Plus, Loader2, Search, ArrowUpCircle, ArrowDownCircle,
-  Briefcase, Printer, Hammer, Scissors, Package
+  Briefcase, Printer, Hammer, Scissors, Package, ChevronDown, ChevronUp
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -737,6 +737,12 @@ function NotificationsList() {
     refetchOnWindowFocus: false // Evita recarregar quando a janela ganha foco
   });
 
+  // Estado para controlar se o painel está expandido ou não
+  const [isExpanded, setIsExpanded] = useState(false);
+  
+  // Contagem de notificações não lidas
+  const unreadCount = notifications?.filter((n: any) => !n.read).length || 0;
+
   // Formatar data para exibição
   const formatDate = (dateString: string) => {
     try {
@@ -749,50 +755,74 @@ function NotificationsList() {
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Bell className="h-5 w-5" />
-          Notificações
+      <CardHeader 
+        className="cursor-pointer" 
+        onClick={() => setIsExpanded(!isExpanded)}
+      >
+        <CardTitle className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Bell className="h-5 w-5" />
+            Notificações
+            {unreadCount > 0 && (
+              <Badge variant="destructive" className="ml-2 text-xs px-2 py-0">
+                {unreadCount}
+              </Badge>
+            )}
+          </div>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            className="h-6 w-6" 
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsExpanded(!isExpanded);
+            }}
+          >
+            {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </Button>
         </CardTitle>
         <CardDescription>
           Atualizações e notificações do sistema
         </CardDescription>
       </CardHeader>
-      <CardContent>
-        {isLoading ? (
-          <div className="flex justify-center py-4">
-            <div className="animate-spin h-6 w-6 border-2 border-primary border-t-transparent rounded-full"></div>
-          </div>
-        ) : !notifications || notifications.length === 0 ? (
-          <div className="text-center py-6 text-muted-foreground">
-            Nenhuma notificação encontrada.
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {notifications.map((notification: any) => (
-              <div 
-                key={notification.id} 
-                className={`p-3 rounded-md border ${notification.read ? 'bg-gray-50' : 'bg-blue-50 border-blue-200'}`}
-              >
-                <div className="flex justify-between items-start">
-                  <div className="font-medium">
-                    {notification.title || "Notificação"}
+      
+      {isExpanded && (
+        <CardContent>
+          {isLoading ? (
+            <div className="flex justify-center py-4">
+              <div className="animate-spin h-6 w-6 border-2 border-primary border-t-transparent rounded-full"></div>
+            </div>
+          ) : !notifications || notifications.length === 0 ? (
+            <div className="text-center py-6 text-muted-foreground">
+              Nenhuma notificação encontrada.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {notifications.map((notification: any) => (
+                <div 
+                  key={notification.id} 
+                  className={`p-3 rounded-md border ${notification.read ? 'bg-gray-50' : 'bg-blue-50 border-blue-200'}`}
+                >
+                  <div className="flex justify-between items-start">
+                    <div className="font-medium">
+                      {notification.title || "Notificação"}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {formatDate(notification.createdAt)}
+                    </div>
                   </div>
-                  <div className="text-xs text-muted-foreground">
-                    {formatDate(notification.createdAt)}
-                  </div>
+                  <p className="text-sm mt-1">{notification.message}</p>
+                  {notification.activityId && (
+                    <div className="mt-2 text-xs text-muted-foreground">
+                      Pedido: #{notification.activityId}
+                    </div>
+                  )}
                 </div>
-                <p className="text-sm mt-1">{notification.message}</p>
-                {notification.activityId && (
-                  <div className="mt-2 text-xs text-muted-foreground">
-                    Pedido: #{notification.activityId}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </CardContent>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      )}
     </Card>
   );
 }
