@@ -603,8 +603,8 @@ function ActivitiesList() {
               </div>
               
               {filteredActivities.map((activity: any) => (
-                <div key={activity.id} className="flex items-center gap-3 pb-3 border-b">
-                  <div className="w-10 h-10 rounded-md overflow-hidden border flex-shrink-0">
+                <div key={activity.id} className="flex items-center gap-3 pb-4 border-b mb-2">
+                  <div className="w-14 h-14 rounded-md overflow-hidden border flex-shrink-0">
                     <img 
                       src={activity.image || "/placeholder.png"}
                       alt={activity.title}
@@ -617,29 +617,43 @@ function ActivitiesList() {
                     />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <p className="font-medium truncate">{activity.title}</p>
-                      <Badge className={
-                        activity.currentDepartment === 'gabarito' ? 'bg-blue-500' : 
-                        activity.currentDepartment === 'impressao' ? 'bg-violet-500' : 
-                        activity.currentDepartment === 'batida' ? 'bg-amber-500' : 
-                        activity.currentDepartment === 'costura' ? 'bg-emerald-500' : 
-                        activity.currentDepartment === 'embalagem' ? 'bg-slate-500' : 'bg-gray-500'
-                      }>
-                        {activity.currentDepartment === 'gabarito' ? 'Gabarito' : 
-                         activity.currentDepartment === 'impressao' ? 'Impressão' : 
-                         activity.currentDepartment === 'batida' ? 'Batida' : 
-                         activity.currentDepartment === 'costura' ? 'Costura' : 
-                         activity.currentDepartment === 'embalagem' ? 'Embalagem' : 'Pendente'}
+                    {/* Nome do pedido em destaque */}
+                    <h3 className="text-lg font-bold truncate mb-1">{activity.title}</h3>
+                    
+                    {/* Informações em formato de badges para melhor visualização */}
+                    <div className="flex flex-wrap items-center gap-2 mb-1">
+                      {/* ID do pedido */}
+                      <div className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-sm">
+                        ID: #{activity.id}
+                      </div>
+                      
+                      {/* Status do setor atual em destaque */}
+                      <Badge className={`text-white font-medium px-3 py-1 ${
+                        activity.currentDepartment === 'gabarito' ? 'bg-blue-600' : 
+                        activity.currentDepartment === 'impressao' ? 'bg-violet-600' : 
+                        activity.currentDepartment === 'batida' ? 'bg-amber-600' : 
+                        activity.currentDepartment === 'costura' ? 'bg-emerald-600' : 
+                        activity.currentDepartment === 'embalagem' ? 'bg-slate-600' : 'bg-gray-600'
+                      }`}>
+                        Setor: {activity.currentDepartment === 'gabarito' ? 'Gabarito' : 
+                               activity.currentDepartment === 'impressao' ? 'Impressão' : 
+                               activity.currentDepartment === 'batida' ? 'Batida' : 
+                               activity.currentDepartment === 'costura' ? 'Costura' : 
+                               activity.currentDepartment === 'embalagem' ? 'Embalagem' : 'Pendente'}
                       </Badge>
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      ID: #{activity.id} • {new Date(activity.createdAt).toLocaleDateString('pt-BR')}
+                      
+                      {/* Data de entrega em destaque */}
                       {activity.deadline && (
-                        <span className={getPriorityClass(activity.deadline)}>
-                          {` • Prazo: ${new Date(activity.deadline).toLocaleDateString('pt-BR')}`}
-                        </span>
+                        <Badge variant="outline" className={`font-medium ${getPriorityClass(activity.deadline)}`}>
+                          <Calendar className="w-3.5 h-3.5 mr-1" />
+                          Prazo: {new Date(activity.deadline).toLocaleDateString('pt-BR')}
+                        </Badge>
                       )}
+                    </div>
+                    
+                    {/* Data de criação */}
+                    <p className="text-xs text-muted-foreground">
+                      Criado em: {new Date(activity.createdAt).toLocaleDateString('pt-BR')}
                     </p>
                   </div>
                   

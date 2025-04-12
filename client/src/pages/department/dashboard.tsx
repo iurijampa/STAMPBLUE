@@ -10,7 +10,7 @@ import { useQuery } from "@tanstack/react-query";
 import { 
   Loader2, CalendarClock, Clock, Eye, RefreshCw, RotateCcw, Printer,
   ArchiveIcon, ListTodo, CheckCircle, InboxIcon, CornerUpLeft, 
-  ClipboardList, Plus, Hammer
+  ClipboardList, Plus, Hammer, CalendarIcon
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -628,17 +628,32 @@ export default function DepartmentDashboard() {
                             )}
                           </div>
                           
-                          <div>
-                            <div className="flex items-center gap-2 mb-1">
+                          <div className="flex-1">
+                            <div className="flex flex-wrap items-center gap-2 mb-2">
+                              {/* Nome do pedido em destaque */}
+                              <h3 className="text-xl font-bold w-full">{activity.title}</h3>
+                              
+                              {/* ID do pedido */}
+                              <div className="bg-gray-100 px-2 py-1 rounded text-sm">
+                                ID: #{activity.id}
+                              </div>
+                              
+                              {/* Status do setor em que está */}
+                              <Badge className="text-white font-medium bg-blue-600">
+                                Setor: {userDepartment ? capitalize(userDepartment) : "Não definido"}
+                              </Badge>
+                              
+                              {/* Prazo de entrega em destaque */}
                               <Badge 
                                 variant="outline" 
-                                className={cn("text-white", getDeadlineColor(activity.deadline))}
+                                className={cn("font-medium text-white px-3 py-1", getDeadlineColor(activity.deadline))}
                               >
+                                <CalendarIcon className="w-4 h-4 mr-1" />
                                 {activity.deadline ? formatDate(activity.deadline) : "Sem prazo"}
                               </Badge>
                             </div>
                             
-                            <h3 className="text-lg font-semibold">{activity.title}</h3>
+                            {/* Descrição do pedido */}
                             <p className="text-neutral-600 line-clamp-2 my-2">
                               {activity.description}
                             </p>
