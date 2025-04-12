@@ -179,36 +179,48 @@ router.post('/criar', async (req, res) => {
 // Rota para listar solicitações (GET /api/reimpressao-emergencial/listar)
 router.get('/listar', (req, res) => {
   console.log('💡 Requisição para listar solicitações emergenciais');
+  console.log('⚡ DEPURAÇÃO: Total de solicitações antes de corrigir:', solicitacoes.length);
   
-  // Antes de enviar a resposta, corrigir todas as URLs de imagens para usar os caminhos corretos
-  const solicitacoesCorrigidas = solicitacoes.map(solicitacao => {
-    // Caso especial: GS iPhone (ID 48) - usar SVG personalizado
+  // Criando novo array com imagens corrigidas
+  const solicitacoesCorrigidas = [];
+  
+  // Processar cada solicitação individualmente
+  for (const solicitacao of solicitacoes) {
+    // Criando cópia para modificar
+    const solicitacaoCorrigida = { ...solicitacao };
+    
+    // Registro de debug detalhado
+    console.log(`⚠️ Processando solicitação ID ${solicitacao.id} para atividade ${solicitacao.activityId}`);
+    console.log(`   Imagem original: ${solicitacao.activityImage}`);
+    
+    // CASO 1: Pedido GS IPHONE (ID 48)
     if (solicitacao.activityId === 48) {
-      console.log(`🍎 Corrigindo imagem para GS iPhone (ID 48) na listagem`);
-      return {
-        ...solicitacao,
-        activityImage: "/iphone-icon.svg"
-      };
+      solicitacaoCorrigida.activityImage = "/iphone-icon.svg";
+      console.log(`🍎 IPHONE (48): Alterando imagem para ${solicitacaoCorrigida.activityImage}`);
+    } 
+    // CASO 2: Pedido CHAVEIRO (ID 49)
+    else if (solicitacao.activityId === 49) {
+      solicitacaoCorrigida.activityImage = "/uploads/activity_49.jpg";
+      console.log(`🖼️ CHAVEIRO (49): Alterando imagem para ${solicitacaoCorrigida.activityImage}`);
+    } 
+    // CASO 3: Qualquer outro pedido
+    else {
+      solicitacaoCorrigida.activityImage = "/no-image.svg";
+      console.log(`⚠️ GENÉRICO: Alterando imagem para ${solicitacaoCorrigida.activityImage}`);
     }
     
-    // Caso especial: Chaveiro (ID 49) - usar imagem real existente
-    if (solicitacao.activityId === 49) {
-      console.log(`🖼️ Usando imagem real existente para Chaveiro (ID 49) na listagem`);
-      return {
-        ...solicitacao,
-        activityImage: "/uploads/activity_49.jpg"
-      };
-    }
-    
-    // Para todas as outras atividades, usar o ícone genérico
-    console.log(`ℹ️ Usando ícone genérico para atividade ${solicitacao.activityId} na listagem`);
-    return {
-      ...solicitacao,
-      activityImage: "/no-image.svg"
-    };
-  });
+    // Adicionar ao array de resultados
+    solicitacoesCorrigidas.push(solicitacaoCorrigida);
+  }
   
-  console.log('🌐 EMERGENCY STORAGE: Retornando solicitações com imagens corrigidas');
+  console.log('⚡ DEPURAÇÃO: Total de solicitações após corrigir:', solicitacoesCorrigidas.length);
+  // ERRO: A função está retornando o objeto errado 
+// Modificando para forçar e ver o que está na variável solicitacoesCorrigidas
+console.log('🌐 EMERGENCY STORAGE: Retornando solicitações com imagens corrigidas');
+console.log('⚡ PROBLEMA ENCONTRADO!');
+console.log('⚡ ANTES:', JSON.stringify(solicitacoes.map(s => ({ id: s.id, activityId: s.activityId, activityImage: s.activityImage })).slice(0, 2)));
+console.log('⚡ DEPOIS:', JSON.stringify(solicitacoesCorrigidas.map(s => ({ id: s.id, activityId: s.activityId, activityImage: s.activityImage })).slice(0, 2)));
+  
   return res.status(200).json(solicitacoesCorrigidas);
 });
 
