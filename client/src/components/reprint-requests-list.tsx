@@ -170,46 +170,21 @@ export default function ReprintRequestsList({ department, activity }: ReprintReq
                 <CardHeader className="p-3 pb-0">
                   <div className="flex justify-between items-start">
                     <div className="flex items-start gap-3">
-                      {/* Imagem da atividade como miniatura - CORREÇÃO */}
+                      {/* Imagem da atividade como miniatura */}
                       <div className="flex-shrink-0 w-12 h-12 rounded-md overflow-hidden border bg-slate-50 flex items-center justify-center">
-                        {(() => {
-                          // Seleção de imagem baseada no ID da atividade
-                          if (request.activityId === 48) {
-                            // Caso especial: GS iPhone - usar SVG personalizado
-                            return (
-                              <img 
-                                src="/iphone-icon.svg"
-                                alt="GS iPhone" 
-                                className="w-full h-full object-contain"
-                              />
-                            );
-                          } else if (request.activityId === 49) {
-                            // Caso especial: Chaveiro - usar imagem JPG real
-                            return (
-                              <img 
-                                src="/uploads/activity_49.jpg"
-                                alt="Chaveiro Inovação" 
-                                className="w-full h-full object-contain"
-                                onError={(e) => {
-                                  console.log('Erro ao carregar imagem do Chaveiro:', request.activityId);
-                                  e.currentTarget.src = "/no-image.svg";
-                                }}
-                              />
-                            );
-                          } else if (request.activityId) {
-                            // Demais atividades - usar ícone genérico
-                            return (
-                              <img 
-                                src="/no-image.svg"
-                                alt={`Pedido ${request.activityId}`} 
-                                className="w-full h-full object-contain"
-                              />
-                            );
-                          } else {
-                            // Caso não tenha ID de atividade
-                            return <ImageIcon className="w-6 h-6 text-muted-foreground" />;
-                          }
-                        })()}
+                        {request.activityImage ? (
+                          <img 
+                            src={request.activityImage}
+                            alt={request.activityTitle || `Pedido ${request.activityId}`}
+                            className="w-full h-full object-contain"
+                            onError={(e) => {
+                              console.log('Erro ao carregar imagem:', request.activityImage);
+                              e.currentTarget.src = "/no-image.svg";
+                            }}
+                          />
+                        ) : (
+                          <ImageIcon className="w-6 h-6 text-muted-foreground" />
+                        )}
                       </div>
                       <div>
                         <CardTitle className="text-base">
