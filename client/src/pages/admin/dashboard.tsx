@@ -478,10 +478,19 @@ function ActivitiesList() {
           (activity.client && activity.client.toLowerCase().includes(searchLower));
         
         // Filtra por status/departamento
-        const matchesStatus = !filterStatus || 
-          (activity.currentDepartment && activity.currentDepartment === filterStatus);
+        // Regra especial: se o filtro for nulo, mostra tudo
+        // Se não, só mostra os que correspondem ao departamento
+        let matchesStatus = true;
         
-        console.log(`Filtrando atividade ${activity.id} - Departamento atual: ${activity.currentDepartment}, Filtro: ${filterStatus}, Match: ${matchesStatus}`);
+        if (filterStatus) {
+          matchesStatus = activity.currentDepartment === filterStatus;
+        }
+        
+        // Logs detalhados para debug
+        if (filterStatus) {
+          console.log(`Filtrando atividade ${activity.id} - Título: ${activity.title} - Departamento: ${activity.currentDepartment}, Filtro: ${filterStatus}, Match: ${matchesStatus}`);
+        }
+        
         return matchesSearch && matchesStatus;
       })
       .slice(0, 100); // Limitar a 100 itens para melhorar performance
@@ -509,8 +518,13 @@ function ActivitiesList() {
   const filteredActivities = useMemo(() => {
     if (!activities) return [];
     
+    // PRIMEIRO VERIFICAR SE PRECISAMOS FILTRAR POR DEPARTAMENTO
+    console.log('STATUS DO FILTRO:', filterStatus);
+    
     // Primeiro filtra as atividades conforme os critérios
     const filtered = filterActivities(activities);
+    
+    console.log(`APÓS FILTRO: Encontradas ${filtered.length} atividades`);
     
     // Depois ordena por prazo (deadline)
     return [...filtered].sort((a, b) => {
