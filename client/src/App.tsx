@@ -9,6 +9,7 @@ import AuthPage from "@/pages/auth-page";
 import AdminDashboard from "@/pages/admin/dashboard";
 import AdminUsers from "@/pages/admin/users";
 import DepartmentDashboard from "@/pages/department/dashboard";
+import DepartmentHistory from "@/pages/department/history";
 import { AuthProvider } from "@/hooks/use-auth";
 import { useAuth } from "@/hooks/use-auth";
 import { WebSocketProvider } from "@/hooks/websocket-provider";
