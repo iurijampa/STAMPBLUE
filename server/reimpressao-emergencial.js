@@ -20,14 +20,14 @@ async function getActivityImage(activityId) {
     
     if (isNaN(activityIdNumber)) {
       console.error(`❌ ID de atividade inválido: ${activityId}`);
-      return '/uploads/no-image.jpg';
+      return '/no-image.svg';
     }
     
     // Caso especial para a atividade 48 (GS iPhone) para o exemplo da solicitação
     if (activityIdNumber === 48) {
-      // Usar logo de exemplo para o GS iPhone - mesma URL usada em todos os lugares
-      const logoUrl = "https://static.vecteezy.com/system/resources/previews/020/336/393/original/iphone-logo-icon-free-png.png";
-      console.log(`🍎 DETECTADO ID 48! Usando logo externa para atividade GS iPhone: ${logoUrl}`);
+      // Usar logo local SVG (muito mais confiável)
+      const logoUrl = "/iphone-icon.svg";
+      console.log(`🍎 DETECTADO ID 48! Usando logo local para atividade GS iPhone: ${logoUrl}`);
       return logoUrl;
     } else {
       console.log(`🔢 ID da atividade é ${activityIdNumber}, não é o especial (48)`);
@@ -114,7 +114,7 @@ router.post('/criar', async (req, res) => {
     // Força uso da imagem específica para o GS iPhone (ID 48)
     let finalImageUrl = activityImage;
     if (Number(activityId) === 48) {
-      const logoUrl = "https://static.vecteezy.com/system/resources/previews/020/336/393/original/iphone-logo-icon-free-png.png";
+      const logoUrl = "/iphone-icon.svg";
       console.log(`🍎 Forçando uso da imagem específica para o GS iPhone (ID 48): ${logoUrl}`);
       finalImageUrl = logoUrl;
     }
@@ -179,8 +179,8 @@ router.get('/imagem/:activityId', async (req, res) => {
   
   // Caso especial para o GS iPhone (ID 48)
   if (activityId === 48) {
-    const iphoneLogoUrl = "https://static.vecteezy.com/system/resources/previews/020/336/393/original/iphone-logo-icon-free-png.png";
-    console.log(`🍎 Redirecionando para imagem do iPhone: ${iphoneLogoUrl}`);
+    const iphoneLogoUrl = "/iphone-icon.svg";
+    console.log(`🍎 Redirecionando para imagem local do iPhone: ${iphoneLogoUrl}`);
     return res.redirect(iphoneLogoUrl);
   }
   
@@ -225,8 +225,8 @@ router.get('/:id', (req, res) => {
   // Aplicar caso especial para GS iPhone (ID 48)
   if (solicitacao.activityId === 48) {
     console.log(`🍎 Alterando URL de imagem para atividade GS iPhone (ID 48) ao fazer GET da solicitação`);
-    // Usando URL direta para compatibilidade com a miniatura em cards
-    solicitacao.activityImage = "https://static.vecteezy.com/system/resources/previews/020/336/393/original/iphone-logo-icon-free-png.png";
+    // Usando caminho local para o SVG
+    solicitacao.activityImage = "/iphone-icon.svg";
   }
   
   return res.status(200).json(solicitacao);
