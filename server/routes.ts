@@ -1145,7 +1145,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // Statistics for admin dashboard
-  app.get("/api/stats", isAdmin, async (req, res) => {
+  app.get("/api/stats", async (req, res) => {
+    // Verificar autenticação
+    if (!req.isAuthenticated()) {
+      console.error("Usuário não autenticado tentando acessar estatísticas");
+      return res.status(401).json({ message: "Não autorizado" });
+    }
     try {
       const stats = await storage.getActivityStats();
       res.json(stats);
@@ -1198,12 +1203,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // Rota para obter o contador de atividades por departamento (para o dashboard admin)
-  app.get("/api/stats/department-counts", isAdmin, async (req, res) => {
+  app.get("/api/stats/department-counts", async (req, res) => {
     try {
+      // Verificar autenticação
+      if (!req.isAuthenticated()) {
+        console.error("Usuário não autenticado tentando acessar contagem de departamentos");
+        return res.status(401).json({ message: "Não autorizado" });
+      }
+      
+      // Verifica se o usuário é admin, mas permite também usuários de departamento
+      if (req.user && req.user.role !== 'admin') {
+        console.log(`[USER] Usuário ${req.user.username} (${req.user.role}) acessando contagem de departamentos`);
+      } else {
+        console.log(`[ADMIN] Obtendo contagem de atividades por departamento`);
+      }
+      
       // Adiciona cabeçalhos de cache para o navegador
       res.setHeader('Cache-Control', 'public, max-age=30');
-      
-      console.log(`[ADMIN] Obtendo contagem de atividades por departamento`);
       
       // Resultado final
       const result: Record<string, number> = {};

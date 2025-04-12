@@ -152,30 +152,19 @@ export default function DepartmentActivityCounter() {
                 // Filtrar departamentos que não estão na lista de departamentos permitidos
                 .filter(([dept]) => departmentNames[dept as keyof typeof departmentNames])
                 .map(([dept, count]) => (
-                <Card key={dept} className="border-2 overflow-hidden">
-                  <CardContent className="p-6">
-                    <div className="flex flex-col items-center text-center">
-                      <div className="p-2 bg-primary/10 rounded-full mb-3">
-                        {departmentIcons[dept as keyof typeof departmentIcons]}
-                      </div>
-                      <div className="space-y-1">
-                        <h3 className="font-medium text-sm">
-                          {departmentNames[dept as keyof typeof departmentNames]}
-                        </h3>
-                        <div className="text-2xl font-bold">
-                          {count}
-                        </div>
-                      </div>
-                    </div>
+                <Card key={dept} className="overflow-hidden">
+                  <CardHeader className={`py-3 bg-${dept === 'gabarito' ? 'blue' : 
+                    dept === 'impressao' ? 'violet' : 
+                    dept === 'batida' ? 'amber' : 
+                    dept === 'costura' ? 'emerald' : 
+                    dept === 'embalagem' ? 'slate' : 'gray'}-600 text-white`}>
+                    <CardTitle className="text-center text-base font-medium">
+                      {departmentNames[dept as keyof typeof departmentNames]}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-4 text-center">
+                    <span className="text-3xl font-bold">{count}</span>
                   </CardContent>
-                  
-                  {/* Barra de progresso na parte inferior */}
-                  {totalActivities > 0 && (
-                    <div 
-                      className="h-1.5 bg-primary" 
-                      style={{ width: `${(count / totalActivities) * 100}%` }}
-                    ></div>
-                  )}
                 </Card>
               ))}
             </div>
