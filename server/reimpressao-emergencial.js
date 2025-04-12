@@ -106,7 +106,7 @@ router.post('/criar', async (req, res) => {
       details: details || '',
       quantity: Number(quantity) || 1,
       priority: formattedPriority,
-      status: 'pending', // Usamos 'pending' em vez de 'pendente' para consistência
+      status: 'pendente', // Usando 'pendente' para manter consistência com o português
       requestedAt: new Date().toISOString(),
       fromDepartment,
       toDepartment

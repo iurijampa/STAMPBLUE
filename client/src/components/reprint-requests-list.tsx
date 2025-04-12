@@ -112,14 +112,19 @@ export default function ReprintRequestsList({ department, activity }: ReprintReq
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'pending':
+      case 'pendente':
         return <Badge variant="outline" className="bg-yellow-50 text-yellow-700">Pendente</Badge>;
       case 'in_progress':
+      case 'em_andamento':
         return <Badge variant="secondary" className="bg-blue-50 text-blue-700">Em Processo</Badge>;
       case 'completed':
+      case 'concluida':
         return <Badge variant="default" className="bg-green-50 text-green-700">Concluída</Badge>;
       case 'rejected':
+      case 'rejeitada':
         return <Badge variant="destructive">Rejeitada</Badge>;
       default:
+        console.log('Status desconhecido:', status);
         return <Badge variant="outline">Desconhecido</Badge>;
     }
   };

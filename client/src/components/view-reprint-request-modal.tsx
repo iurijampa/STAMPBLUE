@@ -46,7 +46,7 @@ interface ReprintRequest {
   details?: string;
   quantity: number;
   priority: "low" | "normal" | "high" | "urgent";
-  status: "pending" | "in_progress" | "completed" | "rejected";
+  status: "pending" | "in_progress" | "completed" | "rejected" | "pendente" | "em_andamento" | "concluida" | "rejeitada";
   requestedAt: string;
   completedBy?: string;
   completedAt?: string;
@@ -165,14 +165,19 @@ export default function ViewReprintRequestModal({ isOpen, onClose, request }: Vi
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'pending':
+      case 'pendente':
         return <Badge variant="outline" className="bg-yellow-50 text-yellow-700">Pendente</Badge>;
       case 'in_progress':
+      case 'em_andamento':
         return <Badge variant="secondary" className="bg-blue-50 text-blue-700">Em Processo</Badge>;
       case 'completed':
+      case 'concluida':
         return <Badge variant="default" className="bg-green-50 text-green-700">Concluída</Badge>;
       case 'rejected':
+      case 'rejeitada':
         return <Badge variant="destructive">Rejeitada</Badge>;
       default:
+        console.log('Status desconhecido no modal:', status);
         return <Badge variant="outline">Desconhecido</Badge>;
     }
   };
@@ -290,7 +295,7 @@ export default function ViewReprintRequestModal({ isOpen, onClose, request }: Vi
           </Card>
 
           {/* Seção para processar a solicitação - apenas visível para o departamento destinatário */}
-          {canProcess && request.status === 'pending' && (
+          {canProcess && (request.status === 'pending' || request.status === 'pendente') && (
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle>Processar Solicitação</CardTitle>
