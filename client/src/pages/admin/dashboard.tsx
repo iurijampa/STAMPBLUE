@@ -15,7 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import Layout from "@/components/Layout";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import DepartmentActivityCounter from "@/components/department-activity-counter";
+
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
@@ -141,20 +141,10 @@ export default function AdminDashboard() {
       </div>
 
       <div className="space-y-6">
-        {/* Seção combinada: Visão Geral + Contadores de Departamento */}
+        {/* Seção combinada: Visão Geral do Sistema */}
         <div>
           <h2 className="text-xl font-semibold mb-4">Visão Geral</h2>
-          <div className="flex flex-col xl:flex-row gap-6 w-full">
-            {/* Cards de estatísticas */}
-            <div className="w-full xl:w-2/5">
-              <StatsOverview />
-            </div>
-            
-            {/* Cards de departamentos */}
-            <div className="w-full xl:flex-1">
-              <DepartmentActivityCounter />
-            </div>
-          </div>
+          <StatsAndDepartmentsOverview />
         </div>
         
         {/* Lista de todas as atividades primeiro */}
@@ -235,9 +225,10 @@ export default function AdminDashboard() {
   );
 }
 
-// Componente para visão geral das estatísticas
-function StatsOverview() {
-  const { data: stats, isLoading } = useQuery({
+// Componente combinado para visão geral das estatísticas e departamentos
+function StatsAndDepartmentsOverview() {
+  // Dados para estatísticas
+  const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: ["/api/stats"],
     queryFn: async () => {
       const response = await fetch("/api/stats");
@@ -250,41 +241,167 @@ function StatsOverview() {
     refetchOnWindowFocus: false // Melhora performance evitando recargas desnecessárias
   });
 
+  // Dados para contadores de departamentos
+  const [departmentCounts, setDepartmentCounts] = useState<any>(null);
+  const [deptLoading, setDeptLoading] = useState(true);
+  const [deptError, setDeptError] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+  
+  const departmentIcons = {
+    gabarito: <Briefcase className="h-5 w-5" />,
+    impressao: <Printer className="h-5 w-5" />,
+    batida: <Hammer className="h-5 w-5" />,
+    costura: <Scissors className="h-5 w-5" />,
+    embalagem: <Package className="h-5 w-5" />,
+  };
+  
+  const departmentNames = {
+    gabarito: "Gabarito",
+    impressao: "Impressão",
+    batida: "Batida",
+    costura: "Costura",
+    embalagem: "Embalagem",
+  };
+  
+  useEffect(() => {
+    let isMounted = true;
+    const controller = new AbortController();
+    const signal = controller.signal;
+    
+    const fetchCounts = async () => {
+      try {
+        if (isMounted) setDeptLoading(true);
+        if (isMounted) setDeptError(null);
+        
+        const timeoutId = setTimeout(() => {
+          if (isMounted && deptLoading) {
+            controller.abort();
+            setDeptError("Tempo limite excedido ao carregar contadores");
+            setDeptLoading(false);
+          }
+        }, 5000);
+        
+        const response = await fetch("/api/stats/department-counts", {
+          signal,
+          headers: {
+            "Cache-Control": "max-age=30"
+          }
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+          throw new Error(`Erro ao carregar contadores (${response.status})`);
+        }
+        
+        const data = await response.json();
+        
+        if (isMounted) {
+          setDepartmentCounts(data);
+          setDeptLoading(false);
+        }
+      } catch (err) {
+        if (isMounted && !signal.aborted) {
+          console.error("Erro ao carregar contadores:", err);
+          setDeptError(err instanceof Error ? err.message : "Erro desconhecido");
+          setDeptLoading(false);
+        }
+      }
+    };
+    
+    fetchCounts();
+    
+    return () => {
+      isMounted = false;
+      controller.abort();
+    };
+  }, [refreshKey]);
+
+  const isLoading = statsLoading || deptLoading;
+
   return (
-    <Card className="h-full">
+    <Card className="w-full">
       <CardHeader className="bg-gray-50 dark:bg-gray-800/50 py-3">
-        <CardTitle className="text-sm">Resumo de Pedidos</CardTitle>
+        <div className="flex justify-between items-center">
+          <CardTitle className="text-lg flex items-center gap-2">
+            Visão Geral do Sistema
+          </CardTitle>
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => setRefreshKey(prev => prev + 1)}
+            className="h-7 px-2"
+          >
+            <RefreshCw className="h-3.5 w-3.5 mr-1" />
+            Atualizar
+          </Button>
+        </div>
       </CardHeader>
-      <CardContent className="p-3 pt-5">
+      <CardContent className="p-3">
         {isLoading ? (
           <div className="py-8 flex flex-col items-center justify-center">
             <Loader2 className="h-6 w-6 animate-spin mb-2" />
-            <p className="text-sm text-muted-foreground">Carregando estatísticas...</p>
+            <p className="text-sm text-muted-foreground">Carregando dados...</p>
           </div>
         ) : (
-          <div className="grid gap-4 grid-cols-1 md:grid-cols-3">
-            <div className="flex flex-col items-center p-4 bg-gray-50 dark:bg-gray-800/50 rounded-md">
-              <Activity className="h-6 w-6 text-primary mb-2" />
-              <span className="text-2xl font-bold">{stats?.total || 0}</span>
-              <p className="text-xs text-muted-foreground mt-1 text-center">
-                Total de Pedidos
-              </p>
+          <div className="space-y-6">
+            {/* Estatísticas resumidas */}
+            <div>
+              <h3 className="text-sm mb-3 font-medium">Resumo de Pedidos</h3>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="flex flex-col items-center p-3 bg-gray-50 dark:bg-gray-800/50 rounded-md">
+                  <Activity className="h-5 w-5 text-primary mb-2" />
+                  <span className="text-2xl font-bold">{stats?.total || 0}</span>
+                  <p className="text-xs text-muted-foreground mt-1 text-center">
+                    Total
+                  </p>
+                </div>
+                
+                <div className="flex flex-col items-center p-3 bg-amber-50 dark:bg-amber-950/20 rounded-md">
+                  <Clock className="h-5 w-5 text-amber-500 mb-2" />
+                  <span className="text-2xl font-bold">{stats?.inProgress || 0}</span>
+                  <p className="text-xs text-muted-foreground mt-1 text-center">
+                    Em Produção
+                  </p>
+                </div>
+                
+                <div className="flex flex-col items-center p-3 bg-green-50 dark:bg-green-950/20 rounded-md">
+                  <CheckCircle2 className="h-5 w-5 text-green-500 mb-2" />
+                  <span className="text-2xl font-bold">{stats?.completed || 0}</span>
+                  <p className="text-xs text-muted-foreground mt-1 text-center">
+                    Concluídos
+                  </p>
+                </div>
+              </div>
             </div>
             
-            <div className="flex flex-col items-center p-4 bg-amber-50 dark:bg-amber-950/50 rounded-md">
-              <Clock className="h-6 w-6 text-amber-500 mb-2" />
-              <span className="text-2xl font-bold">{stats?.inProgress || 0}</span>
-              <p className="text-xs text-muted-foreground mt-1 text-center">
-                Em Produção
-              </p>
-            </div>
-            
-            <div className="flex flex-col items-center p-4 bg-green-50 dark:bg-green-950/50 rounded-md">
-              <CheckCircle2 className="h-6 w-6 text-green-500 mb-2" />
-              <span className="text-2xl font-bold">{stats?.completed || 0}</span>
-              <p className="text-xs text-muted-foreground mt-1 text-center">
-                Concluídos
-              </p>
+            {/* Contadores por departamento */}
+            <div>
+              <h3 className="text-sm mb-3 font-medium">Atividades por Departamento</h3>
+              <div className="grid grid-cols-5 gap-2">
+                {departmentCounts && 
+                  // Ordem correta da linha de produção
+                  ['gabarito', 'impressao', 'batida', 'costura', 'embalagem']
+                  .filter(dept => departmentNames[dept as keyof typeof departmentNames])
+                  .map(dept => [dept, departmentCounts[dept as keyof typeof departmentCounts]])
+                  .map(([dept, count]) => (
+                  <div key={dept} className="flex flex-col">
+                    <div className={`py-2 px-3 rounded-t-md bg-${dept === 'gabarito' ? 'blue' : 
+                      dept === 'impressao' ? 'violet' : 
+                      dept === 'batida' ? 'amber' : 
+                      dept === 'costura' ? 'emerald' : 
+                      dept === 'embalagem' ? 'slate' : 'gray'}-600 text-white`}>
+                      <div className="text-center text-sm font-medium flex justify-center items-center gap-1">
+                        {departmentIcons[dept as keyof typeof departmentIcons]}
+                        {departmentNames[dept as keyof typeof departmentNames]}
+                      </div>
+                    </div>
+                    <div className="py-3 bg-white dark:bg-gray-950 border-x border-b rounded-b-md text-center">
+                      <span className="text-2xl font-bold">{count}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         )}
