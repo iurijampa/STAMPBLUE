@@ -23,22 +23,13 @@ async function getActivityImage(activityId) {
       return '/no-image.svg';
     }
     
-    // Caso especial para a atividade 48 (GS iPhone) para o exemplo da solicitação
-    if (activityIdNumber === 48) {
-      // Usar logo local SVG (muito mais confiável)
-      const logoUrl = "/iphone-icon.svg";
-      console.log(`🍎 DETECTADO ID 48! Usando logo local para atividade GS iPhone: ${logoUrl}`);
-      return logoUrl;
-    } else {
-      console.log(`🔢 ID da atividade é ${activityIdNumber}, não é o especial (48)`);
-    }
-    
-    // Buscar a atividade no banco de dados
+    // Buscar a atividade no banco de dados - abordagem principal
+    console.log(`📊 Buscando atividade com ID ${activityIdNumber} no banco de dados`);
     const activity = await storage.getActivity(activityIdNumber);
     
-    // Verificar se a atividade e a imagem existem
+    // CASO 1: Encontrou a atividade e ela tem uma imagem definida
     if (activity && activity.image) {
-      console.log(`🔍 Imagem encontrada para atividade ${activityId}: ${activity.image.substring(0, 50)}...`);
+      console.log(`✅ Imagem encontrada para atividade ${activityId}: ${activity.image.substring(0, 50)}...`);
       
       // Se a imagem for um caminho relativo, adicionar o prefixo correto
       if (activity.image.startsWith('/')) {
@@ -51,17 +42,29 @@ async function getActivityImage(activityId) {
       }
     }
     
-    // Tentar caminho padrão para a imagem se não encontrada no banco de dados
-    const defaultImagePath = `/uploads/activity_${activityIdNumber}.jpg`;
-    console.log(`⚠️ Nenhuma imagem encontrada em activity.image, tentando caminho padrão: ${defaultImagePath}`);
+    // CASO 2: Usar caminhos específicos para determinados IDs conhecidos
+    if (activityIdNumber === 48) {
+      // GS iPhone - usar SVG personalizado
+      const logoUrl = "/iphone-icon.svg";
+      console.log(`🍎 Usando ícone SVG para atividade GS iPhone (ID 48): ${logoUrl}`);
+      return logoUrl;
+    } else if (activityIdNumber === 49) {
+      // Chaveiro - usar imagem JPG existente
+      const imageUrl = "/uploads/activity_49.jpg";
+      console.log(`🔑 Usando imagem JPG para Chaveiro (ID 49): ${imageUrl}`);
+      return imageUrl;
+    }
     
-    // Usar uma URL de placeholder como último recurso
-    const placeholderUrl = "https://placehold.co/200x200/e6f7ff/0077cc?text=Pedido+" + activityIdNumber;
-    console.log(`🖼️ Usando imagem de placeholder: ${placeholderUrl}`);
-    return placeholderUrl;
+    // CASO 3: Tentar caminho padrão para a imagem
+    const defaultImagePath = `/uploads/activity_${activityIdNumber}.jpg`;
+    console.log(`🔍 Tentando encontrar imagem no caminho padrão: ${defaultImagePath}`);
+    
+    // Usar ícone genérico como último recurso
+    console.log(`⚠️ Usando ícone genérico para atividade ${activityIdNumber}`);
+    return '/no-image.svg';
   } catch (error) {
     console.error(`❌ Erro ao buscar imagem para atividade ${activityId}:`, error);
-    return 'https://placehold.co/200x200/ffebee/d32f2f?text=Erro';
+    return '/no-image.svg';
   }
 }
 
@@ -111,23 +114,38 @@ router.post('/criar', async (req, res) => {
     const validPriorities = ['low', 'normal', 'high', 'urgent'];
     const formattedPriority = validPriorities.includes(priority) ? priority : 'normal';
     
-    // Verificação de imagens e definição do caminho correto
+    // Definir a URL da imagem a partir da atividade real, quando possível
     let finalImageUrl;
     
-    // Para atividade 48 (GS IPHONE), usar ícone SVG alternativo
-    if (Number(activityId) === 48) {
-      finalImageUrl = "/iphone-icon.svg";
-      console.log(`🍎 Usando ícone SVG para atividade GS iPhone (ID 48): ${finalImageUrl}`);
-    } 
-    // Para atividade 49 (CHAVEIRO), usar a imagem existente
-    else if (Number(activityId) === 49) {
-      finalImageUrl = "/uploads/activity_49.jpg";
-      console.log(`🖼️ Usando imagem existente para atividade Chaveiro (ID 49): ${finalImageUrl}`);
+    // FASE 1: Tentar usar a imagem real do pedido
+    if (activity && activity.image) {
+      // Garantir formato correto da URL
+      if (activity.image.startsWith('/')) {
+        finalImageUrl = activity.image;
+      } else if (activity.image.startsWith('http')) {
+        finalImageUrl = activity.image;
+      } else {
+        finalImageUrl = `/${activity.image}`;
+      }
+      console.log(`✅ Usando imagem real do pedido: ${finalImageUrl}`);
     }
-    // Para as demais atividades, usar ícone genérico
+    // FASE 2: Se não encontrou imagem na atividade, usar tratamento específico por ID
     else {
-      finalImageUrl = "/no-image.svg";
-      console.log(`⚠️ Usando ícone genérico para atividade ${activityId}: ${finalImageUrl}`);
+      if (Number(activityId) === 48) {
+        // GS iPhone - usar ícone SVG
+        finalImageUrl = "/iphone-icon.svg";
+        console.log(`🍎 Usando ícone SVG para GS iPhone (ID 48): ${finalImageUrl}`);
+      } 
+      else if (Number(activityId) === 49) {
+        // Chaveiro - usar imagem JPG
+        finalImageUrl = "/uploads/activity_49.jpg";
+        console.log(`🔑 Usando imagem JPG para Chaveiro (ID 49): ${finalImageUrl}`);
+      }
+      else {
+        // Outros pedidos - usar ícone genérico
+        finalImageUrl = "/no-image.svg";
+        console.log(`⚠️ Usando ícone genérico para atividade ${activityId}: ${finalImageUrl}`);
+      }
     }
     
     // Criar solicitação
@@ -177,51 +195,74 @@ router.post('/criar', async (req, res) => {
 });
 
 // Rota para listar solicitações (GET /api/reimpressao-emergencial/listar)
-router.get('/listar', (req, res) => {
+router.get('/listar', async (req, res) => {
   console.log('💡 Requisição para listar solicitações emergenciais');
-  console.log('⚡ DEPURAÇÃO: Total de solicitações antes de corrigir:', solicitacoes.length);
+  console.log(`🌐 EMERGENCY STORAGE: Retornando ${solicitacoes.length} solicitações`);
   
-  // Criando novo array com imagens corrigidas
-  const solicitacoesCorrigidas = [];
-  
-  // Processar cada solicitação individualmente
-  for (const solicitacao of solicitacoes) {
-    // Criando cópia para modificar
-    const solicitacaoCorrigida = { ...solicitacao };
-    
-    // Registro de debug detalhado
-    console.log(`⚠️ Processando solicitação ID ${solicitacao.id} para atividade ${solicitacao.activityId}`);
-    console.log(`   Imagem original: ${solicitacao.activityImage}`);
-    
-    // CASO 1: Pedido GS IPHONE (ID 48)
-    if (solicitacao.activityId === 48) {
-      solicitacaoCorrigida.activityImage = "/iphone-icon.svg";
-      console.log(`🍎 IPHONE (48): Alterando imagem para ${solicitacaoCorrigida.activityImage}`);
-    } 
-    // CASO 2: Pedido CHAVEIRO (ID 49)
-    else if (solicitacao.activityId === 49) {
-      solicitacaoCorrigida.activityImage = "/uploads/activity_49.jpg";
-      console.log(`🖼️ CHAVEIRO (49): Alterando imagem para ${solicitacaoCorrigida.activityImage}`);
-    } 
-    // CASO 3: Qualquer outro pedido
-    else {
-      solicitacaoCorrigida.activityImage = "/no-image.svg";
-      console.log(`⚠️ GENÉRICO: Alterando imagem para ${solicitacaoCorrigida.activityImage}`);
-    }
-    
-    // Adicionar ao array de resultados
-    solicitacoesCorrigidas.push(solicitacaoCorrigida);
+  // Se não houver solicitações, retornar array vazio
+  if (solicitacoes.length === 0) {
+    return res.status(200).json([]);
   }
   
-  console.log('⚡ DEPURAÇÃO: Total de solicitações após corrigir:', solicitacoesCorrigidas.length);
-  // ERRO: A função está retornando o objeto errado 
-// Modificando para forçar e ver o que está na variável solicitacoesCorrigidas
-console.log('🌐 EMERGENCY STORAGE: Retornando solicitações com imagens corrigidas');
-console.log('⚡ PROBLEMA ENCONTRADO!');
-console.log('⚡ ANTES:', JSON.stringify(solicitacoes.map(s => ({ id: s.id, activityId: s.activityId, activityImage: s.activityImage })).slice(0, 2)));
-console.log('⚡ DEPOIS:', JSON.stringify(solicitacoesCorrigidas.map(s => ({ id: s.id, activityId: s.activityId, activityImage: s.activityImage })).slice(0, 2)));
-  
-  return res.status(200).json(solicitacoesCorrigidas);
+  try {
+    // Importar storage para buscar informações das atividades
+    const { storage } = require('./storage-export');
+    const solicitacoesAtualizadas = [];
+    
+    // Processar cada solicitação para garantir URLs de imagem corretas
+    for (const solicitacao of solicitacoes) {
+      // Criar cópia para modificar
+      const solicitacaoAtualizada = { ...solicitacao };
+      
+      // Buscar a atividade original para obter a imagem real
+      try {
+        const activity = await storage.getActivity(solicitacao.activityId);
+        
+        // Se encontrou a atividade e ela tem imagem, usar essa imagem
+        if (activity && activity.image) {
+          // Formatar a URL da imagem corretamente
+          if (activity.image.startsWith('/')) {
+            solicitacaoAtualizada.activityImage = activity.image;
+          } else if (activity.image.startsWith('http')) {
+            solicitacaoAtualizada.activityImage = activity.image;
+          } else {
+            solicitacaoAtualizada.activityImage = `/${activity.image}`;
+          }
+          console.log(`✅ Atualizada imagem de solicitação #${solicitacao.id} para usar imagem real do pedido: ${solicitacaoAtualizada.activityImage}`);
+        }
+        // Se não encontrou imagem na atividade, manter tratamento específico
+        else {
+          // Caso especial: GS iPhone (ID 48)
+          if (solicitacao.activityId === 48) {
+            solicitacaoAtualizada.activityImage = "/iphone-icon.svg";
+            console.log(`🍎 Mantendo ícone SVG para GS iPhone (ID 48): ${solicitacaoAtualizada.activityImage}`);
+          } 
+          // Caso especial: Chaveiro (ID 49)
+          else if (solicitacao.activityId === 49) {
+            solicitacaoAtualizada.activityImage = "/uploads/activity_49.jpg";
+            console.log(`🔑 Mantendo imagem JPG para Chaveiro (ID 49): ${solicitacaoAtualizada.activityImage}`);
+          }
+          // Demais casos: usar ícone genérico
+          else {
+            solicitacaoAtualizada.activityImage = "/no-image.svg";
+            console.log(`⚠️ Usando ícone genérico para atividade ${solicitacao.activityId}: ${solicitacaoAtualizada.activityImage}`);
+          }
+        }
+      } catch (error) {
+        console.error(`❌ Erro ao buscar atividade ${solicitacao.activityId}:`, error);
+        // Manter a URL original em caso de erro
+      }
+      
+      // Adicionar ao array de resultados
+      solicitacoesAtualizadas.push(solicitacaoAtualizada);
+    }
+    
+    return res.status(200).json(solicitacoesAtualizadas);
+  } catch (error) {
+    console.error('❌ Erro ao processar solicitações:', error);
+    // Em caso de erro, retornar as solicitações originais
+    return res.status(200).json(solicitacoes);
+  }
 });
 
 // Rota para obter a imagem de uma atividade (GET /api/reimpressao-emergencial/imagem/:activityId)
@@ -230,39 +271,56 @@ router.get('/imagem/:activityId', async (req, res) => {
   const activityId = parseInt(req.params.activityId);
   console.log(`💡 Requisição para obter imagem da atividade #${activityId}`);
   
-  // Caso especial para o GS iPhone (ID 48)
-  if (activityId === 48) {
-    const iphoneLogoUrl = "/iphone-icon.svg";
-    console.log(`🍎 Redirecionando para imagem local do iPhone: ${iphoneLogoUrl}`);
-    return res.redirect(iphoneLogoUrl);
-  }
-  
   try {
+    // FASE 1: Buscar a atividade no banco de dados (abordagem principal)
     const { storage } = require('./storage-export');
     const activity = await storage.getActivity(activityId);
     
+    // Se encontrou a atividade e ela tem imagem definida
     if (activity && activity.image) {
+      console.log(`✅ Encontrada imagem para atividade ${activityId}: ${activity.image}`);
+      
       if (activity.image.startsWith('http')) {
         return res.redirect(activity.image);
       } else {
-        // Para caminhos locais, redirecionar para o caminho correto
+        // Para caminhos locais, garantir formato correto
         const imagePath = activity.image.startsWith('/') ? activity.image : `/${activity.image}`;
+        console.log(`🖼️ Redirecionando para imagem real: ${imagePath}`);
         return res.redirect(imagePath);
       }
     }
     
-    // Fallback para um placeholder se não encontrar a imagem
-    console.log(`⚠️ Nenhuma imagem encontrada para atividade ${activityId}, usando placeholder`);
-    return res.redirect(`https://placehold.co/200x200/e6f7ff/0077cc?text=Pedido+${activityId}`);
+    // FASE 2: Casos especiais para IDs conhecidos
+    // Caso especial: GS iPhone (ID 48)
+    if (activityId === 48) {
+      const iphoneLogoUrl = "/iphone-icon.svg";
+      console.log(`🍎 Redirecionando para ícone do iPhone: ${iphoneLogoUrl}`);
+      return res.redirect(iphoneLogoUrl);
+    }
+    // Caso especial: Chaveiro (ID 49)
+    else if (activityId === 49) {
+      const chaveiroImageUrl = "/uploads/activity_49.jpg";
+      console.log(`🔑 Redirecionando para imagem do Chaveiro: ${chaveiroImageUrl}`);
+      return res.redirect(chaveiroImageUrl);
+    }
+    
+    // FASE 3: Tentar caminho padrão
+    const defaultImagePath = `/uploads/activity_${activityId}.jpg`;
+    console.log(`🔍 Tentando caminho padrão: ${defaultImagePath}`);
+    
+    // FASE 4: Usar ícone genérico como último recurso
+    console.log(`⚠️ Nenhuma imagem encontrada para atividade ${activityId}, usando ícone genérico`);
+    return res.redirect('/no-image.svg');
     
   } catch (error) {
     console.error(`❌ Erro ao buscar imagem para atividade ${activityId}:`, error);
-    return res.redirect('https://placehold.co/200x200/ffebee/d32f2f?text=Erro');
+    // Usar ícone genérico em caso de erro
+    return res.redirect('/no-image.svg');
   }
 });
 
 // Rota para obter uma solicitação específica (GET /api/reimpressao-emergencial/:id)
-router.get('/:id', (req, res) => {
+router.get('/:id', async (req, res) => {
   const id = parseInt(req.params.id);
   console.log(`💡 Requisição para obter solicitação emergencial #${id}`);
   
@@ -275,20 +333,51 @@ router.get('/:id', (req, res) => {
     });
   }
   
-  // Aplicar caso especial para GS iPhone (ID 48)
-  if (solicitacao.activityId === 48) {
-    console.log(`🍎 Alterando URL de imagem para atividade GS iPhone (ID 48) ao fazer GET da solicitação`);
-    // Usando caminho local para o SVG
-    solicitacao.activityImage = "/iphone-icon.svg";
+  try {
+    // Criar uma cópia que pode ser modificada
+    const solicitacaoAtualizada = { ...solicitacao };
+    
+    // Buscar a atividade original para obter suas informações
+    const { storage } = require('./storage-export');
+    const activity = await storage.getActivity(solicitacao.activityId);
+    
+    // Se encontrou a atividade e ela tem imagem, usar essa imagem
+    if (activity && activity.image) {
+      // Garantir formato correto da URL
+      if (activity.image.startsWith('/')) {
+        solicitacaoAtualizada.activityImage = activity.image;
+      } else if (activity.image.startsWith('http')) {
+        solicitacaoAtualizada.activityImage = activity.image;
+      } else {
+        solicitacaoAtualizada.activityImage = `/${activity.image}`;
+      }
+      console.log(`✅ Usando imagem real do pedido para solicitação #${id}: ${solicitacaoAtualizada.activityImage}`);
+    }
+    // Se não encontrou imagem na atividade, manter casos especiais
+    else {
+      // Caso especial: GS iPhone (ID 48)
+      if (solicitacao.activityId === 48) {
+        solicitacaoAtualizada.activityImage = "/iphone-icon.svg";
+        console.log(`🍎 Usando ícone SVG para GS iPhone (ID 48) na solicitação #${id}`);
+      }
+      // Caso especial: Chaveiro (ID 49)
+      else if (solicitacao.activityId === 49) {
+        solicitacaoAtualizada.activityImage = "/uploads/activity_49.jpg";
+        console.log(`🔑 Usando imagem JPG para Chaveiro (ID 49) na solicitação #${id}`);
+      }
+      // Demais casos: usar ícone genérico
+      else {
+        solicitacaoAtualizada.activityImage = "/no-image.svg";
+        console.log(`⚠️ Usando ícone genérico para solicitação #${id}: ${solicitacaoAtualizada.activityImage}`);
+      }
+    }
+    
+    return res.status(200).json(solicitacaoAtualizada);
+  } catch (error) {
+    console.error(`❌ Erro ao processar detalhes da solicitação #${id}:`, error);
+    // Em caso de erro, retornar a solicitação original
+    return res.status(200).json(solicitacao);
   }
-  
-  // Aplicar caso especial para Chaveiro (ID 49)
-  if (solicitacao.activityId === 49) {
-    console.log(`🖼️ Usando imagem real existente para Chaveiro (ID 49) ao fazer GET da solicitação`);
-    solicitacao.activityImage = "/uploads/activity_49.jpg";
-  }
-  
-  return res.status(200).json(solicitacao);
 });
 
 // Rota para processar solicitação (POST /api/reimpressao-emergencial/:id/processar)
