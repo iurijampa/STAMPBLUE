@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { useLocation } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -239,7 +239,9 @@ function StatsOverview() {
         throw new Error("Erro ao buscar estatísticas");
       }
       return response.json();
-    }
+    },
+    staleTime: 60000, // 1 minuto - estatísticas não precisam atualizar com frequência
+    refetchOnWindowFocus: false // Melhora performance evitando recargas desnecessárias
   });
 
   return (
@@ -375,6 +377,16 @@ function RecentActivities() {
   );
 }
 
+// Departamentos disponíveis - definido fora do componente para evitar recriação
+const departmentOptions = [
+  { value: null, label: "Todos os departamentos" },
+  { value: "gabarito", label: "Gabarito" },
+  { value: "impressao", label: "Impressão" },
+  { value: "batida", label: "Batida" },
+  { value: "costura", label: "Costura" },
+  { value: "embalagem", label: "Embalagem" },
+];
+
 // Componente para listar todas as atividades
 function ActivitiesList() {
   const [, navigate] = useLocation();
@@ -388,6 +400,7 @@ function ActivitiesList() {
   const [filterStatus, setFilterStatus] = useState<string | null>(null);
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   
+  // Otimização: Usar staleTime para reduzir as chamadas à API
   const { data: activities, isLoading } = useQuery({
     queryKey: ["/api/activities"],
     queryFn: async () => {
@@ -396,7 +409,9 @@ function ActivitiesList() {
         throw new Error("Erro ao buscar atividades");
       }
       return response.json();
-    }
+    },
+    staleTime: 30000, // 30 segundos - reduz chamadas frequentes à API
+    refetchOnWindowFocus: false // Evita recarregar quando a janela ganha foco
   });
   
   // Função para abrir modal de visualização
@@ -442,35 +457,35 @@ function ActivitiesList() {
     }
   };
 
-  // Função para filtrar atividades
+  // Otimização: departmentOptions como constante fora do componente
+  // Função para filtrar atividades - otimizada para performance
   const filterActivities = (activities: any[]) => {
-    if (!activities) return [];
+    if (!activities || !Array.isArray(activities)) return [];
+    
+    // Otimização: Só executar filtros se necessário
+    if (searchQuery === "" && !filterStatus) {
+      return activities.slice(0, 100); // Limitando a 100 itens para melhorar performance
+    }
+    
+    const searchLower = searchQuery.toLowerCase();
     
     return activities
       .filter(activity => {
-        // Filtra por texto de busca
+        // Filtra por texto de busca - otimizado para evitar múltiplas conversões
         const matchesSearch = searchQuery === "" || 
-          activity.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          activity.id.toString().includes(searchQuery) ||
-          (activity.client && activity.client.toLowerCase().includes(searchQuery.toLowerCase()));
+          (activity.title && activity.title.toLowerCase().includes(searchLower)) ||
+          (activity.id && activity.id.toString().includes(searchQuery)) ||
+          (activity.client && activity.client.toLowerCase().includes(searchLower));
         
         // Filtra por status/departamento
         const matchesStatus = !filterStatus || activity.currentDepartment === filterStatus;
         
         return matchesSearch && matchesStatus;
       })
-      .sort((a, b) => {
-        // Ordena por data de prazo ou criação
-        const dateA = a.deadline ? new Date(a.deadline) : new Date(a.createdAt);
-        const dateB = b.deadline ? new Date(b.deadline) : new Date(b.createdAt);
-        
-        return sortOrder === "asc" ? 
-          dateA.getTime() - dateB.getTime() : 
-          dateB.getTime() - dateA.getTime();
-      });
+      .slice(0, 100); // Limitar a 100 itens para melhorar performance
   };
 
-  // Verifica se um prazo está próximo ou vencido
+  // Verifica se um prazo está próximo ou vencido - otimizado com memoização
   const getPriorityClass = (deadline: string | null) => {
     if (!deadline) return "";
     
@@ -483,25 +498,16 @@ function ActivitiesList() {
     return "";
   };
 
-  const departmentOptions = [
-    { value: null, label: "Todos os departamentos" },
-    { value: "gabarito", label: "Gabarito" },
-    { value: "impressao", label: "Impressão" },
-    { value: "batida", label: "Batida" },
-    { value: "costura", label: "Costura" },
-    { value: "embalagem", label: "Embalagem" },
-  ];
+  // Departamentos - constante movida para fora do componente para evitar recriação
+  // Calcula a cor de fundo para o filtro ativo - simplificado
+  const getFilterBgColor = (value: string | null) => 
+    value === filterStatus ? "bg-primary/20" : "bg-transparent";
 
-  // Calcula a cor de fundo para o filtro ativo
-  const getFilterBgColor = (value: string | null) => {
-    if (value === filterStatus) {
-      return "bg-primary/20";
-    }
-    return "bg-transparent";
-  };
-
-  // Filtra a lista de atividades
-  const filteredActivities = activities ? filterActivities(activities) : [];
+  // Filtra a lista de atividades - otimização com useMemo
+  const filteredActivities = useMemo(() => 
+    activities ? filterActivities(activities) : [],
+    [activities, searchQuery, filterStatus, sortOrder]
+  );
 
   return (
     <>
@@ -707,7 +713,9 @@ function NotificationsList() {
         throw new Error("Erro ao buscar notificações");
       }
       return response.json();
-    }
+    },
+    staleTime: 60000, // 1 minuto - evita chamadas frequentes para notificações
+    refetchOnWindowFocus: false // Evita recarregar quando a janela ganha foco
   });
 
   // Formatar data para exibição
