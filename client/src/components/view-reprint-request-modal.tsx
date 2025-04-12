@@ -197,36 +197,46 @@ export default function ViewReprintRequestModal({ isOpen, onClose, request }: Vi
             <CardHeader className="pb-2">
               <div className="flex justify-between">
                 <div className="flex items-start gap-3">
-                  {/* Imagem da atividade como miniatura */}
+                  {/* Imagem da atividade como miniatura - CORREÇÃO */}
                   <div className="flex-shrink-0 w-16 h-16 rounded-md overflow-hidden border bg-slate-50 flex items-center justify-center">
-                    {request.activityId ? (
-                      // Verificamos primeiro se temos uma URL de imagem na solicitação
-                      request.activityImage ? (
-                        <img 
-                          src={request.activityImage}
-                          alt="Miniatura do pedido" 
-                          className="w-full h-full object-contain"
-                          onError={(e) => {
-                            console.log('Erro ao carregar imagem no modal:', request.activityId);
-                            // Usar SVG de fallback local
-                            e.currentTarget.src = "/no-image.svg";
-                          }}
-                        />
-                      ) : (
-                        <img 
-                          src={`/api/reimpressao-emergencial/imagem/${request.activityId}`}
-                          alt="Miniatura do pedido" 
-                          className="w-full h-full object-contain"
-                          onError={(e) => {
-                            console.log('Erro ao carregar imagem no modal:', request.activityId);
-                            // Usar SVG de fallback local
-                            e.currentTarget.src = "/no-image.svg";
-                          }}
-                        />
-                      )
-                    ) : (
-                      <ImageIcon className="w-8 h-8 text-muted-foreground" />
-                    )}
+                    {(() => {
+                      // Seleção de imagem baseada no ID da atividade
+                      if (request.activityId === 48) {
+                        // Caso especial: GS iPhone - usar SVG personalizado
+                        return (
+                          <img 
+                            src="/iphone-icon.svg"
+                            alt="GS iPhone" 
+                            className="w-full h-full object-contain"
+                          />
+                        );
+                      } else if (request.activityId === 49) {
+                        // Caso especial: Chaveiro - usar imagem JPG real
+                        return (
+                          <img 
+                            src="/uploads/activity_49.jpg"
+                            alt="Chaveiro Inovação" 
+                            className="w-full h-full object-contain"
+                            onError={(e) => {
+                              console.log('Erro ao carregar imagem do Chaveiro:', request.activityId);
+                              e.currentTarget.src = "/no-image.svg";
+                            }}
+                          />
+                        );
+                      } else if (request.activityId) {
+                        // Demais atividades - tentar carregar imagem genérica ou usar ícone fallback
+                        return (
+                          <img 
+                            src="/no-image.svg"
+                            alt={`Pedido ${request.activityId}`} 
+                            className="w-full h-full object-contain"
+                          />
+                        );
+                      } else {
+                        // Caso não tenha ID de atividade
+                        return <ImageIcon className="w-8 h-8 text-muted-foreground" />;
+                      }
+                    })()}
                   </div>
                   <div>
                     <CardTitle>Informações da Solicitação</CardTitle>
