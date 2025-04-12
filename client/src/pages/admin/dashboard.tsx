@@ -502,9 +502,9 @@ function ActivitiesList() {
     const deadlineDate = new Date(deadline);
     const diffDays = Math.ceil((deadlineDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
     
-    if (diffDays < 0) return "text-white bg-red-500"; // Vencido - vermelho
-    if (diffDays <= 2) return "text-white bg-amber-500"; // Próximo - amarelo
-    return "text-white bg-green-500"; // Normal - verde
+    if (diffDays < 0) return "text-white bg-red-500 font-medium"; // Vencido - vermelho
+    if (diffDays <= 2) return "text-white bg-amber-500 font-medium"; // Próximo - amarelo
+    return "text-white bg-green-500 font-medium"; // Normal - verde
   };
 
   // Departamentos - constante movida para fora do componente para evitar recriação
@@ -614,12 +614,15 @@ function ActivitiesList() {
                       </Button>
                     </div>
                   </th>
-                  <th className="px-4 py-3 font-medium text-sm">Criado em</th>
                   <th className="px-4 py-3 font-medium text-sm text-right">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {filteredActivities.map((activity: any) => (
+                {filteredActivities.map((activity: any) => {
+                  // Determina o departamento atual com fallback
+                  const currentDept = activity.currentDepartment || activity.department || 'pendente';
+                  
+                  return (
                   <tr key={activity.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
                     <td className="px-4 py-3">
                       <div className="font-medium">{activity.title}</div>
@@ -627,26 +630,23 @@ function ActivitiesList() {
                     <td className="px-4 py-3">{activity.client}</td>
                     <td className="px-4 py-3">
                       <div className={`px-3 py-1 text-center text-white rounded-md text-sm ${
-                        activity.currentDepartment === 'gabarito' ? 'bg-blue-600' : 
-                        activity.currentDepartment === 'impressao' ? 'bg-violet-600' : 
-                        activity.currentDepartment === 'batida' ? 'bg-amber-600' : 
-                        activity.currentDepartment === 'costura' ? 'bg-emerald-600' : 
-                        activity.currentDepartment === 'embalagem' ? 'bg-slate-600' : 'bg-gray-600'
+                        currentDept === 'gabarito' ? 'bg-blue-600' : 
+                        currentDept === 'impressao' ? 'bg-violet-600' : 
+                        currentDept === 'batida' ? 'bg-amber-600' : 
+                        currentDept === 'costura' ? 'bg-emerald-600' : 
+                        currentDept === 'embalagem' ? 'bg-slate-600' : 'bg-gray-600'
                       }`}>
-                        {activity.currentDepartment === 'gabarito' ? 'Gabarito' : 
-                         activity.currentDepartment === 'impressao' ? 'Impressão' : 
-                         activity.currentDepartment === 'batida' ? 'Batida' : 
-                         activity.currentDepartment === 'costura' ? 'Costura' : 
-                         activity.currentDepartment === 'embalagem' ? 'Embalagem' : 'Pendente'}
+                        {currentDept === 'gabarito' ? 'Gabarito' : 
+                         currentDept === 'impressao' ? 'Impressão' : 
+                         currentDept === 'batida' ? 'Batida' : 
+                         currentDept === 'costura' ? 'Costura' : 
+                         currentDept === 'embalagem' ? 'Embalagem' : 'Pendente'}
                       </div>
                     </td>
                     <td className="px-4 py-3">
                       <div className={`px-3 py-1 text-center rounded-md ${getPriorityClass(activity.deadline)}`}>
                         {activity.deadline ? new Date(activity.deadline).toLocaleDateString('pt-BR') : '-'}
                       </div>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-500">
-                      {new Date(activity.createdAt).toLocaleDateString('pt-BR')}
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex justify-end gap-2">
@@ -680,7 +680,7 @@ function ActivitiesList() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                )})}
               </tbody>
             </table>
           </div>
