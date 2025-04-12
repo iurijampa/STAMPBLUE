@@ -38,6 +38,7 @@ export async function buscarAtividadesPorDepartamentoEmergencia(department: stri
           description: activities.description,
           activity_status: activities.status,
           priority: activities.priority,
+          clientName: activities.clientName,
           deadline: activities.deadline,
           image: activities.image,
           additional_images: activities.additionalImages,
@@ -92,7 +93,8 @@ export async function buscarAtividadesPorDepartamentoEmergencia(department: stri
       additionalImages: row.additional_images,
       createdAt: row.created_at,
       clientName: row.clientName,    // Nome do cliente no campo original
-      client: row.clientName,        // Campo duplicado para compatibilidade com frontend
+      // Garantir que o campo client está preenchido
+      client: row.clientName || "Cliente não informado",
       clientInfo: row.description,   // Descrição como informação adicional
       quantity: row.quantity,
       notes: row.notes

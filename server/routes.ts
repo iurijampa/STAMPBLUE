@@ -196,7 +196,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             return {
               ...activity,
               currentDepartment,
-              clientInfo: activity.clientDetails || activity.clientInfo || null, // Adiciona informações adicionais do cliente
+              client: activity.clientName,  // Nome do cliente
+              clientInfo: activity.description || null, // Adiciona informações adicionais do cliente (descrição)
               progress: progresses
             };
           })
@@ -267,7 +268,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`[DEBUG] Chamando getActivitiesByDepartment('${department}')`);
       // SOLUÇÃO EMERGENCIAL: Usar método direto e seguro para TODOS os departamentos
       console.log(`[EMERGENCIA] Usando método direto para buscar atividades do departamento ${department}`);
-      const activities = await buscarAtividadesPorDepartamentoEmergencia(department);
+      let activities = await buscarAtividadesPorDepartamentoEmergencia(department);
+      
+      // Garantir que o campo client está sendo preenchido com clientName
+      activities = activities.map(activity => ({
+        ...activity,
+        client: activity.clientName || "Cliente não informado"
+      }));
       
       console.log(`[DEBUG] Encontradas ${activities.length} atividades para o departamento: ${department}`);
       if (activities.length > 0) {
