@@ -202,19 +202,26 @@ export default function ViewReprintRequestModal({ isOpen, onClose, request }: Vi
     }
     
     // Verificar se tem nome de quem está cancelando
-    if (!processedBy) {
-      toast({
-        title: "Informação necessária",
-        description: "Informe seu nome no campo 'Processado por' antes de cancelar.",
-        variant: "destructive",
-      });
-      return;
+    let nomeCancelamento = processedBy;
+    
+    // Se não tiver preenchido, pede diretamente
+    if (!nomeCancelamento || nomeCancelamento.trim() === '') {
+      nomeCancelamento = prompt("Digite seu nome para confirmar o cancelamento:") || "";
+      
+      if (!nomeCancelamento || nomeCancelamento.trim() === '') {
+        toast({
+          title: "Informação necessária",
+          description: "É necessário informar seu nome para cancelar a solicitação.",
+          variant: "destructive",
+        });
+        return;
+      }
     }
     
     setIsProcessing(true);
     cancelRequestMutation.mutate({
       id: request.id,
-      canceledBy: processedBy,
+      canceledBy: nomeCancelamento,
     });
   };
 
