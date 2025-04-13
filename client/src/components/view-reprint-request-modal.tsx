@@ -49,7 +49,8 @@ interface ReprintRequest {
   quantity: number;
   priority: "low" | "normal" | "high" | "urgent";
   status: "pending" | "in_progress" | "completed" | "rejected" | "pendente" | "em_andamento" | "concluida" | "rejeitada";
-  requestedAt: string;
+  requestedAt?: string;
+  createdAt: string;
   completedBy?: string;
   completedAt?: string;
   receivedBy?: string;
@@ -267,7 +268,7 @@ export default function ViewReprintRequestModal({ isOpen, onClose, request }: Vi
                   <div>
                     <CardTitle>Informações da Solicitação</CardTitle>
                     <CardDescription>
-                      Criado em {request.requestedAt ? new Date(request.requestedAt).toLocaleString() : 'data não disponível'}
+                      Criado em {request.createdAt ? new Date(request.createdAt).toLocaleString() : 'data não disponível'}
                     </CardDescription>
                   </div>
                 </div>

@@ -28,8 +28,9 @@ interface ReprintRequest {
   details?: string;
   quantity: number;
   priority: "low" | "normal" | "high" | "urgent";
-  status: "pending" | "in_progress" | "completed" | "rejected";
-  requestedAt: string;
+  status: "pending" | "in_progress" | "completed" | "rejected" | "pendente" | "em_andamento" | "concluida" | "rejeitada";
+  requestedAt?: string;
+  createdAt: string;
   completedBy?: string;
   completedAt?: string;
   receivedBy?: string;
@@ -209,7 +210,7 @@ export default function ReprintRequestsList({ department, activity }: ReprintReq
                           {request.activityTitle || `Pedido #${request.activityId}`}
                         </CardTitle>
                         <CardDescription className="text-xs">
-                          Solicitado por: {request.requestedBy} em {request.requestedAt ? new Date(request.requestedAt).toLocaleDateString() : 'data não disponível'}
+                          Solicitado por: {request.requestedBy} em {request.createdAt ? new Date(request.createdAt).toLocaleString() : 'data não disponível'}
                         </CardDescription>
                       </div>
                     </div>
