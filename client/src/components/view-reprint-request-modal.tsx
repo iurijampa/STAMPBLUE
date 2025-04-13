@@ -4,8 +4,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { apiRequest } from "@/lib/queryClient";
-import { ImageIcon, Loader2 } from "lucide-react";
-import ImageDiagnosis from "@/components/image-diagnosis";
+import { Loader2 } from "lucide-react";
 
 import {
   Dialog,
@@ -35,7 +34,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 // Interface para representar a solicitação de reimpressão
 interface ReprintRequest {
@@ -279,90 +277,77 @@ export default function ViewReprintRequestModal({ isOpen, onClose, request }: Vi
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
-              <Tabs defaultValue="info" className="w-full">
-                <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="info">Informações</TabsTrigger>
-                  <TabsTrigger value="image">Imagem</TabsTrigger>
-                </TabsList>
-                <TabsContent value="info" className="pt-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label className="text-muted-foreground text-xs">Solicitado por</Label>
-                      <p className="font-medium">{request.requestedBy}</p>
-                    </div>
-                    <div>
-                      <Label className="text-muted-foreground text-xs">Quantidade</Label>
-                      <p className="font-medium">{request.quantity} {request.quantity > 1 ? 'peças' : 'peça'}</p>
-                    </div>
+              <div className="space-y-4 pt-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label className="text-muted-foreground text-xs">Solicitado por</Label>
+                    <p className="font-medium">{request.requestedBy}</p>
                   </div>
-                  
-                  <div className="mt-3">
-                    <Label className="text-muted-foreground text-xs">Motivo</Label>
-                    <p className="font-medium">{request.reason}</p>
+                  <div>
+                    <Label className="text-muted-foreground text-xs">Quantidade</Label>
+                    <p className="font-medium">{request.quantity} {request.quantity > 1 ? 'peças' : 'peça'}</p>
                   </div>
-                  
-                  {request.details && (
-                    <div className="mt-3">
-                      <Label className="text-muted-foreground text-xs">Detalhes</Label>
-                      <p className="text-sm whitespace-pre-wrap">{request.details}</p>
-                    </div>
-                  )}
-                  
-                  <div className="grid grid-cols-2 gap-4 mt-3">
-                    <div>
-                      <Label className="text-muted-foreground text-xs">Departamento Solicitante</Label>
-                      <p className="font-medium capitalize">{request.fromDepartment}</p>
-                    </div>
-                    <div>
-                      <Label className="text-muted-foreground text-xs">Departamento Destinatário</Label>
-                      <p className="font-medium capitalize">{request.toDepartment}</p>
-                    </div>
+                </div>
+                
+                <div>
+                  <Label className="text-muted-foreground text-xs">Motivo</Label>
+                  <p className="font-medium">{request.reason}</p>
+                </div>
+                
+                {request.details && (
+                  <div>
+                    <Label className="text-muted-foreground text-xs">Detalhes</Label>
+                    <p className="text-sm whitespace-pre-wrap">{request.details}</p>
                   </div>
-                  
-                  {request.status === 'completed' && request.completedBy && (
-                    <>
-                      <Separator className="my-3" />
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <Label className="text-muted-foreground text-xs">Concluído por</Label>
-                          <p className="font-medium">{request.completedBy}</p>
-                        </div>
-                        {request.completedAt && (
-                          <div>
-                            <Label className="text-muted-foreground text-xs">Data de Conclusão</Label>
-                            <p className="font-medium">{request.completedAt ? new Date(request.completedAt).toLocaleString() : 'data não disponível'}</p>
-                          </div>
-                        )}
+                )}
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label className="text-muted-foreground text-xs">Departamento Solicitante</Label>
+                    <p className="font-medium capitalize">{request.fromDepartment}</p>
+                  </div>
+                  <div>
+                    <Label className="text-muted-foreground text-xs">Departamento Destinatário</Label>
+                    <p className="font-medium capitalize">{request.toDepartment}</p>
+                  </div>
+                </div>
+                
+                {request.status === 'completed' && request.completedBy && (
+                  <>
+                    <Separator className="my-3" />
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label className="text-muted-foreground text-xs">Concluído por</Label>
+                        <p className="font-medium">{request.completedBy}</p>
                       </div>
-                    </>
-                  )}
-                  
-                  {request.status === 'rejected' && request.completedBy && (
-                    <>
-                      <Separator className="my-3" />
-                      <div className="grid grid-cols-2 gap-4">
+                      {request.completedAt && (
                         <div>
-                          <Label className="text-muted-foreground text-xs">Rejeitado por</Label>
-                          <p className="font-medium">{request.completedBy}</p>
+                          <Label className="text-muted-foreground text-xs">Data de Conclusão</Label>
+                          <p className="font-medium">{request.completedAt ? new Date(request.completedAt).toLocaleString() : 'data não disponível'}</p>
                         </div>
-                        {request.completedAt && (
-                          <div>
-                            <Label className="text-muted-foreground text-xs">Data de Rejeição</Label>
-                            <p className="font-medium">{request.completedAt ? new Date(request.completedAt).toLocaleString() : 'data não disponível'}</p>
-                          </div>
-                        )}
+                      )}
+                    </div>
+                  </>
+                )}
+                
+                {request.status === 'rejected' && request.completedBy && (
+                  <>
+                    <Separator className="my-3" />
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label className="text-muted-foreground text-xs">Rejeitado por</Label>
+                        <p className="font-medium">{request.completedBy}</p>
                       </div>
-                    </>
-                  )}
-                </TabsContent>
-                <TabsContent value="image" className="pt-4">
-                  <ImageDiagnosis 
-                    imageData={request.activityImage || null}
-                    activityId={request.activityId}
-                    title={`Diagnóstico de Imagem - ${request.activityTitle || `Pedido #${request.activityId}`}`}
-                  />
-                </TabsContent>
-              </Tabs>
+                      {request.completedAt && (
+                        <div>
+                          <Label className="text-muted-foreground text-xs">Data de Rejeição</Label>
+                          <p className="font-medium">{request.completedAt ? new Date(request.completedAt).toLocaleString() : 'data não disponível'}</p>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
             </CardContent>
           </Card>
 
