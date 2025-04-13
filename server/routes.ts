@@ -110,13 +110,13 @@ async function completarProgressoAtividadeEmergencia(activityId: number, departm
       throw new Error(`Progresso não encontrado para atividade ${activityId} no departamento ${department}`);
     }
     
-    // Atualizar o progresso atual para completed
-    await storage.updateActivityProgress(currentProgress.id, {
-      status: "completed",
-      completedBy: data.completedBy || "Sistema",
-      completedAt: new Date(),
-      notes: data.notes || null
-    });
+    // Atualizar o progresso atual para completed usando o método completeActivityProgress
+    await storage.completeActivityProgress(
+      activityId,
+      department,
+      data.completedBy || "Sistema",
+      data.notes || null
+    );
     
     // Verificar qual é o próximo departamento no fluxo
     const departmentIndex = DEPARTMENTS.indexOf(department as any);
@@ -240,22 +240,28 @@ async function buscarAtividadesPorDepartamentoEmergencia(department: string) {
   console.log(`MODO RÁPIDO: Cache expirado para ${cacheKey}, buscando dados novos`);
   
   try {
-    // Buscar todos os progressos pendentes para este departamento usando o método atualizado
-    const allProgresses = await storage.getAllProgress();
-    const pendingProgresses = allProgresses.filter(
-      p => p.department === department && p.status === "pending"
-    );
+    // Obter todas as atividades
+    const allActivities = await storage.getAllActivities();
+    const pendingProgresses = [];
+    
+    // Para cada atividade, buscar o progresso e verificar se está pendente neste departamento
+    for (const activity of allActivities) {
+      const progress = await storage.getActivityProgressByDepartment(activity.id, department);
+      if (progress && progress.status === "pending") {
+        pendingProgresses.push(progress);
+      }
+    }
     
     console.log(`[EMERGENCIA] Encontrados ${pendingProgresses.length} progresso(s) pendente(s) para ${department}`);
     
     // Buscar as atividades correspondentes a esses progressos
-    const activities = [];
+    const resultActivities = [];
     
     for (const progress of pendingProgresses) {
       const activity = await storage.getActivity(progress.activityId);
       if (activity) {
         console.log(`[EMERGENCIA] Atividade adicionada: ${activity.id} - ${activity.title}`);
-        activities.push({
+        resultActivities.push({
           ...activity,
           client: activity.clientName || "Cliente não informado",
           clientInfo: activity.description || null
@@ -263,12 +269,12 @@ async function buscarAtividadesPorDepartamentoEmergencia(department: string) {
       }
     }
     
-    console.log(`[EMERGENCIA] Total de ${activities.length} atividades recuperadas para ${department}`);
+    console.log(`[EMERGENCIA] Total de ${resultActivities.length} atividades recuperadas para ${department}`);
     
     // Armazena em cache por 15 segundos
-    (global as any).cache?.set(cacheKey, activities, 15000);
+    (global as any).cache?.set(cacheKey, resultActivities, 15000);
     
-    return activities;
+    return resultActivities;
   } catch (error) {
     console.error(`[ERROR] Erro ao buscar atividades para departamento ${department}:`, error);
     return [];
