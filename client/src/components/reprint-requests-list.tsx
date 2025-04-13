@@ -209,7 +209,7 @@ export default function ReprintRequestsList({ department, activity }: ReprintReq
                           {request.activityTitle || `Pedido #${request.activityId}`}
                         </CardTitle>
                         <CardDescription className="text-xs">
-                          Solicitado por: {request.requestedBy} em {new Date(request.requestedAt).toLocaleDateString()}
+                          Solicitado por: {request.requestedBy} em {request.requestedAt ? new Date(request.requestedAt).toLocaleDateString() : 'data não disponível'}
                         </CardDescription>
                       </div>
                     </div>

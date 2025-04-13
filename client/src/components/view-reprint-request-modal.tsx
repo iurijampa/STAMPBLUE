@@ -267,7 +267,7 @@ export default function ViewReprintRequestModal({ isOpen, onClose, request }: Vi
                   <div>
                     <CardTitle>Informações da Solicitação</CardTitle>
                     <CardDescription>
-                      Criado em {new Date(request.requestedAt).toLocaleString()}
+                      Criado em {request.requestedAt ? new Date(request.requestedAt).toLocaleString() : 'data não disponível'}
                     </CardDescription>
                   </div>
                 </div>
@@ -329,7 +329,7 @@ export default function ViewReprintRequestModal({ isOpen, onClose, request }: Vi
                         {request.completedAt && (
                           <div>
                             <Label className="text-muted-foreground text-xs">Data de Conclusão</Label>
-                            <p className="font-medium">{new Date(request.completedAt).toLocaleString()}</p>
+                            <p className="font-medium">{request.completedAt ? new Date(request.completedAt).toLocaleString() : 'data não disponível'}</p>
                           </div>
                         )}
                       </div>
@@ -347,7 +347,7 @@ export default function ViewReprintRequestModal({ isOpen, onClose, request }: Vi
                         {request.completedAt && (
                           <div>
                             <Label className="text-muted-foreground text-xs">Data de Rejeição</Label>
-                            <p className="font-medium">{new Date(request.completedAt).toLocaleString()}</p>
+                            <p className="font-medium">{request.completedAt ? new Date(request.completedAt).toLocaleString() : 'data não disponível'}</p>
                           </div>
                         )}
                       </div>
