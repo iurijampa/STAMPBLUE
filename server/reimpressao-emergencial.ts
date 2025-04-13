@@ -321,10 +321,7 @@ router.post('/:id/cancelar', (req: Request, res: Response) => {
   }
 });
 
-// Função para listar solicitações de reimpressão 
-// Mantido para compatibilidade, mas usando o storage compartilhado
-export function listarSolicitacoesReimpressao(): EmergencyReprintRequest[] {
-  return getAllRequests();
-}
+// Removida a definição duplicada da função listarSolicitacoesReimpressao
+// A função agora vem diretamente do módulo emergency-storage.ts
 
 export default router;
