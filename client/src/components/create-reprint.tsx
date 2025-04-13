@@ -7,11 +7,22 @@ import { Loader2 } from "lucide-react";
 const createReprintRequest = async () => {
   console.log("⏳ Iniciando criação de solicitação de teste...");
   
+  // Buscar uma atividade aleatória entre as disponíveis para o usuário
+  // Para tornar o teste mais robusto, vamos alternar entre algumas atividades
+  const activityIds = [49, 53]; // IDs das atividades que sabemos que têm imagens
+  const randomIndex = Math.floor(Math.random() * activityIds.length);
+  const selectedActivityId = activityIds[randomIndex];
+  
+  const activityTitles = {
+    49: "CHAVEIRO INOVAÇÃO",
+    53: "CONSTRUTORA INOVAÇÃO",
+  };
+  
   const requestData = {
-    activityId: 53,
+    activityId: selectedActivityId,
     requestedBy: "Teste Automático",
-    reason: "Teste da exibição de imagem para Construtora",
-    details: "Esta solicitação testa se as imagens dos pedidos estão sendo exibidas corretamente - CONSTRUTORA INOVAÇÃO",
+    reason: `Teste da exibição de imagem para ${activityTitles[selectedActivityId as keyof typeof activityTitles]}`,
+    details: `Esta solicitação testa se as imagens dos pedidos estão sendo exibidas corretamente - ${activityTitles[selectedActivityId as keyof typeof activityTitles]}`,
     quantity: 1,
     priority: "normal",
     fromDepartment: "batida",
