@@ -126,6 +126,53 @@ export default function ViewReprintRequestModal({ isOpen, onClose, request }: Vi
       });
     },
   });
+  
+  // Mutação para cancelar a solicitação
+  const cancelRequestMutation = useMutation({
+    mutationFn: async ({ id, canceledBy }: { 
+      id: number; 
+      canceledBy: string; 
+    }) => {
+      const response = await fetch(`/api/reimpressao-emergencial/${id}/cancelar`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          canceledBy
+        })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Erro ao cancelar solicitação");
+      }
+      
+      return await response.json();
+    },
+    onSuccess: () => {
+      setIsProcessing(false);
+      // Forçar atualização imediata de todas as listas de solicitações
+      queryClient.invalidateQueries({
+        queryKey: ["/api/reimpressao-emergencial/listar"],
+        refetchType: 'all'
+      });
+      // Mostrar notificação de sucesso
+      toast({
+        title: "Solicitação cancelada",
+        description: "A solicitação de reimpressão foi cancelada com sucesso.",
+      });
+      onClose();
+    },
+    onError: (error: Error) => {
+      setIsProcessing(false);
+      toast({
+        title: "Erro ao cancelar solicitação",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
 
   // Função para lidar com a atualização do status
   const handleUpdateStatus = (status: string) => {
@@ -144,6 +191,30 @@ export default function ViewReprintRequestModal({ isOpen, onClose, request }: Vi
       status,
       processedBy,
       responseNotes,
+    });
+  };
+  
+  // Função para lidar com o cancelamento da solicitação
+  const handleCancelRequest = () => {
+    // Solicitar confirmação antes de cancelar
+    if (!window.confirm("Tem certeza que deseja cancelar esta solicitação de reimpressão?")) {
+      return;
+    }
+    
+    // Verificar se tem nome de quem está cancelando
+    if (!processedBy) {
+      toast({
+        title: "Informação necessária",
+        description: "Informe seu nome no campo 'Processado por' antes de cancelar.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setIsProcessing(true);
+    cancelRequestMutation.mutate({
+      id: request.id,
+      canceledBy: processedBy,
     });
   };
 
@@ -421,7 +492,27 @@ export default function ViewReprintRequestModal({ isOpen, onClose, request }: Vi
           )}
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="flex justify-between">
+          <div>
+            {/* Botão de cancelamento - apenas visível para solicitações pendentes */}
+            {(request.status === 'pending' || request.status === 'pendente') && (
+              <Button 
+                onClick={handleCancelRequest}
+                variant="destructive"
+                disabled={isProcessing}
+                className="mr-2"
+              >
+                {isProcessing ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Cancelando...
+                  </>
+                ) : (
+                  "Cancelar Solicitação"
+                )}
+              </Button>
+            )}
+          </div>
           <Button onClick={onClose} variant="outline">
             Fechar
           </Button>

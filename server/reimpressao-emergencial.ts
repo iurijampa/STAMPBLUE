@@ -244,6 +244,43 @@ router.post('/:id/processar', (req: Request, res: Response) => {
   });
 });
 
+// Rota para cancelar solicitação (POST /api/reimpressao-emergencial/:id/cancelar)
+router.post('/:id/cancelar', (req: Request, res: Response) => {
+  const id = parseInt(req.params.id);
+  console.log(`💡 Requisição para cancelar solicitação emergencial #${id}:`, req.body);
+  
+  const { canceledBy } = req.body;
+  
+  if (!canceledBy) {
+    return res.status(400).json({
+      success: false,
+      message: 'Nome de quem está cancelando é obrigatório'
+    });
+  }
+  
+  // Atualizar solicitação para status "cancelada"
+  const solicitacaoAtualizada = updateRequest(id, {
+    status: 'cancelada',
+    processedBy: canceledBy,
+    processedAt: new Date().toISOString()
+  });
+  
+  if (!solicitacaoAtualizada) {
+    return res.status(404).json({
+      success: false,
+      message: 'Solicitação não encontrada'
+    });
+  }
+  
+  console.log(`✅ Solicitação emergencial #${id} cancelada com sucesso:`, solicitacaoAtualizada);
+  
+  return res.status(200).json({
+    success: true,
+    message: 'Solicitação cancelada com sucesso',
+    data: solicitacaoAtualizada
+  });
+});
+
 // Função para listar solicitações de reimpressão 
 // Mantido para compatibilidade, mas usando o storage compartilhado
 export function listarSolicitacoesReimpressao(): EmergencyReprintRequest[] {
