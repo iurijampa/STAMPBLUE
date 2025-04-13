@@ -240,8 +240,12 @@ async function buscarAtividadesPorDepartamentoEmergencia(department: string) {
   console.log(`MODO RÁPIDO: Cache expirado para ${cacheKey}, buscando dados novos`);
   
   try {
-    // Buscar todos os progressos pendentes para este departamento
-    const pendingProgresses = await storage.getAllProgressByDepartmentAndStatus(department, "pending");
+    // Buscar todos os progressos pendentes para este departamento usando o método atualizado
+    const allProgresses = await storage.getAllProgress();
+    const pendingProgresses = allProgresses.filter(
+      p => p.department === department && p.status === "pending"
+    );
+    
     console.log(`[EMERGENCIA] Encontrados ${pendingProgresses.length} progresso(s) pendente(s) para ${department}`);
     
     // Buscar as atividades correspondentes a esses progressos
