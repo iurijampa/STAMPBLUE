@@ -69,9 +69,16 @@ export function criarSolicitacaoReimpressao(input: CreateEmergencyReprintRequest
   return addRequest(newRequest);
 }
 
-export function getAllRequests(): EmergencyReprintRequest[] {
-  console.log(`🌐 EMERGENCY STORAGE: Retornando ${emergencyRequests.length} solicitações`);
-  return emergencyRequests;
+export function getAllRequests(includeCanceled: boolean = true): EmergencyReprintRequest[] {
+  if (includeCanceled) {
+    console.log(`🌐 EMERGENCY STORAGE: Retornando ${emergencyRequests.length} solicitações`);
+    return emergencyRequests;
+  } else {
+    // Filtrar solicitações canceladas
+    const filteredRequests = emergencyRequests.filter(req => req.status !== 'cancelada');
+    console.log(`🌐 EMERGENCY STORAGE: Retornando ${filteredRequests.length} solicitações (excluindo canceladas)`);
+    return filteredRequests;
+  }
 }
 
 export function getRequestById(id: number): EmergencyReprintRequest | undefined {
@@ -104,16 +111,19 @@ export function buscarSolicitacaoPorId(id: number): EmergencyReprintRequest | un
   return emergencyRequests.find(req => req.id === id);
 }
 
-export function listarSolicitacoesReimpressao(departamento?: string): EmergencyReprintRequest[] {
+export function listarSolicitacoesReimpressao(departamento?: string, includeCanceled: boolean = false): EmergencyReprintRequest[] {
+  // Base de solicitações excluindo as canceladas
+  const baseRequests = getAllRequests(includeCanceled);
+  
   if (departamento) {
     // Se departamento for especificado, retorna apenas solicitações deste departamento
     // (tanto como origem quanto destino)
-    return emergencyRequests.filter(
+    return baseRequests.filter(
       req => req.fromDepartment === departamento || req.toDepartment === departamento
     );
   }
-  // Caso contrário, retorna todas as solicitações
-  return getAllRequests();
+  // Caso contrário, retorna todas as solicitações (exceto canceladas)
+  return baseRequests;
 }
 
 export function atualizarStatusSolicitacao(

@@ -10,7 +10,8 @@ import {
   getAllRequests, 
   getRequestById, 
   addRequest, 
-  updateRequest 
+  updateRequest,
+  listarSolicitacoesReimpressao
 } from './emergency-storage';
 
 const router: Router = express.Router();
@@ -187,7 +188,8 @@ router.post('/criar', async (req: Request, res: Response) => {
 // Rota para listar solicitações (GET /api/reimpressao-emergencial/listar)
 router.get('/listar', (req: Request, res: Response) => {
   console.log('💡 Requisição para listar solicitações emergenciais');
-  return res.status(200).json(getAllRequests());
+  // Usar função listarSolicitacoesReimpressao com parâmetro includeCanceled=false para não incluir solicitações canceladas
+  return res.status(200).json(listarSolicitacoesReimpressao(undefined, false));
 });
 
 // Rota para obter uma solicitação específica (GET /api/reimpressao-emergencial/:id)
