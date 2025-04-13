@@ -97,6 +97,180 @@ const cache = new LRUCache(500); // Suporta até 500 itens em cache
 (global as any).cache = cache;
 // Sistema de reimpressão agora usa o sistema principal, sem o sistema emergencial de teste
 
+// Funções substitutas para manter compatibilidade com o código existente
+async function completarProgressoAtividadeEmergencia(activityId: number, department: string, completedBy: string, notes: string | null = null) {
+  const data = { completedBy, notes };
+  console.log(`[MODO DEUS] Completando atividade ${activityId} no departamento ${department} (método seguro)`);
+  try {
+    // Buscar o progresso atual
+    const currentProgress = await storage.getActivityProgressByDepartment(activityId, department);
+    
+    if (!currentProgress) {
+      console.error(`[MODO DEUS] Progresso não encontrado para atividade ${activityId} no departamento ${department}`);
+      throw new Error(`Progresso não encontrado para atividade ${activityId} no departamento ${department}`);
+    }
+    
+    // Atualizar o progresso atual para completed
+    await storage.updateActivityProgress(currentProgress.id, {
+      status: "completed",
+      completedBy: data.completedBy || "Sistema",
+      completedAt: new Date(),
+      notes: data.notes || null
+    });
+    
+    // Verificar qual é o próximo departamento no fluxo
+    const departmentIndex = DEPARTMENTS.indexOf(department as any);
+    
+    // Se não for o último departamento, criar progresso para o próximo
+    if (departmentIndex < DEPARTMENTS.length - 1) {
+      const nextDepartment = DEPARTMENTS[departmentIndex + 1];
+      
+      // Criar progresso para o próximo departamento
+      await storage.createActivityProgress({
+        activityId,
+        department: nextDepartment,
+        status: "pending"
+      });
+      
+      // Enviar notificação para usuários do próximo departamento
+      const nextDeptUsers = await storage.getUsersByRole(nextDepartment);
+      const activity = await storage.getActivity(activityId);
+      
+      for (const user of nextDeptUsers) {
+        await storage.createNotification({
+          userId: user.id,
+          activityId,
+          message: `Nova atividade recebida: ${activity?.title || 'Desconhecido'}, concluída por ${data.completedBy || 'Sistema'}`
+        });
+      }
+      
+      // Notificar administradores
+      const adminUsers = await storage.getUsersByRole("admin");
+      for (const user of adminUsers) {
+        await storage.createNotification({
+          userId: user.id,
+          activityId,
+          message: `Atividade ${activity?.title || 'Desconhecido'} concluída por ${department} e enviada para ${nextDepartment}`
+        });
+      }
+      
+      // Notificar via WebSocket
+      if ((global as any).wsNotifications) {
+        const notificationData = {
+          type: 'activity_completed',
+          activity,
+          completedBy: data.completedBy,
+          department,
+          nextDepartment
+        };
+        
+        // Notificar o próximo departamento
+        (global as any).wsNotifications.notifyDepartment(nextDepartment, notificationData);
+        
+        // Notificar administradores
+        (global as any).wsNotifications.notifyDepartment('admin', notificationData);
+      }
+    } else {
+      // Se for o último departamento, marcar a atividade como concluída
+      await storage.updateActivity(activityId, { status: "completed" });
+      
+      // Notificar administradores
+      const adminUsers = await storage.getUsersByRole("admin");
+      const activity = await storage.getActivity(activityId);
+      
+      for (const user of adminUsers) {
+        await storage.createNotification({
+          userId: user.id,
+          activityId,
+          message: `Atividade ${activity?.title || 'Desconhecido'} concluída pelo departamento ${department} (FINALIZADA)`
+        });
+      }
+      
+      // Notificar via WebSocket
+      if ((global as any).wsNotifications) {
+        const notificationData = {
+          type: 'activity_completed_final',
+          activity,
+          completedBy: data.completedBy,
+          department
+        };
+        
+        // Notificar administradores
+        (global as any).wsNotifications.notifyDepartment('admin', notificationData);
+      }
+    }
+    
+    // Invalidar caches que possam conter dados desatualizados
+    const cacheKeys = [`activities_dept_${department}`];
+    
+    // Se não for o último departamento, invalide também o cache do próximo
+    if (departmentIndex < DEPARTMENTS.length - 1) {
+      const nextDepartment = DEPARTMENTS[departmentIndex + 1];
+      cacheKeys.push(`activities_dept_${nextDepartment}`);
+    }
+    
+    // Invalidar todos os caches afetados
+    for (const key of cacheKeys) {
+      console.log(`[MODO DEUS] Invalidando cache: ${key}`);
+      (global as any).cache?.delete(key);
+    }
+    
+    console.log(`[MODO DEUS] Atividade ${activityId} completada com sucesso no departamento ${department}`);
+    
+    return { success: true, message: "Atividade completada com sucesso" };
+  } catch (error) {
+    console.error(`[MODO DEUS] Erro ao completar atividade ${activityId} no departamento ${department}:`, error);
+    throw error;
+  }
+}
+
+async function buscarAtividadesPorDepartamentoEmergencia(department: string) {
+  console.log(`[EMERGENCIA] Buscando atividades: ${department}`);
+  
+  // Cria uma chave de cache específica para o departamento
+  const cacheKey = `activities_dept_${department}`;
+  const cachedData = (global as any).cache?.get(cacheKey);
+  
+  // Se tiver em cache e não estiver expirado, retorna imediatamente
+  if (cachedData) {
+    console.log(`[CACHE] Usando dados em cache para ${cacheKey}`);
+    return cachedData;
+  }
+  
+  console.log(`MODO RÁPIDO: Cache expirado para ${cacheKey}, buscando dados novos`);
+  
+  try {
+    // Buscar todos os progressos pendentes para este departamento
+    const pendingProgresses = await storage.getAllProgressByDepartmentAndStatus(department, "pending");
+    console.log(`[EMERGENCIA] Encontrados ${pendingProgresses.length} progresso(s) pendente(s) para ${department}`);
+    
+    // Buscar as atividades correspondentes a esses progressos
+    const activities = [];
+    
+    for (const progress of pendingProgresses) {
+      const activity = await storage.getActivity(progress.activityId);
+      if (activity) {
+        console.log(`[EMERGENCIA] Atividade adicionada: ${activity.id} - ${activity.title}`);
+        activities.push({
+          ...activity,
+          client: activity.clientName || "Cliente não informado",
+          clientInfo: activity.description || null
+        });
+      }
+    }
+    
+    console.log(`[EMERGENCIA] Total de ${activities.length} atividades recuperadas para ${department}`);
+    
+    // Armazena em cache por 15 segundos
+    (global as any).cache?.set(cacheKey, activities, 15000);
+    
+    return activities;
+  } catch (error) {
+    console.error(`[ERROR] Erro ao buscar atividades para departamento ${department}:`, error);
+    return [];
+  }
+}
+
 // Middleware to check if the user is authenticated
 function isAuthenticated(req: Request, res: Response, next: Function) {
   // Permitir acesso às páginas de teste e rotas de reimpressão sem autenticação
@@ -722,8 +896,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const completedProgress = await completarProgressoAtividadeEmergencia(
           activityId, 
           department, 
-          req.body.completedBy,
-          req.body.notes
+          req.body.completedBy || "Usuário", 
+          req.body.notes || null
         );
         console.log(`[SUCESSO] Atividade ${activityId} concluída com sucesso no departamento ${department}`);
         

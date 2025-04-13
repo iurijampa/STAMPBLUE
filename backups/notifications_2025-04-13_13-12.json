@@ -1,11 +1,11 @@
 [
   {
-    "id": 302,
+    "id": 315,
     "userId": 2,
-    "activityId": 62,
-    "message": "Nova atividade: teste3",
+    "activityId": 63,
+    "message": "Nova atividade: IURI - CAMISA NOVA TURMA PANTERA ROSA",
     "read": false,
-    "createdAt": "2025-04-12T14:08:53.381Z"
+    "createdAt": "2025-04-12T17:53:23.717Z"
   },
   {
     "id": 294,
@@ -184,14 +184,6 @@
     "createdAt": "2025-04-09T13:03:41.930Z"
   },
   {
-    "id": 307,
-    "userId": 3,
-    "activityId": 62,
-    "message": "Novo pedido de batida para costura: teste3",
-    "read": false,
-    "createdAt": "2025-04-12T14:24:38.542Z"
-  },
-  {
     "id": 237,
     "userId": 3,
     "activityId": 28,
@@ -222,14 +214,6 @@
     "message": "Novo pedido de batida para costura: ARTE PERIGOSA CAMISA 2025",
     "read": false,
     "createdAt": "2025-04-10T13:01:49.354Z"
-  },
-  {
-    "id": 303,
-    "userId": 4,
-    "activityId": 62,
-    "message": "Novo pedido de gabarito para impressao: teste3",
-    "read": false,
-    "createdAt": "2025-04-12T14:09:47.310Z"
   },
   {
     "id": 295,
@@ -384,14 +368,6 @@
     "createdAt": "2025-04-09T17:24:32.672Z"
   },
   {
-    "id": 305,
-    "userId": 6,
-    "activityId": 62,
-    "message": "Novo pedido de impressao para batida: teste3",
-    "read": false,
-    "createdAt": "2025-04-12T14:24:03.583Z"
-  },
-  {
     "id": 297,
     "userId": 6,
     "activityId": 53,
@@ -480,28 +456,12 @@
     "createdAt": "2025-04-09T18:33:55.097Z"
   },
   {
-    "id": 311,
-    "userId": 5,
-    "activityId": 62,
-    "message": "Novo pedido de costura para embalagem: teste3",
-    "read": false,
-    "createdAt": "2025-04-12T14:25:24.804Z"
-  },
-  {
     "id": 309,
     "userId": 5,
     "activityId": 13,
     "message": "Novo pedido de costura para embalagem: CAMISA PAREDINHA 62 - DRYFIT",
     "read": false,
     "createdAt": "2025-04-12T14:25:17.411Z"
-  },
-  {
-    "id": 314,
-    "userId": 1,
-    "activityId": 62,
-    "message": "Setor embalagem finalizou o pedido \"teste3\" (Produção concluída) - Finalizado por: Iuri - Obs: Pedido completo",
-    "read": false,
-    "createdAt": "2025-04-12T14:27:23.277Z"
   },
   {
     "id": 313,
@@ -512,44 +472,12 @@
     "createdAt": "2025-04-12T14:25:50.219Z"
   },
   {
-    "id": 312,
-    "userId": 1,
-    "activityId": 62,
-    "message": "Pedido \"teste3\" passou de costura para embalagem - Finalizado por: teste5 - Obs: teste5",
-    "read": false,
-    "createdAt": "2025-04-12T14:25:24.977Z"
-  },
-  {
     "id": 310,
     "userId": 1,
     "activityId": 13,
     "message": "Pedido \"CAMISA PAREDINHA 62 - DRYFIT\" passou de costura para embalagem - Finalizado por: Costura - Obs: Completo",
     "read": false,
     "createdAt": "2025-04-12T14:25:17.609Z"
-  },
-  {
-    "id": 308,
-    "userId": 1,
-    "activityId": 62,
-    "message": "Pedido \"teste3\" passou de batida para costura - Finalizado por: teste - Obs: teste",
-    "read": false,
-    "createdAt": "2025-04-12T14:24:38.715Z"
-  },
-  {
-    "id": 306,
-    "userId": 1,
-    "activityId": 62,
-    "message": "Pedido \"teste3\" passou de impressao para batida - Finalizado por: teste - Obs: teste",
-    "read": false,
-    "createdAt": "2025-04-12T14:24:03.770Z"
-  },
-  {
-    "id": 304,
-    "userId": 1,
-    "activityId": 62,
-    "message": "Pedido \"teste3\" passou de gabarito para impressao - Finalizado por: teste3 - Obs: teste3",
-    "read": false,
-    "createdAt": "2025-04-12T14:09:47.486Z"
   },
   {
     "id": 298,
