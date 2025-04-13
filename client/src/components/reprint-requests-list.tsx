@@ -172,21 +172,37 @@ export default function ReprintRequestsList({ department, activity }: ReprintReq
                     <div className="flex items-start gap-3">
                       {/* Imagem da atividade como miniatura */}
                       <div className="flex-shrink-0 w-12 h-12 rounded-md overflow-hidden border bg-slate-50 flex items-center justify-center">
-                        <img 
-                          // Usar URL direta da imagem ou caminho para o arquivo
-                          src={request.activityImage || `/uploads/activity_${request.activityId}.jpg`}
-                          alt={request.activityTitle || `Pedido ${request.activityId}`}
-                          className="w-full h-full object-contain"
-                          onError={(e) => {
-                            console.log('Erro ao carregar imagem, usando fallback:', e.currentTarget.src);
-                            // Tentar com API como fallback
-                            if (e.currentTarget.src.includes(`/uploads/activity_${request.activityId}.jpg`)) {
-                              e.currentTarget.src = `/api/activity-image/${request.activityId}`;
-                            } else {
+                        {request.activityImage && request.activityImage.startsWith('data:') ? (
+                          // Se temos uma string base64, usar diretamente
+                          <img 
+                            src={request.activityImage}
+                            alt={request.activityTitle || `Pedido ${request.activityId}`}
+                            className="w-full h-full object-contain"
+                            onError={(e) => {
+                              console.log('Erro ao carregar imagem base64, usando ícone.');
+                              e.currentTarget.onerror = null; // Previne loop infinito
                               e.currentTarget.src = "/no-image.svg";
-                            }
-                          }}
-                        />
+                            }}
+                          />
+                        ) : (
+                          // Caso contrário, tentar diferentes fontes
+                          <img 
+                            src={request.activityImage || `/uploads/activity_${request.activityId}.jpg`}
+                            alt={request.activityTitle || `Pedido ${request.activityId}`}
+                            className="w-full h-full object-contain"
+                            onError={(e) => {
+                              console.log('Erro ao carregar imagem, usando fallback:', e.currentTarget.src);
+                              // Tentar com API como fallback
+                              if (e.currentTarget.src.includes(`/uploads/activity_${request.activityId}.jpg`)) {
+                                e.currentTarget.src = `/api/activity-image/${request.activityId}`;
+                              } else {
+                                // Úlitmo recurso: ícone de imagem
+                                e.currentTarget.onerror = null; // Previne loop infinito
+                                e.currentTarget.src = "/no-image.svg";
+                              }
+                            }}
+                          />
+                        )}
                       </div>
                       <div>
                         <CardTitle className="text-base">

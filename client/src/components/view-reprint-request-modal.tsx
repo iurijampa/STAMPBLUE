@@ -5,6 +5,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { apiRequest } from "@/lib/queryClient";
 import { ImageIcon, Loader2 } from "lucide-react";
+import ImageDiagnosis from "@/components/image-diagnosis";
 
 import {
   Dialog,
@@ -34,6 +35,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 // Interface para representar a solicitação de reimpressão
 interface ReprintRequest {
@@ -198,42 +200,68 @@ export default function ViewReprintRequestModal({ isOpen, onClose, request }: Vi
               <div className="flex justify-between">
                 <div className="flex items-start gap-3">
                   {/* Imagem da atividade como miniatura */}
-                  <div className="flex-shrink-0 w-16 h-16 rounded-md overflow-hidden border bg-slate-50 flex items-center justify-center">
-                    {request.activityImage ? (
-                      <img 
-                        // Usar diretamente a imagem base64 se disponível
-                        src={request.activityImage.startsWith('data:') ? request.activityImage : request.activityImage}
-                        alt={request.activityTitle || `Pedido ${request.activityId}`} 
-                        className="w-full h-full object-contain"
-                        onError={(e) => {
-                          console.log('Erro ao carregar imagem no modal via base64, tentando API:', e.currentTarget.src);
-                          // Verifica se a imagem é uma URL ou já é a URL da API
-                          if (!e.currentTarget.src.includes('/api/')) {
-                            e.currentTarget.src = `/api/activity-image/${request.activityId}`;
-                          } else {
-                            console.log('Todas as tentativas de carregamento falharam, usando ícone.');
+                  <div className="flex-shrink-0 w-36 h-36 rounded-md overflow-hidden border bg-slate-50 flex items-center justify-center">
+                    {request.activityImage && request.activityImage.startsWith('data:') ? (
+                      // Se temos uma string base64, usar diretamente
+                      <div className="relative w-full h-full">
+                        <img 
+                          src={request.activityImage}
+                          alt={request.activityTitle || `Pedido ${request.activityId}`} 
+                          className="w-full h-full object-contain"
+                          style={{ imageRendering: 'auto' }}
+                          onError={(e) => {
+                            console.log('Erro ao carregar imagem base64 no modal, usando ícone.');
                             e.currentTarget.onerror = null; // Previne loop infinito
                             e.currentTarget.src = "/no-image.svg";
-                          }
-                        }}
-                      />
+                          }}
+                        />
+                        <div className="absolute bottom-0 right-0 p-1 bg-black bg-opacity-50 text-white text-xs rounded-tl">
+                          Base64
+                        </div>
+                      </div>
+                    ) : request.activityImage ? (
+                      // Se temos uma URL ou caminho, usar isso
+                      <div className="relative w-full h-full">
+                        <img 
+                          src={request.activityImage}
+                          alt={request.activityTitle || `Pedido ${request.activityId}`} 
+                          className="w-full h-full object-contain"
+                          onError={(e) => {
+                            console.log('Erro ao carregar imagem no modal, tentando API:', e.currentTarget.src);
+                            if (!e.currentTarget.src.includes('/api/')) {
+                              e.currentTarget.src = `/api/activity-image/${request.activityId}`;
+                            } else {
+                              e.currentTarget.onerror = null; // Previne loop infinito
+                              e.currentTarget.src = "/no-image.svg";
+                            }
+                          }}
+                        />
+                        <div className="absolute bottom-0 right-0 p-1 bg-black bg-opacity-50 text-white text-xs rounded-tl">
+                          URL
+                        </div>
+                      </div>
                     ) : (
-                      // Se não temos uma imagem, tentar obter pelo ID da atividade
-                      <img 
-                        src={`/api/activity-image/${request.activityId}`}
-                        alt={request.activityTitle || `Pedido ${request.activityId}`} 
-                        className="w-full h-full object-contain"
-                        onError={(e) => {
-                          console.log('Erro ao carregar imagem no modal via API, tentando arquivo:', e.currentTarget.src);
-                          if (e.currentTarget.src.includes('/api/')) {
-                            e.currentTarget.src = `/uploads/activity_${request.activityId}.jpg`;
-                          } else {
-                            console.log('Todas as tentativas de carregamento falharam, usando ícone.');
-                            e.currentTarget.onerror = null; // Previne loop infinito
-                            e.currentTarget.src = "/no-image.svg";
-                          }
-                        }}
-                      />
+                      // Última alternativa: tentar várias fontes em sequência
+                      <div className="relative w-full h-full">
+                        <img 
+                          src={`/uploads/activity_${request.activityId}.jpg`}
+                          alt={request.activityTitle || `Pedido ${request.activityId}`} 
+                          className="w-full h-full object-contain"
+                          onError={(e) => {
+                            console.log('Erro ao carregar imagem no modal via arquivo, tentando API:', e.currentTarget.src);
+                            if (e.currentTarget.src.includes(`/uploads/`)) {
+                              e.currentTarget.src = `/api/activity-image/${request.activityId}`;
+                            } else {
+                              console.log('Todas as tentativas falharam, usando ícone.');
+                              e.currentTarget.onerror = null; // Previne loop infinito
+                              e.currentTarget.src = "/no-image.svg";
+                            }
+                          }}
+                        />
+                        <div className="absolute bottom-0 right-0 p-1 bg-black bg-opacity-50 text-white text-xs rounded-tl">
+                          Arquivo
+                        </div>
+                      </div>
                     )}
                   </div>
                   <div>
@@ -250,75 +278,90 @@ export default function ViewReprintRequestModal({ isOpen, onClose, request }: Vi
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-muted-foreground text-xs">Solicitado por</Label>
-                  <p className="font-medium">{request.requestedBy}</p>
-                </div>
-                <div>
-                  <Label className="text-muted-foreground text-xs">Quantidade</Label>
-                  <p className="font-medium">{request.quantity} {request.quantity > 1 ? 'peças' : 'peça'}</p>
-                </div>
-              </div>
-              
-              <div>
-                <Label className="text-muted-foreground text-xs">Motivo</Label>
-                <p className="font-medium">{request.reason}</p>
-              </div>
-              
-              {request.details && (
-                <div>
-                  <Label className="text-muted-foreground text-xs">Detalhes</Label>
-                  <p className="text-sm whitespace-pre-wrap">{request.details}</p>
-                </div>
-              )}
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-muted-foreground text-xs">Departamento Solicitante</Label>
-                  <p className="font-medium capitalize">{request.fromDepartment}</p>
-                </div>
-                <div>
-                  <Label className="text-muted-foreground text-xs">Departamento Destinatário</Label>
-                  <p className="font-medium capitalize">{request.toDepartment}</p>
-                </div>
-              </div>
-              
-              {request.status === 'completed' && request.completedBy && (
-                <>
-                  <Separator />
+              <Tabs defaultValue="info" className="w-full">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="info">Informações</TabsTrigger>
+                  <TabsTrigger value="image">Imagem</TabsTrigger>
+                </TabsList>
+                <TabsContent value="info" className="pt-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <Label className="text-muted-foreground text-xs">Concluído por</Label>
-                      <p className="font-medium">{request.completedBy}</p>
+                      <Label className="text-muted-foreground text-xs">Solicitado por</Label>
+                      <p className="font-medium">{request.requestedBy}</p>
                     </div>
-                    {request.completedAt && (
-                      <div>
-                        <Label className="text-muted-foreground text-xs">Data de Conclusão</Label>
-                        <p className="font-medium">{new Date(request.completedAt).toLocaleString()}</p>
-                      </div>
-                    )}
-                  </div>
-                </>
-              )}
-              
-              {request.status === 'rejected' && request.completedBy && (
-                <>
-                  <Separator />
-                  <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <Label className="text-muted-foreground text-xs">Rejeitado por</Label>
-                      <p className="font-medium">{request.completedBy}</p>
+                      <Label className="text-muted-foreground text-xs">Quantidade</Label>
+                      <p className="font-medium">{request.quantity} {request.quantity > 1 ? 'peças' : 'peça'}</p>
                     </div>
-                    {request.completedAt && (
-                      <div>
-                        <Label className="text-muted-foreground text-xs">Data de Rejeição</Label>
-                        <p className="font-medium">{new Date(request.completedAt).toLocaleString()}</p>
-                      </div>
-                    )}
                   </div>
-                </>
-              )}
+                  
+                  <div className="mt-3">
+                    <Label className="text-muted-foreground text-xs">Motivo</Label>
+                    <p className="font-medium">{request.reason}</p>
+                  </div>
+                  
+                  {request.details && (
+                    <div className="mt-3">
+                      <Label className="text-muted-foreground text-xs">Detalhes</Label>
+                      <p className="text-sm whitespace-pre-wrap">{request.details}</p>
+                    </div>
+                  )}
+                  
+                  <div className="grid grid-cols-2 gap-4 mt-3">
+                    <div>
+                      <Label className="text-muted-foreground text-xs">Departamento Solicitante</Label>
+                      <p className="font-medium capitalize">{request.fromDepartment}</p>
+                    </div>
+                    <div>
+                      <Label className="text-muted-foreground text-xs">Departamento Destinatário</Label>
+                      <p className="font-medium capitalize">{request.toDepartment}</p>
+                    </div>
+                  </div>
+                  
+                  {request.status === 'completed' && request.completedBy && (
+                    <>
+                      <Separator className="my-3" />
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label className="text-muted-foreground text-xs">Concluído por</Label>
+                          <p className="font-medium">{request.completedBy}</p>
+                        </div>
+                        {request.completedAt && (
+                          <div>
+                            <Label className="text-muted-foreground text-xs">Data de Conclusão</Label>
+                            <p className="font-medium">{new Date(request.completedAt).toLocaleString()}</p>
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
+                  
+                  {request.status === 'rejected' && request.completedBy && (
+                    <>
+                      <Separator className="my-3" />
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label className="text-muted-foreground text-xs">Rejeitado por</Label>
+                          <p className="font-medium">{request.completedBy}</p>
+                        </div>
+                        {request.completedAt && (
+                          <div>
+                            <Label className="text-muted-foreground text-xs">Data de Rejeição</Label>
+                            <p className="font-medium">{new Date(request.completedAt).toLocaleString()}</p>
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </TabsContent>
+                <TabsContent value="image" className="pt-4">
+                  <ImageDiagnosis 
+                    imageData={request.activityImage || null}
+                    activityId={request.activityId}
+                    title={`Diagnóstico de Imagem - ${request.activityTitle || `Pedido #${request.activityId}`}`}
+                  />
+                </TabsContent>
+              </Tabs>
             </CardContent>
           </Card>
 
