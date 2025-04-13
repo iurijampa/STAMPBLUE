@@ -246,39 +246,77 @@ router.post('/:id/processar', (req: Request, res: Response) => {
 
 // Rota para cancelar solicitação (POST /api/reimpressao-emergencial/:id/cancelar)
 router.post('/:id/cancelar', (req: Request, res: Response) => {
-  const id = parseInt(req.params.id);
-  console.log(`💡 Requisição para cancelar solicitação emergencial #${id}:`, req.body);
-  
-  const { canceledBy } = req.body;
-  
-  if (!canceledBy) {
-    return res.status(400).json({
+  try {
+    // Verificar se o ID é válido
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      console.error(`⚠️ ID inválido para cancelamento: ${req.params.id}`);
+      return res.status(400).json({
+        success: false,
+        message: 'ID de solicitação inválido'
+      });
+    }
+    
+    console.log(`💡 Requisição para cancelar solicitação emergencial #${id}:`, req.body);
+    
+    // Verificar se o corpo da requisição é válido
+    if (!req.body || typeof req.body !== 'object') {
+      console.error(`⚠️ Corpo da requisição inválido:`, req.body);
+      return res.status(400).json({
+        success: false,
+        message: 'Corpo da requisição inválido'
+      });
+    }
+    
+    const { canceledBy } = req.body;
+    
+    if (!canceledBy) {
+      console.error(`⚠️ Nome de quem está cancelando não informado`);
+      return res.status(400).json({
+        success: false,
+        message: 'Nome de quem está cancelando é obrigatório'
+      });
+    }
+    
+    // Verificar se a solicitação existe
+    const solicitacaoExistente = getRequestById(id);
+    if (!solicitacaoExistente) {
+      console.error(`⚠️ Solicitação #${id} não encontrada para cancelamento`);
+      return res.status(404).json({
+        success: false,
+        message: 'Solicitação não encontrada'
+      });
+    }
+    
+    // Atualizar solicitação para status "cancelada"
+    const solicitacaoAtualizada = updateRequest(id, {
+      status: 'cancelada',
+      processedBy: canceledBy,
+      processedAt: new Date().toISOString()
+    });
+    
+    console.log(`✅ Solicitação emergencial #${id} cancelada com sucesso:`, solicitacaoAtualizada);
+    
+    // Definir explicitamente o cabeçalho Content-Type
+    res.setHeader('Content-Type', 'application/json');
+    
+    return res.status(200).json({
+      success: true,
+      message: 'Solicitação cancelada com sucesso',
+      data: solicitacaoAtualizada
+    });
+  } catch (error) {
+    console.error(`❌ Erro ao cancelar solicitação:`, error);
+    
+    // Definir explicitamente o cabeçalho Content-Type
+    res.setHeader('Content-Type', 'application/json');
+    
+    return res.status(500).json({
       success: false,
-      message: 'Nome de quem está cancelando é obrigatório'
+      message: 'Erro ao processar a solicitação de cancelamento',
+      error: error instanceof Error ? error.message : String(error)
     });
   }
-  
-  // Atualizar solicitação para status "cancelada"
-  const solicitacaoAtualizada = updateRequest(id, {
-    status: 'cancelada',
-    processedBy: canceledBy,
-    processedAt: new Date().toISOString()
-  });
-  
-  if (!solicitacaoAtualizada) {
-    return res.status(404).json({
-      success: false,
-      message: 'Solicitação não encontrada'
-    });
-  }
-  
-  console.log(`✅ Solicitação emergencial #${id} cancelada com sucesso:`, solicitacaoAtualizada);
-  
-  return res.status(200).json({
-    success: true,
-    message: 'Solicitação cancelada com sucesso',
-    data: solicitacaoAtualizada
-  });
 });
 
 // Função para listar solicitações de reimpressão 
