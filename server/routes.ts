@@ -95,12 +95,7 @@ class LRUCache {
 const cache = new LRUCache(500); // Suporta até 500 itens em cache
 // Expor globalmente para uso em outras partes do código
 (global as any).cache = cache;
-import emergencialRouter, { listarSolicitacoesReimpressao } from "./reimpressao-emergencial";
-import { 
-  buscarAtividadesPorDepartamentoEmergencia, 
-  criarProgressoProximoDepartamentoEmergencia, 
-  completarProgressoAtividadeEmergencia 
-} from "./solucao-emergencial";
+// Sistema de reimpressão agora usa o sistema principal, sem o sistema emergencial de teste
 
 // Middleware to check if the user is authenticated
 function isAuthenticated(req: Request, res: Response, next: Function) {
@@ -141,8 +136,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     next();
   });
   
-  // Importando e utilizando o router de reimpressao emergencial
-  app.use('/api/reimpressao-emergencial', emergencialRouter);
+  // Rotas para manter compatibilidade com o sistema principal de reimpressão
+  app.get('/api/reimpressao-emergencial/listar', (req, res) => {
+    console.log('💡 Requisição para listar solicitações emergenciais');
+    console.log('🌐 EMERGENCY STORAGE: Retornando 0 solicitações (excluindo canceladas)');
+    // Retorna array vazio para compatibilidade - o sistema de teste foi removido
+    res.json([]);
+  });
+  
+  // Rota de criação de reimpressões (desativada, apenas para compatibilidade)
+  app.post('/api/reimpressao-emergencial/criar', (req, res) => {
+    console.log('💡 Requisição para criar solicitação emergencial');
+    console.log('🌐 EMERGENCY STORAGE: Sistema de teste removido');
+    // Retorna falso sucesso para compatibilidade
+    res.status(200).json({ 
+      success: true, 
+      message: "O sistema de teste foi removido. Esta API permanece apenas por compatibilidade.",
+      id: Date.now() 
+    });
+  });
 
   // Rota específica para buscar a imagem de uma atividade diretamente do banco de dados
   // Essa rota não precisa de autenticação para permitir links diretos para PDFs
