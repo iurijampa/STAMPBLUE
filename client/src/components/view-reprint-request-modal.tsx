@@ -139,8 +139,7 @@ export default function ViewReprintRequestModal({ isOpen, onClose, request }: Vi
       requestId: number, 
       canceledBy: string 
     }) => {
-      const res = await apiRequest("POST", `/api/reimpressao-emergencial/cancelar`, {
-        requestId,
+      const res = await apiRequest("POST", `/api/reimpressao-emergencial/${requestId}/cancelar`, {
         canceledBy
       });
       return await res.json();
