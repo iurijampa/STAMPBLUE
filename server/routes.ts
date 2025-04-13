@@ -95,7 +95,6 @@ class LRUCache {
 const cache = new LRUCache(500); // Suporta até 500 itens em cache
 // Expor globalmente para uso em outras partes do código
 (global as any).cache = cache;
-import impressaoRouter from "./solucao-impressao";
 import emergencialRouter, { listarSolicitacoesReimpressao } from "./reimpressao-emergencial";
 import { 
   buscarAtividadesPorDepartamentoEmergencia, 
@@ -133,10 +132,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Permitir acesso às rotas simplificadas sem autenticação
   app.use((req, res, next) => {
     // Se for uma rota para a página de teste ou API simplificada, pular autenticação
-    if (req.path.startsWith('/api/reimpressao-simples') || 
-        req.path.startsWith('/api/reimpressao-ultrabasico') ||
-        req.path.startsWith('/api/reimpressao-emergencial') ||
-        req.path.startsWith('/api/impressao-emergencial')) {
+    if (req.path.startsWith('/api/reimpressao-emergencial')) {
       req.isAuthenticated = () => true; // Fingir que está autenticado
       console.log(`[AUTH_BYPASS] Autenticação pulada para: ${req.path}`);
       return next();
@@ -145,10 +141,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     next();
   });
   
-  // Registrar rota específica para o setor de impressão
-  app.use('/api/impressao-emergencial', impressaoRouter);
-  
-  // Importando e utilizando o router de emergencialRouter
+  // Importando e utilizando o router de reimpressao emergencial
   app.use('/api/reimpressao-emergencial', emergencialRouter);
 
   // Rota específica para buscar a imagem de uma atividade diretamente do banco de dados
