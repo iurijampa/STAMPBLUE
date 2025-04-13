@@ -6,6 +6,12 @@ import { useState } from "react";
 import { apiRequest } from "@/lib/queryClient";
 import { Loader2 } from "lucide-react";
 
+// Adicionado status "cancelada" ao tipo de status da solicitação
+type RequestStatus = 
+  | "pending" | "in_progress" | "completed" | "rejected" 
+  | "pendente" | "em_andamento" | "concluida" | "rejeitada" 
+  | "cancelada";
+
 import {
   Dialog,
   DialogContent,
@@ -46,7 +52,7 @@ interface ReprintRequest {
   details?: string;
   quantity: number;
   priority: "low" | "normal" | "high" | "urgent";
-  status: "pending" | "in_progress" | "completed" | "rejected" | "pendente" | "em_andamento" | "concluida" | "rejeitada";
+  status: RequestStatus; // Usando o tipo RequestStatus que inclui "cancelada"
   requestedAt?: string;
   createdAt: string;
   completedBy?: string;
@@ -134,36 +140,59 @@ export default function ViewReprintRequestModal({ isOpen, onClose, request }: Vi
       canceledBy: string; 
     }) => {
       try {
-        const response = await fetch(`/api/reimpressao-emergencial/${id}/cancelar`, {
+        // Use apiRequest do queryClient para padronizar a comunicação
+        const apiUrl = `/api/reimpressao-emergencial/${id}/cancelar`;
+        
+        // Método 1: Usando a API nativa fetch com validação explícita
+        const response = await fetch(apiUrl, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            "Accept": "application/json" // Indica que esperamos JSON como resposta
           },
           body: JSON.stringify({
             canceledBy
           })
         });
         
-        // Adiciona tratamento para possíveis erros HTML ou de formato
-        const contentType = response.headers.get("content-type");
-        if (!response.ok) {
-          if (contentType && contentType.includes("application/json")) {
-            const errorData = await response.json();
-            throw new Error(errorData.message || "Erro ao cancelar solicitação");
-          } else {
-            const errorText = await response.text();
-            console.error("Erro não-JSON na resposta:", errorText);
-            throw new Error("Erro no servidor ao processar a solicitação");
+        // Verificar se a resposta é tratável
+        try {
+          // Tentar obter o texto da resposta (funciona mesmo que não seja JSON válido)
+          const responseText = await response.text();
+          
+          // Se a resposta estiver vazia mas for bem-sucedida, retornar um sucesso genérico
+          if (response.ok && (!responseText || responseText.trim() === '')) {
+            console.log("Resposta vazia mas status OK, considerando sucesso");
+            return { success: true, message: "Solicitação cancelada com sucesso" };
           }
+          
+          // Tentar fazer o parse do JSON
+          let data;
+          try {
+            data = JSON.parse(responseText);
+          } catch (parseError) {
+            console.error("Erro ao fazer parse da resposta como JSON:", responseText);
+            // Se não for um JSON válido mas o status for OK, considerar como sucesso
+            if (response.ok) {
+              return { success: true, message: "Solicitação cancelada com sucesso" };
+            }
+            throw new Error("Resposta inválida do servidor");
+          }
+          
+          // Se chegou aqui, temos um JSON válido
+          if (!response.ok) {
+            throw new Error(data.message || "Erro ao cancelar solicitação");
+          }
+          
+          return data;
+        } catch (responseError) {
+          console.error("Erro ao processar resposta:", responseError);
+          // Se ainda assim o status for OK, retornar sucesso genérico
+          if (response.ok) {
+            return { success: true, message: "Solicitação cancelada com sucesso" };
+          }
+          throw responseError;
         }
-        
-        if (!contentType || !contentType.includes("application/json")) {
-          console.warn("Resposta não é JSON:", await response.text());
-          // Retornar um objeto de sucesso fictício já que a requisição foi bem-sucedida
-          return { success: true, message: "Solicitação cancelada com sucesso" };
-        }
-        
-        return await response.json();
       } catch (error) {
         console.error("Erro ao cancelar solicitação:", error);
         throw error;
@@ -215,6 +244,16 @@ export default function ViewReprintRequestModal({ isOpen, onClose, request }: Vi
   
   // Função para lidar com o cancelamento da solicitação
   const handleCancelRequest = () => {
+    // Verificar se a solicitação já está cancelada
+    if (request.status === 'cancelada') {
+      toast({
+        title: "Operação inválida",
+        description: "Esta solicitação já foi cancelada anteriormente.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     // Solicitar confirmação antes de cancelar
     if (!window.confirm("Tem certeza que deseja cancelar esta solicitação de reimpressão?")) {
       return;
@@ -274,6 +313,8 @@ export default function ViewReprintRequestModal({ isOpen, onClose, request }: Vi
       case 'rejected':
       case 'rejeitada':
         return <Badge variant="destructive">Rejeitada</Badge>;
+      case 'cancelada':
+        return <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-400">Cancelada</Badge>;
       default:
         console.log('Status desconhecido no modal:', status);
         return <Badge variant="outline">Desconhecido</Badge>;
@@ -520,8 +561,9 @@ export default function ViewReprintRequestModal({ isOpen, onClose, request }: Vi
 
         <DialogFooter className="flex justify-between">
           <div>
-            {/* Botão de cancelamento - apenas visível para solicitações pendentes */}
-            {(request.status === 'pending' || request.status === 'pendente') && (
+            {/* Botão de cancelamento - apenas visível para solicitações pendentes ou em andamento */}
+            {(request.status === 'pending' || request.status === 'pendente' || 
+              request.status === 'in_progress' || request.status === 'em_andamento') && (
               <Button 
                 onClick={handleCancelRequest}
                 variant="destructive"
