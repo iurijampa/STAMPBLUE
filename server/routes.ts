@@ -172,7 +172,8 @@ async function completarProgressoAtividadeEmergencia(activityId: number, departm
       }
     } else {
       // Se for o último departamento, marcar a atividade como concluída
-      await storage.updateActivity(activityId, { status: "completed" });
+      // Usamos o método updateActivityStatus que já existe ao invés de updateActivity
+      await storage.updateActivityStatus(activityId, "completed");
       
       // Notificar administradores
       const adminUsers = await storage.getUsersByRole("admin");
