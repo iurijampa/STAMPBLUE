@@ -199,21 +199,42 @@ export default function ViewReprintRequestModal({ isOpen, onClose, request }: Vi
                 <div className="flex items-start gap-3">
                   {/* Imagem da atividade como miniatura */}
                   <div className="flex-shrink-0 w-16 h-16 rounded-md overflow-hidden border bg-slate-50 flex items-center justify-center">
-                    <img 
-                      // Usar diretamente a URL da imagem armazenada na solicitação ou a API como fallback
-                      src={request.activityImage || `/uploads/activity_${request.activityId}.jpg`}
-                      alt={request.activityTitle || `Pedido ${request.activityId}`} 
-                      className="w-full h-full object-contain"
-                      onError={(e) => {
-                        console.log('Erro ao carregar imagem no modal, usando fallback:', e.currentTarget.src);
-                        // Tentativa com API alternativa
-                        if (e.currentTarget.src.includes(`/uploads/activity_${request.activityId}.jpg`)) {
-                          e.currentTarget.src = `/api/activity-image/${request.activityId}`;
-                        } else {
-                          e.currentTarget.src = "/no-image.svg";
-                        }
-                      }}
-                    />
+                    {request.activityImage ? (
+                      <img 
+                        // Usar diretamente a imagem base64 se disponível
+                        src={request.activityImage.startsWith('data:') ? request.activityImage : request.activityImage}
+                        alt={request.activityTitle || `Pedido ${request.activityId}`} 
+                        className="w-full h-full object-contain"
+                        onError={(e) => {
+                          console.log('Erro ao carregar imagem no modal via base64, tentando API:', e.currentTarget.src);
+                          // Verifica se a imagem é uma URL ou já é a URL da API
+                          if (!e.currentTarget.src.includes('/api/')) {
+                            e.currentTarget.src = `/api/activity-image/${request.activityId}`;
+                          } else {
+                            console.log('Todas as tentativas de carregamento falharam, usando ícone.');
+                            e.currentTarget.onerror = null; // Previne loop infinito
+                            e.currentTarget.src = "/no-image.svg";
+                          }
+                        }}
+                      />
+                    ) : (
+                      // Se não temos uma imagem, tentar obter pelo ID da atividade
+                      <img 
+                        src={`/api/activity-image/${request.activityId}`}
+                        alt={request.activityTitle || `Pedido ${request.activityId}`} 
+                        className="w-full h-full object-contain"
+                        onError={(e) => {
+                          console.log('Erro ao carregar imagem no modal via API, tentando arquivo:', e.currentTarget.src);
+                          if (e.currentTarget.src.includes('/api/')) {
+                            e.currentTarget.src = `/uploads/activity_${request.activityId}.jpg`;
+                          } else {
+                            console.log('Todas as tentativas de carregamento falharam, usando ícone.');
+                            e.currentTarget.onerror = null; // Previne loop infinito
+                            e.currentTarget.src = "/no-image.svg";
+                          }
+                        }}
+                      />
+                    )}
                   </div>
                   <div>
                     <CardTitle>Informações da Solicitação</CardTitle>
