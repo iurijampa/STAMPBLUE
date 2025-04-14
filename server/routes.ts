@@ -327,6 +327,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { reprintRequests } = await import('@shared/schema');
       const { desc, sql } = await import('drizzle-orm');
+      const { listarSolicitacoesReimpressao } = await import('./reimpressao-bridge');
       
       // Criar algumas solicitações de teste se não existirem
       const count = await db.select({ count: sql`count(*)` }).from(reprintRequests);
@@ -358,8 +359,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ]);
       }
       
-      // Buscar solicitações de reimpressão do banco de dados
-      const requests = await db.select().from(reprintRequests).orderBy(desc(reprintRequests.requestedAt));
+      // Buscar solicitações usando a ponte de compatibilidade
+      const requests = await listarSolicitacoesReimpressao();
       
       // Buscar informações adicionais das atividades relacionadas
       const enrichedRequests = [];
@@ -395,25 +396,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/reimpressao-emergencial/criar', async (req, res) => {
     console.log('💡 Requisição para criar solicitação de reimpressão');
     try {
-      const { reprintRequests, insertReprintRequestSchema } = await import('@shared/schema');
+      const { insertReprintRequestSchema } = await import('@shared/schema');
+      const { criarSolicitacaoReimpressao } = await import('./reimpressao-bridge');
       
       // Validar os dados usando o esquema do schema.ts
       const validatedData = insertReprintRequestSchema.parse(req.body);
       
-      // Inserir no banco de dados
-      const [createdRequest] = await db
-        .insert(reprintRequests)
-        .values(validatedData)
-        .returning();
+      // Criar solicitação usando a ponte de compatibilidade
+      const result = await criarSolicitacaoReimpressao(validatedData);
       
-      console.log(`🌐 Solicitação de reimpressão criada com sucesso: ${createdRequest.id}`);
-      
-      // Retornar resposta de sucesso
-      res.status(201).json({ 
-        success: true, 
-        message: "Solicitação de reimpressão criada com sucesso",
-        id: createdRequest.id 
-      });
+      if (result.success) {
+        return res.status(201).json(result);
+      } else {
+        return res.status(400).json(result);
+      }
     } catch (error) {
       console.error('Erro ao criar solicitação de reimpressão:', error);
       // Retornar erro
