@@ -93,14 +93,34 @@ export default function ReprintRequestModal({ isOpen, onClose, activity, onSucce
     enabled: !activity, // Só busca se não tiver atividade específica
   });
 
-  // Função para lidar com o envio do formulário - VERSÃO MODO SUPER DEUS 9000
+  // Função para lidar com o envio do formulário - VERSÃO MODO ULTRA DEUS 10000
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     
     try {
       setIsSubmitting(true);
       
-      console.log("🔥 MODO SUPER DEUS 9000 ATIVADO 🔥");
+      console.log("🔥 MODO ULTRA DEUS 10000 ATIVADO 🔥");
+      
+      // Validação no formulário com react-hook-form
+      const formValid = await form.trigger();
+      if (!formValid) {
+        console.error("🔥 Formulário inválido:", form.formState.errors);
+        
+        // Mostrar erros de validação
+        Object.entries(form.formState.errors).forEach(([field, error]) => {
+          if (error && error.message) {
+            toast({
+              title: `Erro no campo ${field}`,
+              description: error.message as string,
+              variant: "destructive",
+            });
+          }
+        });
+        
+        setIsSubmitting(false);
+        return;
+      }
       
       // Garantir que temos uma atividade válida
       if (!activity) {
@@ -117,28 +137,18 @@ export default function ReprintRequestModal({ isOpen, onClose, activity, onSucce
       console.log("🔥 Atividade validada:", activity.title, "(ID:", activity.id, ")");
       
       // Inicialização segura de dados
-      const activityId = Number(activity.id);
+      const activityId = parseInt(String(activity.id), 10);
       const formData = form.getValues();
       
-      console.log("🔥 Dados do formulário:", formData);
+      console.log("🔥 Dados do formulário:", JSON.stringify(formData, null, 2));
       
-      // Validar campos obrigatórios manualmente
-      if (!formData.requestedBy || formData.requestedBy.trim() === "") {
-        console.error("🔥 Erro: Campo requestedBy vazio");
+      // Validação adicional para quantidade
+      const quantity = parseInt(String(formData.quantity || 1), 10);
+      if (isNaN(quantity) || quantity < 1) {
+        console.error("🔥 Erro: Quantidade inválida:", formData.quantity);
         toast({
-          title: "Campo obrigatório",
-          description: "Informe quem está solicitando a reimpressão",
-          variant: "destructive",
-        });
-        setIsSubmitting(false);
-        return;
-      }
-      
-      if (!formData.reason || formData.reason.trim() === "") {
-        console.error("🔥 Erro: Campo reason vazio");
-        toast({
-          title: "Campo obrigatório",
-          description: "Informe o motivo da reimpressão",
+          title: "Quantidade inválida",
+          description: "A quantidade deve ser um número maior que zero",
           variant: "destructive",
         });
         setIsSubmitting(false);
@@ -150,14 +160,14 @@ export default function ReprintRequestModal({ isOpen, onClose, activity, onSucce
       // Preparar dados completos com os campos obrigatórios para o banco de dados
       const dataToSubmit = {
         activityId, // Enviar como número
-        requestedBy: formData.requestedBy.trim(),
-        reason: formData.reason.trim(),
-        details: (formData.details || "").trim(),
-        quantity: Number(formData.quantity || 1),
-        priority: formData.priority || "normal",
-        // Adicionar os campos obrigatórios que estavam faltando
-        fromDepartment: formData.fromDepartment || "batida",
-        toDepartment: formData.toDepartment || "impressao",
+        requestedBy: String(formData.requestedBy || "").trim(),
+        reason: String(formData.reason || "").trim(),
+        details: String(formData.details || "").trim(),
+        quantity,
+        priority: String(formData.priority || "normal"),
+        // Garantir que os campos obrigatórios estejam presentes
+        fromDepartment: String(formData.fromDepartment || "batida"),
+        toDepartment: String(formData.toDepartment || "impressao"),
       };
       
       console.log("🔥 Dados simplificados para envio:", JSON.stringify(dataToSubmit, null, 2));
