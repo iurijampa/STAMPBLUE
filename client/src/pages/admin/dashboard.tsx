@@ -727,13 +727,15 @@ function ActivitiesList() {
                         currentDept === 'impressao' ? 'bg-violet-600' : 
                         currentDept === 'batida' ? 'bg-amber-600' : 
                         currentDept === 'costura' ? 'bg-emerald-600' : 
-                        currentDept === 'embalagem' ? 'bg-slate-600' : 'bg-gray-600'
+                        currentDept === 'embalagem' ? 'bg-slate-600' : 
+                        currentDept === 'concluido' ? 'bg-green-600' : 'bg-gray-600'
                       }`}>
                         {currentDept === 'gabarito' ? 'Gabarito' : 
                          currentDept === 'impressao' ? 'Impressão' : 
                          currentDept === 'batida' ? 'Batida' : 
                          currentDept === 'costura' ? 'Costura' : 
-                         currentDept === 'embalagem' ? 'Embalagem' : 'Pendente'}
+                         currentDept === 'embalagem' ? 'Embalagem' : 
+                         currentDept === 'concluido' ? 'Concluído' : 'Pendente'}
                       </div>
                     </td>
                     <td className="px-4 py-3">
