@@ -147,7 +147,7 @@ export default function ReprintRequestModal({ isOpen, onClose, activity, onSucce
       
       console.log("🔥 Validação de campos concluída com sucesso");
       
-      // Preparar dados simplificados - reduzindo ao mínimo necessário
+      // Preparar dados completos com os campos obrigatórios para o banco de dados
       const dataToSubmit = {
         activityId, // Enviar como número
         requestedBy: formData.requestedBy.trim(),
@@ -155,6 +155,9 @@ export default function ReprintRequestModal({ isOpen, onClose, activity, onSucce
         details: (formData.details || "").trim(),
         quantity: Number(formData.quantity || 1),
         priority: formData.priority || "normal",
+        // Adicionar os campos obrigatórios que estavam faltando
+        fromDepartment: formData.fromDepartment || "batida",
+        toDepartment: formData.toDepartment || "impressao",
       };
       
       console.log("🔥 Dados simplificados para envio:", JSON.stringify(dataToSubmit, null, 2));
@@ -198,7 +201,9 @@ export default function ReprintRequestModal({ isOpen, onClose, activity, onSucce
               break;
             } catch (e) {
               console.log("🔥 Resposta não é JSON válido, mas requisição foi bem-sucedida");
+              // Mesmo sem um JSON válido, consideramos como sucesso se o status for 200-299
               success = true;
+              responseData = { success: true, message: "Solicitação processada com sucesso" };
               break;
             }
           } else {
