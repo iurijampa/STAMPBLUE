@@ -3,7 +3,7 @@
  * Este arquivo garante que as APIs antigas continuem funcionando enquanto migramos para o novo sistema
  */
 
-import { eq } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
 import { db } from './db';
 import { reprintRequests } from '@shared/schema';
 
@@ -36,8 +36,8 @@ export async function listarSolicitacoesReimpressao(departamento?: string, inclu
   try {
     console.log('🔄 [BRIDGE] Buscando solicitações de reimpressão do banco de dados');
     
-    // Buscar solicitações do banco de dados
-    const dbRequests = await db.select().from(reprintRequests).orderBy(reprintRequests.requestedAt);
+    // Buscar solicitações do banco de dados (ordenadas por data decrescente - mais recentes primeiro)
+    const dbRequests = await db.select().from(reprintRequests).orderBy(desc(reprintRequests.requestedAt));
     
     // Mapear para o formato legado
     const mappedRequests = dbRequests.map(request => ({
@@ -156,3 +156,10 @@ export async function processarSolicitacaoReimpressao(id: number, data: any) {
     };
   }
 }
+
+// Exportar como padrão também para facilitar importações
+export default {
+  listarSolicitacoesReimpressao,
+  criarSolicitacaoReimpressao,
+  processarSolicitacaoReimpressao
+};
