@@ -333,70 +333,20 @@ export default function ViewReprintRequestModal({ isOpen, onClose, request }: Vi
               <CardHeader className="pb-2">
                 <div className="flex justify-between">
                   <div className="flex items-start gap-3">
-                    {/* Imagem da atividade como miniatura */}
+                    {/* Imagem da atividade como miniatura - VERSÃO SIMPLIFICADA */}
                     <div className="flex-shrink-0 w-36 h-36 rounded-md overflow-hidden border bg-slate-50 flex items-center justify-center">
-                      {request.activityImage && request.activityImage.startsWith('data:') ? (
-                        // Se temos uma string base64, usar diretamente
-                        <div className="relative w-full h-full">
-                          <img 
-                            src={request.activityImage}
-                            alt={request.activityTitle || `Pedido ${request.activityId}`} 
-                            className="w-full h-full object-contain"
-                            style={{ imageRendering: 'auto' }}
-                            onError={(e) => {
-                              console.log('Erro ao carregar imagem base64 no modal, usando ícone.');
-                              e.currentTarget.onerror = null; // Previne loop infinito
-                              e.currentTarget.src = "/no-image.svg";
-                            }}
-                          />
-                          <div className="absolute bottom-0 right-0 p-1 bg-black bg-opacity-50 text-white text-xs rounded-tl">
-                            Base64
-                          </div>
-                        </div>
-                      ) : request.activityImage ? (
-                        // Se temos uma URL ou caminho, usar isso
-                        <div className="relative w-full h-full">
-                          <img 
-                            src={request.activityImage}
-                            alt={request.activityTitle || `Pedido ${request.activityId}`} 
-                            className="w-full h-full object-contain"
-                            onError={(e) => {
-                              console.log('Erro ao carregar imagem no modal, tentando API:', e.currentTarget.src);
-                              if (!e.currentTarget.src.includes('/api/')) {
-                                e.currentTarget.src = `/api/activity-image/${request.activityId}`;
-                              } else {
-                                e.currentTarget.onerror = null; // Previne loop infinito
-                                e.currentTarget.src = "/no-image.svg";
-                              }
-                            }}
-                          />
-                          <div className="absolute bottom-0 right-0 p-1 bg-black bg-opacity-50 text-white text-xs rounded-tl">
-                            URL
-                          </div>
-                        </div>
-                      ) : (
-                        // Última alternativa: tentar várias fontes em sequência
-                        <div className="relative w-full h-full">
-                          <img 
-                            src={`/uploads/activity_${request.activityId}.jpg`}
-                            alt={request.activityTitle || `Pedido ${request.activityId}`} 
-                            className="w-full h-full object-contain"
-                            onError={(e) => {
-                              console.log('Erro ao carregar imagem no modal via arquivo, tentando API:', e.currentTarget.src);
-                              if (e.currentTarget.src.includes(`/uploads/`)) {
-                                e.currentTarget.src = `/api/activity-image/${request.activityId}`;
-                              } else {
-                                console.log('Todas as tentativas falharam, usando ícone.');
-                                e.currentTarget.onerror = null; // Previne loop infinito
-                                e.currentTarget.src = "/no-image.svg";
-                              }
-                            }}
-                          />
-                          <div className="absolute bottom-0 right-0 p-1 bg-black bg-opacity-50 text-white text-xs rounded-tl">
-                            Arquivo
-                          </div>
-                        </div>
-                      )}
+                      <div className="w-full h-full">
+                        <img 
+                          src={`/api/activity-image/${request.activityId}`}
+                          alt={request.activityTitle || `Pedido ${request.activityId}`} 
+                          className="w-full h-full object-contain"
+                          onError={(e) => {
+                            e.currentTarget.onerror = null; // Previne loop infinito
+                            e.currentTarget.src = "/logo.svg"; 
+                            e.currentTarget.className = "w-full h-full object-cover bg-blue-600";
+                          }}
+                        />
+                      </div>
                     </div>
                     <div>
                       <CardTitle>Informações da Solicitação</CardTitle>
