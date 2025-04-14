@@ -309,6 +309,7 @@ function isAdmin(req: Request, res: Response, next: Function) {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Para evitar o middleware catch-all do Vite, usamos rotas explícitas com app.get, app.post etc
   // Permitir acesso às rotas simplificadas sem autenticação
   app.use((req, res, next) => {
     // Se for uma rota para a página de teste ou API simplificada, pular autenticação
@@ -321,9 +322,76 @@ export async function registerRoutes(app: Express): Promise<Server> {
     next();
   });
 
-  // Registrar o módulo de impressão emergencial - usando importação dinâmica
-  const { default: impressaoEmergencialRouter } = await import('./solucao-impressao.js');
-  app.use('/api/impressao-emergencial', impressaoEmergencialRouter);
+  // Rotas de impressão emergencial
+  app.get('/api/impressao-emergencial/teste', (req, res) => {
+    return res.json({ message: "API de impressão emergencial funcionando!" });
+  });
+  
+  app.get('/api/impressao-emergencial/listar', async (req, res) => {
+    console.log('📋 SOLUÇÃO IMPRESSÃO (DIRETO): Requisição para listar solicitações');
+    
+    try {
+      // Importar a ponte de compatibilidade dinamicamente
+      const { listarSolicitacoesReimpressao } = await import('./reimpressao-bridge.js');
+      
+      // Obter solicitações de reimpressão para o setor de impressão
+      const requests = await listarSolicitacoesReimpressao('impressao');
+      
+      console.log(`📋 SOLUÇÃO IMPRESSÃO (DIRETO): Retornando ${requests.length} solicitações`);
+      return res.json(requests);
+    } catch (error) {
+      console.error('🚨 SOLUÇÃO IMPRESSÃO (DIRETO): Erro ao listar solicitações:', error);
+      return res.json([]);
+    }
+  });
+  
+  app.post('/api/impressao-emergencial/criar', async (req, res) => {
+    console.log('📋 SOLUÇÃO IMPRESSÃO (DIRETO): Criando nova solicitação');
+    
+    try {
+      // Importar a ponte de compatibilidade dinamicamente
+      const { criarSolicitacaoReimpressao } = await import('./reimpressao-bridge.js');
+      
+      // Criar solicitação
+      const result = await criarSolicitacaoReimpressao({
+        ...req.body,
+        toDepartment: 'impressao' // Garantir que vai para o setor de impressão
+      });
+      
+      return res.json(result);
+    } catch (error) {
+      console.error('🚨 SOLUÇÃO IMPRESSÃO (DIRETO): Erro ao criar solicitação:', error);
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Erro interno do servidor' 
+      });
+    }
+  });
+  
+  app.post('/api/impressao-emergencial/processar/:id', async (req, res) => {
+    console.log(`📋 SOLUÇÃO IMPRESSÃO (DIRETO): Processando solicitação #${req.params.id}`);
+    
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ success: false, message: 'ID inválido' });
+      }
+      
+      // Importar a ponte de compatibilidade dinamicamente
+      const { processarSolicitacaoReimpressao } = await import('./reimpressao-bridge.js');
+      
+      // Processar a solicitação
+      const result = await processarSolicitacaoReimpressao(id, req.body);
+      
+      return res.json(result);
+    } catch (error) {
+      console.error('🚨 SOLUÇÃO IMPRESSÃO (DIRETO): Erro ao processar solicitação:', error);
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Erro interno do servidor' 
+      });
+    }
+  });
   
   // Rotas para manter compatibilidade com o sistema principal de reimpressão
   app.get('/api/reimpressao-emergencial/listar', async (req, res) => {

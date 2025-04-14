@@ -9,9 +9,6 @@ router.get('/listar', async (req, res) => {
   console.log('📋 SOLUÇÃO IMPRESSÃO: Requisição para listar solicitações');
   
   try {
-    // Definir explicitamente o tipo de conteúdo como JSON
-    res.setHeader('Content-Type', 'application/json');
-    
     // Importar a ponte de compatibilidade dinamicamente
     const { listarSolicitacoesReimpressao } = await import('./reimpressao-bridge.js');
     
@@ -19,13 +16,10 @@ router.get('/listar', async (req, res) => {
     const requests = await listarSolicitacoesReimpressao('impressao');
     
     console.log(`📋 SOLUÇÃO IMPRESSÃO: Retornando ${requests.length} solicitações`);
-    return res.status(200).json(requests);
+    return res.json(requests); // Usar res.json para garantir content-type correto
   } catch (error) {
     console.error('🚨 SOLUÇÃO IMPRESSÃO: Erro ao listar solicitações:', error);
-    console.error(error);
-    
-    // Em caso de erro, retornar array vazio (compatibilidade)
-    return res.status(200).json([]);
+    return res.json([]); // Em caso de erro, retornar array vazio (compatibilidade)
   }
 });
 
@@ -45,7 +39,7 @@ router.post('/processar/:id', async (req, res) => {
     // Processar a solicitação
     const result = await processarSolicitacaoReimpressao(id, req.body);
     
-    return res.status(result.success ? 200 : 400).json(result);
+    return res.json(result);
   } catch (error) {
     console.error('🚨 SOLUÇÃO IMPRESSÃO: Erro ao processar solicitação:', error);
     return res.status(500).json({ 
@@ -69,7 +63,7 @@ router.post('/criar', async (req, res) => {
       toDepartment: 'impressao' // Garantir que vai para o setor de impressão
     });
     
-    return res.status(result.success ? 201 : 400).json(result);
+    return res.json(result);
   } catch (error) {
     console.error('🚨 SOLUÇÃO IMPRESSÃO: Erro ao criar solicitação:', error);
     return res.status(500).json({ 
@@ -77,6 +71,11 @@ router.post('/criar', async (req, res) => {
       message: 'Erro interno do servidor' 
     });
   }
+});
+
+// Teste simples para verificar se o router está funcionando
+router.get('/teste', (req, res) => {
+  return res.json({ message: "API de impressão emergencial funcionando!" });
 });
 
 // Exportar o router como default para uso em routes.ts
