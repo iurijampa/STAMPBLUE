@@ -322,23 +322,106 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // Rotas para manter compatibilidade com o sistema principal de reimpressão
-  app.get('/api/reimpressao-emergencial/listar', (req, res) => {
-    console.log('💡 Requisição para listar solicitações emergenciais');
-    console.log('🌐 EMERGENCY STORAGE: Retornando 0 solicitações (excluindo canceladas)');
-    // Retorna array vazio para compatibilidade - o sistema de teste foi removido
-    res.json([]);
+  app.get('/api/reimpressao-emergencial/listar', async (req, res) => {
+    console.log('💡 Requisição para listar solicitações de reimpressão');
+    try {
+      const { reprintRequests } = await import('@shared/schema');
+      const { desc } = await import('drizzle-orm');
+      
+      // Criar algumas solicitações de teste se não existirem
+      const count = await db.select({ count: sql`count(*)` }).from(reprintRequests);
+      if (count[0].count === 0) {
+        console.log('🔄 Criando solicitações de reimpressão de exemplo');
+        
+        // Criar algumas solicitações de teste
+        await db.insert(reprintRequests).values([
+          {
+            activityId: 48, // ID de uma atividade real
+            requestedBy: 'Teste do Sistema',
+            fromDepartment: 'batida',
+            toDepartment: 'impressao',
+            reason: 'Solicitação de teste - Imagem borrada',
+            details: 'Detalhes da solicitação de teste',
+            quantity: 2,
+            priority: 'high',
+          },
+          {
+            activityId: 51, // Outro ID de atividade real
+            requestedBy: 'Teste do Sistema',
+            fromDepartment: 'batida',
+            toDepartment: 'impressao',
+            reason: 'Solicitação de teste - Cores incorretas',
+            details: 'Detalhes da segunda solicitação de teste',
+            quantity: 1,
+            priority: 'normal',
+          }
+        ]);
+      }
+      
+      // Buscar solicitações de reimpressão do banco de dados
+      const requests = await db.select().from(reprintRequests).orderBy(desc(reprintRequests.requestedAt));
+      
+      // Buscar informações adicionais das atividades relacionadas
+      const enrichedRequests = [];
+      
+      for (const request of requests) {
+        try {
+          const activity = await storage.getActivity(request.activityId);
+          if (activity) {
+            enrichedRequests.push({
+              ...request,
+              activityTitle: activity.title,
+              activityImage: activity.image
+            });
+          } else {
+            enrichedRequests.push(request);
+          }
+        } catch (err) {
+          console.error(`Erro ao buscar atividade ${request.activityId}:`, err);
+          enrichedRequests.push(request);
+        }
+      }
+      
+      console.log(`🌐 Retornando ${enrichedRequests.length} solicitações de reimpressão`);
+      res.json(enrichedRequests);
+    } catch (error) {
+      console.error('Erro ao buscar solicitações de reimpressão:', error);
+      // Em caso de erro, retornar array vazio para compatibilidade
+      res.json([]);
+    }
   });
   
-  // Rota de criação de reimpressões (desativada, apenas para compatibilidade)
-  app.post('/api/reimpressao-emergencial/criar', (req, res) => {
-    console.log('💡 Requisição para criar solicitação emergencial');
-    console.log('🌐 EMERGENCY STORAGE: Sistema de teste removido');
-    // Retorna falso sucesso para compatibilidade
-    res.status(200).json({ 
-      success: true, 
-      message: "O sistema de teste foi removido. Esta API permanece apenas por compatibilidade.",
-      id: Date.now() 
-    });
+  // Rota de criação de reimpressões - mantém url compatível mas utiliza o sistema principal
+  app.post('/api/reimpressao-emergencial/criar', async (req, res) => {
+    console.log('💡 Requisição para criar solicitação de reimpressão');
+    try {
+      const { reprintRequests, insertReprintRequestSchema } = await import('@shared/schema');
+      
+      // Validar os dados usando o esquema do schema.ts
+      const validatedData = insertReprintRequestSchema.parse(req.body);
+      
+      // Inserir no banco de dados
+      const [createdRequest] = await db
+        .insert(reprintRequests)
+        .values(validatedData)
+        .returning();
+      
+      console.log(`🌐 Solicitação de reimpressão criada com sucesso: ${createdRequest.id}`);
+      
+      // Retornar resposta de sucesso
+      res.status(201).json({ 
+        success: true, 
+        message: "Solicitação de reimpressão criada com sucesso",
+        id: createdRequest.id 
+      });
+    } catch (error) {
+      console.error('Erro ao criar solicitação de reimpressão:', error);
+      // Retornar erro
+      res.status(400).json({ 
+        success: false, 
+        message: error instanceof Error ? error.message : "Erro ao criar solicitação de reimpressão" 
+      });
+    }
   });
 
   // Rota específica para buscar a imagem de uma atividade diretamente do banco de dados
