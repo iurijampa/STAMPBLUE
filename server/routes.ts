@@ -326,7 +326,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     console.log('💡 Requisição para listar solicitações de reimpressão');
     try {
       const { reprintRequests } = await import('@shared/schema');
-      const { desc } = await import('drizzle-orm');
+      const { desc, sql } = await import('drizzle-orm');
       
       // Criar algumas solicitações de teste se não existirem
       const count = await db.select({ count: sql`count(*)` }).from(reprintRequests);
@@ -343,7 +343,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             reason: 'Solicitação de teste - Imagem borrada',
             details: 'Detalhes da solicitação de teste',
             quantity: 2,
-            priority: 'high',
+            priority: 'normal',
           },
           {
             activityId: 51, // Outro ID de atividade real
