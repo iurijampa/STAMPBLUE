@@ -26,8 +26,9 @@ import ReprintRequestsForDepartment from "@/components/reprint-requests-for-depa
 import { ActivitySkeleton, StatsSkeleton } from "@/components/activity-skeleton";
 import { SoundToggleButton, SoundTestButton } from "@/components/SoundManagerSimples";
 import ListaUltraSimples from "@/components/lista-ultrasimples";
+import SolucaoEmergencial from "@/components/solucao-emergencial";
 import ActivityHistory from "@/components/activity-history";
-
+import CreateReprintRequest from "@/components/create-reprint";
 
 // Estendendo a interface Activity para incluir os campos que estamos recebendo do backend
 interface ActivityWithNotes extends Activity {
@@ -810,7 +811,18 @@ export default function DepartmentDashboard() {
                 <h3 className="text-lg font-semibold">Sistema de Reimpressão</h3>
               </div>
               
-
+              {/* Card para ferramenta de teste de reimpressão */}
+              <Card className="mb-4 border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-900">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Ferramenta de Teste</CardTitle>
+                  <CardDescription>
+                    Use este botão para criar uma solicitação de teste com imagem
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <CreateReprintRequest />
+                </CardContent>
+              </Card>
               
               {/* Solicitações sempre visíveis */}
               <ReprintRequestsList department={userDepartment} />
@@ -824,8 +836,31 @@ export default function DepartmentDashboard() {
                 <h3 className="text-lg font-semibold">Gerenciamento de Reimpressões</h3>
               </div>
               
-              {/* Componente de Reimpressão Principal */}
-              <ReprintRequestsForDepartment department={userDepartment} />
+              {/* Componente simplificado removido - usamos apenas a versão ultraSimples */}
+              
+              {/* SOLUÇÃO EMERGENCIAL DE REIMPRESSÃO */}
+              <Card className="mt-6">
+                <CardHeader className="pb-3 bg-blue-50 dark:bg-blue-900/20">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="text-lg">Sistema Emergencial de Reimpressão</CardTitle>
+                      <CardDescription>
+                        Solução ultra-rápida para processar solicitações de reimpressão
+                      </CardDescription>
+                    </div>
+                    <Badge variant="outline" className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100">
+                      ULTRA RÁPIDO
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {userDepartment === "impressao" ? (
+                    <SolucaoEmergencial departamento="impressao" />
+                  ) : (
+                    <SolucaoEmergencial departamento="batida" modoVisualizacao={true} />
+                  )}
+                </CardContent>
+              </Card>
             </div>
           )}
         </>

@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
-import { Switch, Route, Redirect } from "wouter";
+import { Switch, Route, Redirect, useLocation } from "wouter";
 import { Toaster } from "@/components/ui/toaster";
 import { useQueryClient } from "@tanstack/react-query";
 import NotFound from "@/pages/not-found";
 import HomePage from "@/pages/home-page";
-// Página de teste removida
+import TestPage from "@/pages/test-page";
 import AuthPage from "@/pages/auth-page";
 import AdminDashboard from "@/pages/admin/dashboard";
 import AdminUsers from "@/pages/admin/users";
@@ -24,7 +24,11 @@ function DashboardRedirect() {
   const [isDataLoading, setIsDataLoading] = useState(false);
   const queryClient = useQueryClient();
   
-  // Páginas de teste foram removidas
+  // Verificar se estamos em páginas que não precisam de autenticação
+  const [location] = useLocation();
+  if (location.startsWith('/test') || location.startsWith('/teste')) {
+    return null; // Se estamos na página de teste, não redirecione
+  }
   
   // Efeito para pré-carregar os dados do departamento quando o usuário é carregado
   useEffect(() => {
@@ -108,7 +112,8 @@ function App() {
           <Switch>
             <Route path="/" component={DashboardRedirect} />
             <Route path="/auth" component={AuthPage} />
-            {/* Rotas de teste removidas */}
+            <Route path="/test" component={TestPage} />
+            <Route path="/teste" component={TestPage} />
             <Route path="/admin/dashboard" component={AdminDashboard} />
             <Route path="/admin/users" component={AdminUsers} />
             <Route path="/admin/create-activity" component={AdminDashboard} />

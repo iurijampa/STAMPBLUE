@@ -93,34 +93,14 @@ export default function ReprintRequestModal({ isOpen, onClose, activity, onSucce
     enabled: !activity, // Só busca se não tiver atividade específica
   });
 
-  // Função para lidar com o envio do formulário - VERSÃO MODO ULTRA DEUS 10000
+  // Função para lidar com o envio do formulário - VERSÃO MODO SUPER DEUS 9000
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     
     try {
       setIsSubmitting(true);
       
-      console.log("🔥 MODO ULTRA DEUS 10000 ATIVADO 🔥");
-      
-      // Validação no formulário com react-hook-form
-      const formValid = await form.trigger();
-      if (!formValid) {
-        console.error("🔥 Formulário inválido:", form.formState.errors);
-        
-        // Mostrar erros de validação
-        Object.entries(form.formState.errors).forEach(([field, error]) => {
-          if (error && error.message) {
-            toast({
-              title: `Erro no campo ${field}`,
-              description: error.message as string,
-              variant: "destructive",
-            });
-          }
-        });
-        
-        setIsSubmitting(false);
-        return;
-      }
+      console.log("🔥 MODO SUPER DEUS 9000 ATIVADO 🔥");
       
       // Garantir que temos uma atividade válida
       if (!activity) {
@@ -137,18 +117,28 @@ export default function ReprintRequestModal({ isOpen, onClose, activity, onSucce
       console.log("🔥 Atividade validada:", activity.title, "(ID:", activity.id, ")");
       
       // Inicialização segura de dados
-      const activityId = parseInt(String(activity.id), 10);
+      const activityId = Number(activity.id);
       const formData = form.getValues();
       
-      console.log("🔥 Dados do formulário:", JSON.stringify(formData, null, 2));
+      console.log("🔥 Dados do formulário:", formData);
       
-      // Validação adicional para quantidade
-      const quantity = parseInt(String(formData.quantity || 1), 10);
-      if (isNaN(quantity) || quantity < 1) {
-        console.error("🔥 Erro: Quantidade inválida:", formData.quantity);
+      // Validar campos obrigatórios manualmente
+      if (!formData.requestedBy || formData.requestedBy.trim() === "") {
+        console.error("🔥 Erro: Campo requestedBy vazio");
         toast({
-          title: "Quantidade inválida",
-          description: "A quantidade deve ser um número maior que zero",
+          title: "Campo obrigatório",
+          description: "Informe quem está solicitando a reimpressão",
+          variant: "destructive",
+        });
+        setIsSubmitting(false);
+        return;
+      }
+      
+      if (!formData.reason || formData.reason.trim() === "") {
+        console.error("🔥 Erro: Campo reason vazio");
+        toast({
+          title: "Campo obrigatório",
+          description: "Informe o motivo da reimpressão",
           variant: "destructive",
         });
         setIsSubmitting(false);
@@ -157,17 +147,14 @@ export default function ReprintRequestModal({ isOpen, onClose, activity, onSucce
       
       console.log("🔥 Validação de campos concluída com sucesso");
       
-      // Preparar dados completos com os campos obrigatórios para o banco de dados
+      // Preparar dados simplificados - reduzindo ao mínimo necessário
       const dataToSubmit = {
         activityId, // Enviar como número
-        requestedBy: String(formData.requestedBy || "").trim(),
-        reason: String(formData.reason || "").trim(),
-        details: String(formData.details || "").trim(),
-        quantity,
-        priority: String(formData.priority || "normal"),
-        // Garantir que os campos obrigatórios estejam presentes
-        fromDepartment: String(formData.fromDepartment || "batida"),
-        toDepartment: String(formData.toDepartment || "impressao"),
+        requestedBy: formData.requestedBy.trim(),
+        reason: formData.reason.trim(),
+        details: (formData.details || "").trim(),
+        quantity: Number(formData.quantity || 1),
+        priority: formData.priority || "normal",
       };
       
       console.log("🔥 Dados simplificados para envio:", JSON.stringify(dataToSubmit, null, 2));
@@ -211,9 +198,7 @@ export default function ReprintRequestModal({ isOpen, onClose, activity, onSucce
               break;
             } catch (e) {
               console.log("🔥 Resposta não é JSON válido, mas requisição foi bem-sucedida");
-              // Mesmo sem um JSON válido, consideramos como sucesso se o status for 200-299
               success = true;
-              responseData = { success: true, message: "Solicitação processada com sucesso" };
               break;
             }
           } else {
