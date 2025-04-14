@@ -491,6 +491,57 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     }
   });
+  
+  // Rota para cancelar uma solicitação de reimpressão específica
+  app.post('/api/reimpressao-emergencial/:id/cancelar', async (req, res) => {
+    console.log(`💡 Requisição para cancelar solicitação de reimpressão: ${req.params.id}`);
+    try {
+      const requestId = parseInt(req.params.id);
+      const canceledBy = req.body.canceledBy || "Usuário não identificado";
+      
+      // Importar funções do banco de dados
+      const { db, eq } = await import('./db');
+      const { reprintRequests } = await import('@shared/schema');
+      
+      // Primeiro, verificar se a solicitação existe
+      const [existingRequest] = await db
+        .select()
+        .from(reprintRequests)
+        .where(eq(reprintRequests.id, requestId));
+        
+      if (!existingRequest) {
+        return res.status(404).json({
+          success: false,
+          message: `Solicitação #${requestId} não encontrada`
+        });
+      }
+      
+      // Atualizar o status para "cancelada" no banco de dados
+      const [updatedRequest] = await db
+        .update(reprintRequests)
+        .set({
+          status: "canceled", // Usar "canceled" como status padrão para cancelamento
+          completedBy: canceledBy,
+          completedAt: new Date()
+        })
+        .where(eq(reprintRequests.id, requestId))
+        .returning();
+      
+      console.log(`🔄 Solicitação #${requestId} cancelada com sucesso por ${canceledBy}`);
+      return res.status(200).json({
+        success: true,
+        message: "Solicitação cancelada com sucesso",
+        request: updatedRequest
+      });
+      
+    } catch (error) {
+      console.error(`Erro ao cancelar solicitação de reimpressão #${req.params.id}:`, error);
+      return res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : "Erro ao cancelar solicitação"
+      });
+    }
+  });
 
   // Rota específica para buscar a imagem de uma atividade diretamente do banco de dados
   // Essa rota não precisa de autenticação para permitir links diretos para PDFs
