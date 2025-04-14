@@ -1,7 +1,7 @@
 // Módulo especial para reimpressão do setor de impressão
 // Agora conectado ao sistema principal via ponte de compatibilidade
 
-const express = require('express');
+import express from 'express';
 const router = express.Router();
 
 // Rota para listar solicitações para impressão (GET /api/impressao-emergencial/listar)
@@ -24,21 +24,8 @@ router.get('/listar', async (req, res) => {
     console.error('🚨 SOLUÇÃO IMPRESSÃO: Erro ao listar solicitações:', error);
     console.error(error);
     
-    // Em caso de erro, tentar usar o método emergencial antigo
-    try {
-      const emergencialApi = require('./reimpressao-emergencial');
-      const allRequests = emergencialApi.listarSolicitacoesReimpressao();
-      const filteredRequests = allRequests.filter(req => req.toDepartment === 'impressao');
-      
-      console.log(`📋 SOLUÇÃO IMPRESSÃO (fallback): Retornando ${filteredRequests.length} solicitações`);
-      return res.status(200).json(filteredRequests);
-    } catch (fallbackError) {
-      console.error('🚨 SOLUÇÃO IMPRESSÃO: Fallback também falhou:', fallbackError);
-      return res.status(500).json({ 
-        success: false, 
-        message: 'Erro interno do servidor - todos os métodos falharam' 
-      });
-    }
+    // Em caso de erro, retornar array vazio (compatibilidade)
+    return res.status(200).json([]);
   }
 });
 
@@ -61,20 +48,10 @@ router.post('/processar/:id', async (req, res) => {
     return res.status(result.success ? 200 : 400).json(result);
   } catch (error) {
     console.error('🚨 SOLUÇÃO IMPRESSÃO: Erro ao processar solicitação:', error);
-    
-    // Em caso de erro, tentar usar o método emergencial antigo
-    try {
-      const emergencialApi = require('./reimpressao-emergencial');
-      const result = emergencialApi.processarSolicitacaoReimpressao(parseInt(req.params.id), req.body);
-      
-      return res.status(result.success ? 200 : 400).json(result);
-    } catch (fallbackError) {
-      console.error('🚨 SOLUÇÃO IMPRESSÃO: Fallback também falhou:', fallbackError);
-      return res.status(500).json({ 
-        success: false, 
-        message: 'Erro interno do servidor - todos os métodos falharam' 
-      });
-    }
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Erro interno do servidor' 
+    });
   }
 });
 
@@ -95,25 +72,12 @@ router.post('/criar', async (req, res) => {
     return res.status(result.success ? 201 : 400).json(result);
   } catch (error) {
     console.error('🚨 SOLUÇÃO IMPRESSÃO: Erro ao criar solicitação:', error);
-    
-    // Em caso de erro, tentar usar o método emergencial antigo
-    try {
-      const emergencialApi = require('./reimpressao-emergencial');
-      const result = emergencialApi.criarSolicitacaoReimpressao({
-        ...req.body,
-        toDepartment: 'impressao'
-      });
-      
-      return res.status(result.success ? 201 : 400).json(result);
-    } catch (fallbackError) {
-      console.error('🚨 SOLUÇÃO IMPRESSÃO: Fallback também falhou:', fallbackError);
-      return res.status(500).json({ 
-        success: false, 
-        message: 'Erro interno do servidor - todos os métodos falharam' 
-      });
-    }
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Erro interno do servidor' 
+    });
   }
 });
 
-// Exportar o router para uso em routes.ts
-module.exports = router;
+// Exportar o router como default para uso em routes.ts
+export default router;

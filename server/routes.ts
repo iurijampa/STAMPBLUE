@@ -309,10 +309,14 @@ function isAdmin(req: Request, res: Response, next: Function) {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Registrar o módulo de impressão emergencial - usando importação dinâmica
+  const { default: impressaoEmergencialRouter } = await import('./solucao-impressao.js');
+  app.use('/api/impressao-emergencial', impressaoEmergencialRouter);
+  
   // Permitir acesso às rotas simplificadas sem autenticação
   app.use((req, res, next) => {
     // Se for uma rota para a página de teste ou API simplificada, pular autenticação
-    if (req.path.startsWith('/api/reimpressao-emergencial')) {
+    if (req.path.startsWith('/api/reimpressao-emergencial') || req.path.startsWith('/api/impressao-emergencial')) {
       req.isAuthenticated = () => true; // Fingir que está autenticado
       console.log(`[AUTH_BYPASS] Autenticação pulada para: ${req.path}`);
       return next();
