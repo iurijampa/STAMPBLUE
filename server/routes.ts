@@ -309,10 +309,6 @@ function isAdmin(req: Request, res: Response, next: Function) {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Registrar o módulo de impressão emergencial - usando importação dinâmica
-  const { default: impressaoEmergencialRouter } = await import('./solucao-impressao.js');
-  app.use('/api/impressao-emergencial', impressaoEmergencialRouter);
-  
   // Permitir acesso às rotas simplificadas sem autenticação
   app.use((req, res, next) => {
     // Se for uma rota para a página de teste ou API simplificada, pular autenticação
@@ -324,6 +320,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // Caso contrário, seguir o fluxo normal
     next();
   });
+
+  // Registrar o módulo de impressão emergencial - usando importação dinâmica
+  const { default: impressaoEmergencialRouter } = await import('./solucao-impressao.js');
+  app.use('/api/impressao-emergencial', impressaoEmergencialRouter);
   
   // Rotas para manter compatibilidade com o sistema principal de reimpressão
   app.get('/api/reimpressao-emergencial/listar', async (req, res) => {
