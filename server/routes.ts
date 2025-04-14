@@ -268,9 +268,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 const deptOrder = ['gabarito', 'impressao', 'batida', 'costura', 'embalagem'];
                 return deptOrder.indexOf(a.department as any) - deptOrder.indexOf(b.department as any);
               })[0];
+              
+            // Verificar se o pedido foi concluído pelo último departamento (embalagem)
+            const embalagemProgress = progresses.find(p => p.department === 'embalagem');
+            const pedidoConcluido = embalagemProgress && embalagemProgress.status === 'completed';
             
-            // Adicionar o departamento atual ao objeto da atividade
-            const currentDepartment = pendingProgress ? pendingProgress.department : 'gabarito';
+            // Determinar o departamento atual ou marcar como concluído se embalagem já finalizou
+            let currentDepartment = pendingProgress ? pendingProgress.department : 'gabarito';
+            
+            // Se o pedido foi concluído pela embalagem, vamos marcar como "concluido" em vez de voltar para o gabarito
+            if (!pendingProgress && pedidoConcluido) {
+              currentDepartment = 'concluido';
+            }
             
             return {
               ...activity,
