@@ -466,28 +466,73 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Rota de criação de reimpressões - mantém url compatível mas utiliza o sistema principal
   app.post('/api/reimpressao-emergencial/criar', async (req, res) => {
-    console.log('💡 Requisição para criar solicitação de reimpressão');
+    console.log('💡 Requisição para criar solicitação de reimpressão, dados:', JSON.stringify(req.body));
     try {
+      // Adicionar fromDepartment e toDepartment se não estiverem presentes
+      if (!req.body.fromDepartment) {
+        console.log('⚠️ Campo fromDepartment ausente, definindo como "batida"');
+        req.body.fromDepartment = "batida";
+      }
+      
+      if (!req.body.toDepartment) {
+        console.log('⚠️ Campo toDepartment ausente, definindo como "impressao"');
+        req.body.toDepartment = "impressao";
+      }
+      
+      // Converter valores de string para número se necessário
+      if (req.body.quantity && typeof req.body.quantity === 'string') {
+        req.body.quantity = parseInt(req.body.quantity);
+      }
+      
+      if (req.body.activityId && typeof req.body.activityId === 'string') {
+        req.body.activityId = parseInt(req.body.activityId);
+      }
+      
       const { insertReprintRequestSchema } = await import('@shared/schema');
       const { criarSolicitacaoReimpressao } = await import('./reimpressao-bridge');
       
-      // Validar os dados usando o esquema do schema.ts
-      const validatedData = insertReprintRequestSchema.parse(req.body);
-      
-      // Criar solicitação usando a ponte de compatibilidade
-      const result = await criarSolicitacaoReimpressao(validatedData);
-      
-      if (result.success) {
-        return res.status(201).json(result);
-      } else {
-        return res.status(400).json(result);
+      try {
+        // Validar os dados usando o esquema do schema.ts
+        const validatedData = insertReprintRequestSchema.parse(req.body);
+        console.log('✅ Dados validados com sucesso:', JSON.stringify(validatedData));
+        
+        // Criar solicitação usando a ponte de compatibilidade
+        const result = await criarSolicitacaoReimpressao(validatedData);
+        
+        if (result.success) {
+          return res.status(201).json(result);
+        } else {
+          return res.status(400).json(result);
+        }
+      } catch (validationError) {
+        console.error('⚠️ Erro de validação:', validationError);
+        
+        // Tentar extrair mensagens de erro de validação do Zod (se disponível)
+        let errorMessage = "Erro ao validar dados da solicitação";
+        
+        if (validationError.errors && Array.isArray(validationError.errors)) {
+          const errors = validationError.errors.map((e: any) => 
+            `${e.path.join('.')}: ${e.message}`
+          ).join(', ');
+          errorMessage = `Erros de validação: ${errors}`;
+        } else if (validationError.message) {
+          errorMessage = validationError.message;
+        }
+        
+        console.log('⚠️ Mensagem de erro formatada:', errorMessage);
+        return res.status(400).json({ 
+          success: false, 
+          message: errorMessage,
+          fields: req.body
+        });
       }
     } catch (error) {
-      console.error('Erro ao criar solicitação de reimpressão:', error);
+      console.error('🚨 Erro ao criar solicitação de reimpressão:', error);
       // Retornar erro
-      res.status(400).json({ 
+      res.status(500).json({ 
         success: false, 
-        message: error instanceof Error ? error.message : "Erro ao criar solicitação de reimpressão" 
+        message: error instanceof Error ? error.message : "Erro ao criar solicitação de reimpressão",
+        details: "Erro interno do servidor ao processar a solicitação"
       });
     }
   });
