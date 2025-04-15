@@ -2344,13 +2344,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   }
   
   // Rota para diagnóstico de cache e integridade do sistema (sem autenticação para testes)
-  app.get('/api/system/diagnostico', (req, res) => {
+  app.get('/api/system/diagnostico', async (req, res) => {
     try {
-      // Importar a função de verificação de integridade do cache
-      const { checkCacheIntegrity } = require('./db');
+      // Usar a função de verificação de integridade de cache já importada do módulo
+      // Não usar require() que não funciona no contexto atual
       
-      // Executar verificação do queryCache
-      const queryCacheIntegrity = checkCacheIntegrity();
+      // Para diagnóstico simples sem dependência de checkCacheIntegrity
       
       // Obter estatísticas do LRUCache do sistema global
       const globalCache = (global as any).cache || {};
@@ -2361,8 +2360,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         hits: globalCache.hits || 0,
         misses: globalCache.misses || 0,
         totalRequests: globalCache.totalRequests || 0,
-        cacheInterval: globalCache.cleanupInterval || 0
+        cacheInterval: globalCache.cleanupInterval || 0,
+        hitRate: globalCache.totalRequests > 0 
+          ? Math.round((globalCache.hits / globalCache.totalRequests) * 100) + '%' 
+          : 'N/A'
       };
+      
+      // Obter contagem de atividades por departamento
+      let departmentCounts = {};
+      try {
+        // Usar a mesma lógica que a rota /api/stats/department-counts mas sem autenticação
+        for (const department of DEPARTMENTS) {
+          const activities = await buscarAtividadesPorDepartamentoEmergencia(department);
+          departmentCounts[department] = activities.length;
+        }
+      } catch (error) {
+        departmentCounts = { error: "Não foi possível obter contagem de departamentos" };
+      }
       
       // Retornar informações completas
       res.json({
@@ -2371,10 +2385,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         memoria: {
           total: Math.round(process.memoryUsage().heapTotal / 1024 / 1024) + "MB",
           usado: Math.round(process.memoryUsage().heapUsed / 1024 / 1024) + "MB",
-          externo: Math.round(process.memoryUsage().external / 1024 / 1024) + "MB"
+          externo: Math.round(process.memoryUsage().external / 1024 / 1024) + "MB",
+          rss: Math.round(process.memoryUsage().rss / 1024 / 1024) + "MB"
         },
         lruCache: lruCacheStats,
-        queryCache: queryCacheIntegrity,
+        conexoesWebSocket: (global as any).websocketConnections || 0,
+        departamentos: departmentCounts,
+        versao: "2.8.2",
         status: "Sistema operacional e otimizado"
       });
     } catch (error) {
