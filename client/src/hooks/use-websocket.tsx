@@ -3,18 +3,18 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useToast } from './use-toast';
 import { queryClient } from '@/lib/queryClient';
 
-// CONFIGURAÇÃO ULTRA-OTIMIZADA PARA MÁXIMA PERFORMANCE E ESTABILIDADE
-// Intervalo para heartbeat (ping/pong) ajustado para maior eficiência
-const HEARTBEAT_INTERVAL = 90000; // 1.5 minutos - equilibra conectividade com economia de recursos
-// Estratégia de back-off exponencial para reconexão
-const INITIAL_RECONNECT_DELAY = 1000; // 1 segundo inicial
-const MAX_RECONNECT_DELAY = 30000; // máximo 30 segundos
-// Número moderado de tentativas antes de pausa
-const MAX_RECONNECT_ATTEMPTS = 5; // Aumentamos para mais tentativas com backoff
-// Tempo de pausa reduzido entre séries de tentativas (10 segundos)
-const RECONNECT_PAUSE = 10000;
-// Intervalo mínimo entre atualizações via polling para evitar sobrecarga
-const MIN_POLLING_INTERVAL = 5000; // 5 segundos
+// CONFIGURAÇÃO OTIMIZADA PARA MÁXIMA ESTABILIDADE E MENOR CONSUMO DE RECURSOS
+// Intervalo para heartbeat mais longo para reduzir tráfego
+const HEARTBEAT_INTERVAL = 120000; // 2 minutos - reduz tráfego de rede
+// Estratégia de back-off exponencial para reconexão mais suave
+const INITIAL_RECONNECT_DELAY = 2000; // 2 segundos inicial para evitar tempestade de conexões
+const MAX_RECONNECT_DELAY = 45000; // máximo 45 segundos para longos períodos sem conexão
+// Menos tentativas antes de pausa
+const MAX_RECONNECT_ATTEMPTS = 3; // Reduzido para menos tentativas com tempo maior entre elas
+// Pausa mais longa entre séries de tentativas para dar tempo ao servidor se recuperar
+const RECONNECT_PAUSE = 20000; // 20 segundos
+// Intervalo mínimo maior entre atualizações via polling para evitar sobrecarga
+const MIN_POLLING_INTERVAL = 10000; // 10 segundos - menor número de chamadas desnecessárias
 
 export function useWebSocket() {
   const { user } = useAuth();
@@ -121,23 +121,40 @@ export function useWebSocket() {
       socketRef.current.send(JSON.stringify({ type: 'ping', timestamp: Date.now() }));
       pendingPongRef.current = true;
       
-      // MODO DE EMERGÊNCIA: Timeout muito mais curto para reconexão ultrarrápida
+      // Timeout mais tolerante para evitar desconexões desnecessárias
       const timeoutId = setTimeout(() => {
         if (!isMountedRef.current) return;
         
         if (pendingPongRef.current) {
-          console.log('MODO RÁPIDO: Timeout de ping/pong (3s), reconectando...');
+          console.log('Timeout de ping/pong (8s), iniciando reconexão programada...');
           pendingPongRef.current = false;
           
+          // Verificar se a conexão ainda está aberta
           if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
             try {
-              socketRef.current.close(1000, "Ping timeout");
+              // Tentar enviar um ping adicional antes de desistir
+              try {
+                socketRef.current.send(JSON.stringify({ type: 'ping', timestamp: Date.now(), retry: true }));
+                
+                // Dar uma segunda chance antes de fechar
+                setTimeout(() => {
+                  if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+                    console.log('Segunda tentativa de ping falhou, fechando conexão...');
+                    socketRef.current.close(1000, "Ping timeout");
+                  }
+                }, 5000);
+                
+                return;
+              } catch (pingError) {
+                // Se falhar ao enviar, aí sim fechamos
+                socketRef.current.close(1000, "Ping timeout");
+              }
             } catch (e) {
               console.error("Erro ao fechar conexão após timeout de ping:", e);
             }
           }
         }
-      }, 3000); // MODO DE EMERGÊNCIA: 3 segundos de timeout (era 10 antes)
+      }, 8000); // 8 segundos de timeout - muito mais tolerante
       
       return () => clearTimeout(timeoutId);
     } catch (error) {
@@ -411,19 +428,19 @@ export function useWebSocket() {
       socket.onerror = (event) => {
         if (!isMountedRef.current) return;
         
-        console.error('MODO RÁPIDO: Erro WebSocket, reconectando imediatamente...', event);
+        console.error('Erro WebSocket detectado, aguardando ciclo normal de reconexão...', event);
         setError('Reconectando...');
         setConnected(false);
         
-        // MODO DE EMERGÊNCIA: Reconectar imediatamente em caso de erro
+        // Modo otimizado: Não forçar reconexão imediata para evitar tempestade de conexões
+        // O manipulador onclose cuidará da reconexão com backoff exponencial
         try {
           if (socketRef.current) {
+            // Fechar conexão atual de forma ordenada
             socketRef.current.close();
           }
-          // Forçar uma reconexão imediata
-          setTimeout(() => connect(), 100);
         } catch (err) {
-          console.error('Erro ao forçar reconexão:', err);
+          console.error('Erro ao fechar conexão com erro:', err);
         }
       };
       
@@ -537,39 +554,42 @@ export function useWebSocket() {
       // Atualizar dados imediatamente, sem esperar pelo WebSocket
       refreshDataPeriodically();
       
-      // Sistema de polling adaptativo - mais inteligente para economizar recursos
+      // Sistema de polling otimizado e adaptativo - mais inteligente para economizar recursos
       const pollingInterval = setInterval(() => {
-        // Determinar se devemos fazer polling com base no estado de conexão e última atualização
+        // Só fazer polling se realmente desconectado
         if (!connected) {
-          // Se não estiver conectado, verificar tempo desde a última atualização
+          // Verificar tempo desde a última atualização
           const now = Date.now();
           const lastUpdateTime = lastUpdateRef.current || 0;
           const timeSinceLastUpdate = now - lastUpdateTime;
           
-          // Intervalo adaptativo baseado no tempo em que a página está aberta
-          // Isso reduz a frequência de polling em páginas abertas por muito tempo
+          // Intervalo adaptativo mais inteligente baseado no tempo em que a página está aberta
+          // Reduz drasticamente a frequência de polling para sessões longas
           const pageOpenTime = now - window.performance.timing.navigationStart;
           const pageOpenMinutes = pageOpenTime / (1000 * 60);
           
-          // Calcular intervalo ideal entre polls
-          // Começa com MIN_POLLING_INTERVAL e cresce gradualmente até 30s
+          // Calcular intervalo ideal entre polls - política mais conservadora
+          // Começa com MIN_POLLING_INTERVAL e cresce exponencialmente com limitador
+          // Aumentamos o máximo para 60s para sessões muito longas
           const idealInterval = Math.min(
             Math.max(
               MIN_POLLING_INTERVAL,
-              MIN_POLLING_INTERVAL + (pageOpenMinutes * 1000) // +1s por minuto que a página está aberta
+              MIN_POLLING_INTERVAL * (1 + Math.min(pageOpenMinutes / 10, 5)) // Crescimento mais rápido
             ),
-            30000 // Máximo de 30s entre polls
+            60000 // Máximo de 60s entre polls para sessões muito longas
           );
           
           if (timeSinceLastUpdate > idealInterval) {
             console.log(`Atualizando via polling (intervalo adaptativo: ${Math.floor(idealInterval/1000)}s)`);
             refreshDataPeriodically();
           } else {
-            // Log reduzido para diminuir ruído
-            console.log(`Aguardando intervalo entre polls (${Math.floor(timeSinceLastUpdate/1000)}/${Math.floor(idealInterval/1000)}s)`);
+            // Log ainda mais reduzido para minimizar ruído
+            if (Math.random() < 0.2) { // Só logar 20% das vezes para reduzir spam
+              console.log(`Aguardando intervalo entre polls (${Math.floor(timeSinceLastUpdate/1000)}/${Math.floor(idealInterval/1000)}s)`);
+            }
           }
         }
-      }, 15000); // Polling base a cada 15 segundos (mais econômico)
+      }, 20000); // Polling base a cada 20 segundos (ainda mais econômico)
       
       // Função de limpeza
       return () => {
