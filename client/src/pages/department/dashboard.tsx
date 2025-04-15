@@ -392,7 +392,7 @@ export default function DepartmentDashboard() {
       console.log("Primeiro item do histórico:", data.length > 0 ? data[0] : "Nenhum item");
       
       // Garantir que completedAt e createdAt estejam preenchidos para cada item
-      const processedData = data.map(item => {
+      const processedData = data.map((item: any) => {
         // Se completedAt estiver nulo, usar createdAt como fallback
         if (!item.completedAt) {
           console.log(`Item ${item.id} tem completedAt nulo. Usando fallback:`, item.createdAt);
@@ -435,14 +435,26 @@ export default function DepartmentDashboard() {
     }
   }, [userDepartment, user, refetchStats]);
   
-  // Função para formatar a data, incluindo hora
-  const formatDate = (date: Date | null) => {
-    if (!date) return "Data não disponível";
+  // Função melhorada para formatar a data, incluindo hora
+  const formatDate = (date: Date | string | null) => {
+    if (!date) {
+      console.log("Data nula recebida na formatação");
+      return "Data não disponível";
+    }
     
     try {
+      // Garantir que temos uma data válida
+      const dateObj = typeof date === 'string' ? new Date(date) : date;
+      
+      // Verificar se a data é válida
+      if (isNaN(dateObj.getTime())) {
+        console.log("Data inválida detectada:", date);
+        return "Data inválida";
+      }
+      
       // Formato: DD/MM/YYYY às HH:MM
-      const formattedDate = new Date(date).toLocaleDateString('pt-BR');
-      const formattedTime = new Date(date).toLocaleTimeString('pt-BR', {
+      const formattedDate = dateObj.toLocaleDateString('pt-BR');
+      const formattedTime = dateObj.toLocaleTimeString('pt-BR', {
         hour: '2-digit',
         minute: '2-digit'
       });
@@ -901,9 +913,15 @@ export default function DepartmentDashboard() {
                               <div className="ml-6">
                                 <p className="text-sm text-gray-600 mb-1">{activity.description}</p>
                                 <div className="flex items-center gap-3 text-xs text-gray-500">
-                                  <span className="font-medium text-blue-700">{activity.completedBy}</span>
+                                  <span className="font-medium text-blue-700">
+                                    <UserIcon className="h-3 w-3 inline mr-1" />
+                                    {activity.completedBy}
+                                  </span>
                                   <span>•</span>
-                                  <span>{formatDate(activity.completedAt ? new Date(activity.completedAt) : null)}</span>
+                                  <span className="text-blue-700">
+                                    <Clock className="h-3 w-3 inline mr-1" />
+                                    {formatDate(activity.completedAt || activity.createdAt)}
+                                  </span>
                                 </div>
                               </div>
                             </div>
@@ -977,9 +995,15 @@ export default function DepartmentDashboard() {
                               <div className="ml-6">
                                 <p className="text-sm text-gray-600 mb-1">{activity.description}</p>
                                 <div className="flex items-center gap-3 text-xs text-gray-500">
-                                  <span className="font-medium text-emerald-700">{activity.completedBy}</span>
+                                  <span className="font-medium text-emerald-700">
+                                    <UserIcon className="h-3 w-3 inline mr-1" />
+                                    {activity.completedBy}
+                                  </span>
                                   <span>•</span>
-                                  <span>{formatDate(activity.completedAt ? new Date(activity.completedAt) : null)}</span>
+                                  <span className="text-emerald-700">
+                                    <Clock className="h-3 w-3 inline mr-1" />
+                                    {formatDate(activity.completedAt || activity.createdAt)}
+                                  </span>
                                 </div>
                               </div>
                             </div>
@@ -1053,9 +1077,15 @@ export default function DepartmentDashboard() {
                               <div className="ml-6">
                                 <p className="text-sm text-gray-600 mb-1">{activity.description}</p>
                                 <div className="flex items-center gap-3 text-xs text-gray-500">
-                                  <span className="font-medium text-amber-700">{activity.completedBy}</span>
+                                  <span className="font-medium text-amber-700">
+                                    <UserIcon className="h-3 w-3 inline mr-1" />
+                                    {activity.completedBy}
+                                  </span>
                                   <span>•</span>
-                                  <span>{formatDate(activity.completedAt ? new Date(activity.completedAt) : null)}</span>
+                                  <span className="text-amber-700">
+                                    <Clock className="h-3 w-3 inline mr-1" />
+                                    {formatDate(activity.completedAt || activity.createdAt)}
+                                  </span>
                                 </div>
                               </div>
                             </div>
