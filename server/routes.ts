@@ -19,48 +19,53 @@ import { db } from "./db";
 import { createBackup } from "./backup";
 import { and, eq, sql } from "drizzle-orm";
 
-// LRU Cache para otimização de performance
+// LRU Cache otimizado para alta performance
 class LRUCache {
   private cache: Map<string, { value: any, expiry: number }>;
   private maxSize: number;
+  private hits: number = 0;
+  private misses: number = 0;
+  private lastCleanup: number = Date.now();
+  private cleanupInterval: number = 60000; // 1 minuto
 
-  constructor(maxSize: number = 100) {
+  constructor(maxSize: number = 200) { // Aumentado para 200 itens
     this.cache = new Map();
     this.maxSize = maxSize;
   }
 
   get(key: string): any {
+    // Performance: verificar expiração periódica em vez de em cada get
+    this.periodicCleanup();
+    
     if (!this.cache.has(key)) {
+      this.misses++;
       return null;
     }
 
     const item = this.cache.get(key)!;
     
-    // Se expirou, remover do cache
+    // Verificar expiração apenas quando necessário
     if (item.expiry && item.expiry < Date.now()) {
       this.cache.delete(key);
+      this.misses++;
       return null;
     }
 
-    // Mover para o final (mais recente)
-    this.cache.delete(key);
-    this.cache.set(key, item);
-    
+    this.hits++;
     return item.value;
   }
 
-  set(key: string, value: any, ttlMs?: number): void {
-    // Se o cache estiver cheio, remover o item mais antigo
+  set(key: string, value: any, ttlMs: number = 30000): void {
+    // Performance: verificar apenas periodicamente se o cache está cheio
     if (this.cache.size >= this.maxSize) {
-      const oldestKey = this.cache.keys().next().value;
-      this.cache.delete(oldestKey);
+      // Remover 10% dos itens mais antigos de uma vez
+      const keysToRemove = Math.max(1, Math.floor(this.maxSize * 0.1));
+      const keys = Array.from(this.cache.keys()).slice(0, keysToRemove);
+      keys.forEach(k => this.cache.delete(k));
     }
-
-    // Adicionar novo item
-    this.cache.set(key, { 
-      value, 
-      expiry: ttlMs ? Date.now() + ttlMs : 0 
-    });
+    
+    const expiry = ttlMs ? Date.now() + ttlMs : 0;
+    this.cache.set(key, { value, expiry });
   }
 
   // Remover item específico
@@ -68,31 +73,52 @@ class LRUCache {
     return this.cache.delete(key);
   }
 
-  // Remover todos os itens com prefixo específico
+  // Remover todos os itens com prefixo específico - otimizado
   deleteByPrefix(prefix: string): number {
-    let count = 0;
+    // Otimização: usar um array para coletar chaves antes de excluir
+    const keysToDelete = [];
     for (const key of this.cache.keys()) {
       if (key.startsWith(prefix)) {
-        this.cache.delete(key);
-        count++;
+        keysToDelete.push(key);
       }
     }
-    return count;
+    
+    keysToDelete.forEach(key => this.cache.delete(key));
+    return keysToDelete.length;
   }
 
   // Limpar todo o cache
   clear(): void {
     this.cache.clear();
+    this.hits = 0;
+    this.misses = 0;
   }
 
   // Obter tamanho atual
   size(): number {
     return this.cache.size;
   }
+  
+  // Limpeza periódica para remover itens expirados
+  private periodicCleanup(): void {
+    const now = Date.now();
+    if (now - this.lastCleanup > this.cleanupInterval) {
+      this.lastCleanup = now;
+      
+      const keysToDelete = [];
+      for (const [key, item] of this.cache.entries()) {
+        if (item.expiry && item.expiry < now) {
+          keysToDelete.push(key);
+        }
+      }
+      
+      keysToDelete.forEach(key => this.cache.delete(key));
+    }
+  }
 }
 
-// Cache global para uso em toda a aplicação
-const cache = new LRUCache(500); // Suporta até 500 itens em cache
+// Cache global otimizado para uso em toda a aplicação
+const cache = new LRUCache(800); // Suporta até 800 itens em cache (aumentado)
 // Expor globalmente para uso em outras partes do código
 (global as any).cache = cache;
 import impressaoRouter from "./solucao-impressao";
