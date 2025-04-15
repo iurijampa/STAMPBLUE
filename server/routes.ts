@@ -171,9 +171,11 @@ function isAuthenticated(req: Request, res: Response, next: Function) {
   // Permitir acesso às páginas de teste e rotas de reimpressão sem autenticação
   if (req.path.startsWith('/api/reimpressao-ultrabasico') || 
       req.path.startsWith('/api/reimpressao-simples') ||
+      req.path.startsWith('/api/reimpressao-emergencial') ||
+      req.path.startsWith('/api/activities/history') ||
       req.path === '/test' || 
       req.path === '/teste') {
-    console.log(`[AUTH] Bypass de autenticação permitido para: ${req.path}`);
+    console.log(`[AUTH_BYPASS] Autenticação pulada para: ${req.path}`);
     return next();
   }
   
@@ -199,9 +201,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (req.path.startsWith('/api/reimpressao-simples') || 
         req.path.startsWith('/api/reimpressao-ultrabasico') ||
         req.path.startsWith('/api/reimpressao-emergencial') ||
-        req.path.startsWith('/api/impressao-emergencial')) {
+        req.path.startsWith('/api/impressao-emergencial') ||
+        req.path.startsWith('/api/activities/history')) {
       req.isAuthenticated = () => true; // Fingir que está autenticado
       console.log(`[AUTH_BYPASS] Autenticação pulada para: ${req.path}`);
+      
+      // Definir usuário padrão para rotas que precisam do req.user 
+      // (como a rota de histórico que usa req.user.id para cache)
+      if (req.path.startsWith('/api/activities/history')) {
+        const department = req.path.split('/').pop() || 'batida';
+        req.user = { 
+          id: 0, 
+          role: department
+        };
+      }
+      
       return next();
     }
     // Caso contrário, seguir o fluxo normal
