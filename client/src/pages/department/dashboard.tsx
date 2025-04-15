@@ -387,7 +387,24 @@ export default function DepartmentDashboard() {
       
       const data = await response.json();
       console.log(`Histórico carregado em ${Date.now() - historyStartTime}ms. Total: ${data.length}`);
-      return data as (ActivityWithNotes & { completedAt: string; completedBy: string })[];
+      
+      // Depurar o formato dos dados do histórico
+      console.log("Primeiro item do histórico:", data.length > 0 ? data[0] : "Nenhum item");
+      
+      // Garantir que completedAt e createdAt estejam preenchidos para cada item
+      const processedData = data.map(item => {
+        // Se completedAt estiver nulo, usar createdAt como fallback
+        if (!item.completedAt) {
+          console.log(`Item ${item.id} tem completedAt nulo. Usando fallback:`, item.createdAt);
+          return {
+            ...item,
+            completedAt: item.createdAt
+          };
+        }
+        return item;
+      });
+      
+      return processedData as (ActivityWithNotes & { completedAt: string; completedBy: string })[];
     },
     enabled: !!department && !userLoading,
   });
