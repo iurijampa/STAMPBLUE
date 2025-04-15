@@ -418,10 +418,23 @@ export default function DepartmentDashboard() {
     }
   }, [userDepartment, user, refetchStats]);
   
-  // Função para formatar a data
+  // Função para formatar a data, incluindo hora
   const formatDate = (date: Date | null) => {
-    if (!date) return "Sem data";
-    return new Date(date).toLocaleDateString('pt-BR');
+    if (!date) return "Data não disponível";
+    
+    try {
+      // Formato: DD/MM/YYYY às HH:MM
+      const formattedDate = new Date(date).toLocaleDateString('pt-BR');
+      const formattedTime = new Date(date).toLocaleTimeString('pt-BR', {
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+      
+      return `${formattedDate} às ${formattedTime}`;
+    } catch (error) {
+      console.error("Erro ao formatar data:", error, date);
+      return "Data inválida";
+    }
   };
   
   // Função para obter a cor conforme o prazo
