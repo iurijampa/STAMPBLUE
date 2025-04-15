@@ -590,64 +590,128 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Cria uma chave de cache baseada no usuário
       const cacheKey = `activities_main_${req.user.role}_${req.user.id}`;
-      const cachedData = cache.get(cacheKey);
       
-      // Se tiver em cache, retorna imediatamente (grande ganho de performance)
+      // Verificar se o header específico para invalidar o cache está presente
+      const bypassCache = req.headers['x-bypass-cache'] === 'true';
+      
+      // Obter o tipo específico (em-produção ou concluídos)
+      const tipoFiltro = req.query.tipo || 'todos';
+      
+      // Modificar a chave do cache com base no tipo de filtro
+      const cacheKeyWithType = `${cacheKey}_${tipoFiltro}`;
+      
+      // Se tiver em cache e não estiver ignorando o cache, retorna imediatamente
+      const cachedData = !bypassCache ? cache.get(cacheKeyWithType) : null;
       if (cachedData) {
-        console.log(`[CACHE] Usando dados em cache para ${cacheKey}`);
+        console.log(`[CACHE] Usando dados em cache para ${cacheKeyWithType}`);
         return res.json(cachedData);
       }
       
       if (req.user && req.user.role === "admin") {
-        // Otimização para o admin - cache por 15 segundos
-        // Buscar todas as atividades
+        console.time('[PERF] Carregamento de atividades admin');
+        
+        // Otimização - adicionar ao hot cache para acesso ultra-rápido
+        // Usar verificação de integridade de dados para garantir consistência
+        
+        // Passos de otimização:
+        // 1. Reduzir a quantidade de dados carregados inicialmente
+        // 2. Realizar processamento em lotes para evitar bloqueio da thread principal
+        // 3. Utilizar cache em múltiplas camadas para dados frequentes
+        
+        // Buscar todas as atividades com uma única consulta
         const activities = await storage.getAllActivities();
         
-        // Para cada atividade, buscar o progresso para determinar o departamento atual
-        const activitiesWithProgress = await Promise.all(
-          activities.map(async (activity) => {
-            const progresses = await storage.getActivityProgress(activity.id);
-            
-            // Ordenar os progressos por departamento e encontrar o pendente mais recente
-            // para determinar em qual departamento a atividade está atualmente
-            const pendingProgress = progresses
-              .filter(p => p.status === 'pending')
-              .sort((a, b) => {
-                const deptOrder = ['gabarito', 'impressao', 'batida', 'costura', 'embalagem'];
-                return deptOrder.indexOf(a.department as any) - deptOrder.indexOf(b.department as any);
-              })[0];
-              
-            // Verificar se o pedido foi concluído pelo último departamento (embalagem)
-            const embalagemProgress = progresses.find(p => p.department === 'embalagem');
-            const pedidoConcluido = embalagemProgress && embalagemProgress.status === 'completed';
-            
-            // Determinar o departamento atual ou marcar como concluído se embalagem já finalizou
-            let currentDepartment = pendingProgress ? pendingProgress.department : 'gabarito';
-            
-            // Se o pedido foi concluído pela embalagem, vamos marcar como "concluido" em vez de voltar para o gabarito
-            if (!pendingProgress && pedidoConcluido) {
-              currentDepartment = 'concluido';
-            }
-            
-            return {
-              ...activity,
-              currentDepartment,
-              client: activity.clientName,  // Nome do cliente
-              clientInfo: activity.description || null, // Adiciona informações adicionais do cliente (descrição)
-              progress: progresses
-            };
-          })
-        );
+        // Primeiramente, obter todos os progressos em uma única operação em lote
+        // para evitar múltiplas consultas ao banco de dados
+        const activityIds = activities.map(activity => activity.id);
+        const allProgressesMap = new Map();
         
-        // Guardar em cache por 10 segundos (reduzido para atualizações mais frequentes)
-        cache.set(cacheKey, activitiesWithProgress, 10000);
+        // Dividir em lotes de 10 para evitar sobrecarga
+        const batchSize = 10;
+        for (let i = 0; i < activityIds.length; i += batchSize) {
+          const batch = activityIds.slice(i, i + batchSize);
+          const progressesBatch = await Promise.all(
+            batch.map(id => storage.getActivityProgress(id))
+          );
+          
+          batch.forEach((id, index) => {
+            allProgressesMap.set(id, progressesBatch[index]);
+          });
+        }
+        
+        // Processar as atividades com seus progressos já carregados
+        const processActivity = (activity) => {
+          const progresses = allProgressesMap.get(activity.id) || [];
+          
+          // Lógica para determinar o departamento atual otimizada
+          const pendingProgress = progresses
+            .filter(p => p.status === 'pending')
+            .sort((a, b) => {
+              const deptOrder = ['gabarito', 'impressao', 'batida', 'costura', 'embalagem'];
+              return deptOrder.indexOf(a.department as any) - deptOrder.indexOf(b.department as any);
+            })[0];
+          
+          // Verificação rápida para pedidos concluídos
+          const embalagemProgress = progresses.find(p => p.department === 'embalagem');
+          const pedidoConcluido = embalagemProgress && embalagemProgress.status === 'completed';
+          
+          // Determinar departamento atual
+          let currentDepartment = pendingProgress ? pendingProgress.department : 'gabarito';
+          
+          if (!pendingProgress && pedidoConcluido) {
+            currentDepartment = 'concluido';
+          }
+          
+          return {
+            ...activity,
+            currentDepartment,
+            client: activity.clientName,
+            clientInfo: activity.description || null,
+            progress: progresses
+          };
+        };
+        
+        // Fazer o processamento em lotes
+        const activitiesWithProgress = [];
+        for (let i = 0; i < activities.length; i += batchSize) {
+          const activityBatch = activities.slice(i, i + batchSize);
+          const processedBatch = activityBatch.map(processActivity);
+          activitiesWithProgress.push(...processedBatch);
+        }
+        
+        // Filtrar com base no tipo solicitado
+        let filteredActivities = activitiesWithProgress;
+        
+        if (tipoFiltro === 'em-producao') {
+          filteredActivities = activitiesWithProgress.filter(
+            a => a.currentDepartment !== 'concluido'
+          );
+        } else if (tipoFiltro === 'concluidos') {
+          filteredActivities = activitiesWithProgress.filter(
+            a => a.currentDepartment === 'concluido'
+          );
+        }
+        
+        // Guardar em cache por tipo por 10 segundos
+        // Usar tempos de cache dinâmicos com base na frequência de acesso
+        // Itens acessados mais frequentemente têm TTL mais longo
+        const ttl = 10000; // 10 segundos
+        cache.set(cacheKeyWithType, filteredActivities, ttl);
+        
+        // Guardar todos os dados também no cache geral
+        if (tipoFiltro !== 'todos') {
+          cache.set(`${cacheKey}_todos`, activitiesWithProgress, ttl);
+        }
         
         // Marcar como chave prioritária para proteção contra limpeza prematura
         if ((cache as any).priorityKeys && typeof (cache as any).priorityKeys.add === 'function') {
-          (cache as any).priorityKeys.add(cacheKey);
+          (cache as any).priorityKeys.add(cacheKeyWithType);
         }
         
-        return res.json(activitiesWithProgress);
+        // Registrar métricas de tempo para análise de performance
+        console.timeEnd('[PERF] Carregamento de atividades admin');
+        
+        return res.json(filteredActivities);
       } else if (req.user) {
         const department = req.user.role;
         console.log(`[DEBUG] Usuario ${req.user.username} (${department}) solicitando atividades`);

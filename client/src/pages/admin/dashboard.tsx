@@ -49,10 +49,31 @@ export default function AdminDashboard() {
 
   // Função para atualizar dados
   const handleRefresh = () => {
-    queryClient.invalidateQueries({ queryKey: ["/api/activities"] });
-    queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
-    queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
-    queryClient.invalidateQueries({ queryKey: ["/api/stats/department-counts"] });
+    // Invalidar todas as queries de atividades (geral, concluídos e em-producao)
+    queryClient.invalidateQueries({ 
+      queryKey: ["/api/activities"]
+    });
+    
+    // Invalidar estatísticas
+    queryClient.invalidateQueries({ 
+      queryKey: ["/api/stats"]
+    });
+    
+    // Invalidar notificações
+    queryClient.invalidateQueries({ 
+      queryKey: ["/api/notifications"]
+    });
+    
+    // Invalidar contagem por departamentos
+    queryClient.invalidateQueries({ 
+      queryKey: ["/api/stats/department-counts"]
+    });
+    
+    // Fazer solicitação para diagnóstico para verificar status do cache  
+    fetch("/api/system/diagnostico")
+      .then(resp => resp.json())
+      .catch(err => console.error("Erro ao carregar diagnóstico:", err));
+    
     toast({
       title: "Atualizado",
       description: "Dados atualizados com sucesso",
@@ -524,18 +545,31 @@ function ActivitiesList(showCompleted: boolean = false) {
   const [filterStatus, setFilterStatus] = useState<string | null>(null);
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   
-  // Otimização: Usar staleTime para reduzir as chamadas à API
+  // Determinar o tipo de lista a ser carregada baseado no parâmetro
+  const tipoLista = showCompleted ? 'concluidos' : 'em-producao';
+  
+  // Otimização: Usar queryKey específica para cada tipo de lista e parâmetros na URL
+  // isso permite que o backend filtre os dados corretamente
   const { data: activities, isLoading } = useQuery({
-    queryKey: ["/api/activities"],
+    queryKey: ["/api/activities", tipoLista],
     queryFn: async () => {
-      const response = await fetch("/api/activities");
+      console.time(`[PERF] Carregamento ${tipoLista}`);
+      const response = await fetch(`/api/activities?tipo=${tipoLista}`, {
+        headers: {
+          'Cache-Control': 'max-age=30' // usar cache do navegador para melhorar performance
+        }
+      });
       if (!response.ok) {
-        throw new Error("Erro ao buscar atividades");
+        throw new Error(`Erro ao buscar atividades (${tipoLista})`);
       }
-      return response.json();
+      const data = await response.json();
+      console.timeEnd(`[PERF] Carregamento ${tipoLista}`);
+      return data;
     },
     staleTime: 30000, // 30 segundos - reduz chamadas frequentes à API
-    refetchOnWindowFocus: false // Evita recarregar quando a janela ganha foco
+    refetchOnWindowFocus: false, // Evita recarregar quando a janela ganha foco
+    retry: 1, // Limitar tentativas de retry para falhas
+    refetchInterval: showCompleted ? 60000 : 30000 // Concluídos podem atualizar com menos frequência
   });
   
   // Função para abrir modal de visualização
