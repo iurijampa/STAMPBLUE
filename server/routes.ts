@@ -21,14 +21,14 @@ import { and, eq, sql } from "drizzle-orm";
 
 // LRU Cache TURBO-OTIMIZADO v2.0 para performance extrema com sistema de camadas
 class LRUCache {
-  // Cache principal para todos os itens
+  // Cache principal para todos os itens - camada L2
   private cache: Map<string, { value: any, expiry: number, lastAccess: number }>;
-  // Cache rápido (L1) para itens frequentemente acessados
+  // Cache ultra-rápido (L1) para itens frequentemente acessados - acesso instantâneo
   private hotCache: Map<string, any> = new Map();
-  // Cache de pré-busca para itens que serão necessários em breve
+  // Cache de pré-busca preditiva para itens que serão necessários em breve - L3
   private prefetchCache: Map<string, any> = new Map();
   
-  // Configurações de tamanho
+  // Configurações de tamanho otimizadas
   private maxSize: number;
   private hotCacheMaxSize: number;
   
@@ -36,7 +36,7 @@ class LRUCache {
   private hits: number = 0;
   private misses: number = 0;
   private lastCleanup: number = Date.now();
-  private cleanupInterval: number = 12000; // Reduzido para 12 segundos para maior eficiência
+  private cleanupInterval: number = 8000; // Reduzido para 8 segundos para eficiência máxima
   private totalRequests: number = 0;
   private evictions: number = 0;
   
@@ -424,7 +424,7 @@ class LRUCache {
 }
 
 // Cache global otimizado para uso em toda a aplicação
-const cache = new LRUCache(1200); // Suporta até 1200 itens em cache (aumentado para melhor performance)
+const cache = new LRUCache(1500); // Suporta até 1500 itens em cache (aumentado para performance máxima)
 // Expor globalmente para uso em outras partes do código
 (global as any).cache = cache;
 import impressaoRouter from "./solucao-impressao";
@@ -638,8 +638,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           })
         );
         
-        // Guardar em cache por 15 segundos
-        cache.set(cacheKey, activitiesWithProgress, 15000);
+        // Guardar em cache por 10 segundos (reduzido para atualizações mais frequentes)
+        cache.set(cacheKey, activitiesWithProgress, 10000);
+        
+        // Marcar como chave prioritária para proteção contra limpeza prematura
+        if ((cache as any).priorityKeys && typeof (cache as any).priorityKeys.add === 'function') {
+          (cache as any).priorityKeys.add(cacheKey);
+        }
         
         return res.json(activitiesWithProgress);
       } else if (req.user) {
@@ -650,8 +655,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log(`[EMERGENCIA] Usando método direto para buscar atividades do departamento ${department}`);
         const activities = await buscarAtividadesPorDepartamentoEmergencia(department);
         
-        // Guardar em cache por 15 segundos
-        cache.set(cacheKey, activities, 15000);
+        // Guardar em cache por 10 segundos (reduzido para atualizações mais frequentes)
+        cache.set(cacheKey, activities, 10000);
+        
+        // Marcar como chave prioritária para proteção contra limpeza prematura
+        if ((cache as any).priorityKeys && typeof (cache as any).priorityKeys.add === 'function') {
+          (cache as any).priorityKeys.add(cacheKey);
+        }
         
         return res.json(activities);
       } else {
