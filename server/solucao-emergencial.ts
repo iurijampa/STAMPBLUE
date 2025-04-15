@@ -2,21 +2,27 @@ import { db, cachedQuery, clearCacheByPattern, CACHE_PERSISTENTE_POR_DEPT } from
 import { activities, activityProgress, DEPARTMENTS } from "@shared/schema"; 
 import { and, eq, inArray, sql } from "drizzle-orm";
 
-// TTL para cache de atividades pendentes por departamento (20 segundos)
-const CACHE_DEPT_TTL = 20 * 1000;
+// TTL para cache de atividades pendentes por departamento (7 segundos)
+// Reduzido para melhorar a responsividade e manter dados mais atualizados
+const CACHE_DEPT_TTL = 7 * 1000;
 
 /**
  * Sistema de cache persistente pré-computado para atividades pendentes por departamento
  * Essa função é executada em background a cada 10 segundos para manter dados atualizados
  * com gargalos, impactando o mínimo possível o usuário final
  */
-export async function atualizarCachePersistenteDepartamentos() {
+export async function atualizarCachePersistenteDepartamentos(departmentsToUpdate?: string[]) {
   const inicio = Date.now();
   console.log(`[CACHE-DEPT] Atualizando cache persistente de departamentos`);
 
   try {
-    // Buscar atividades para cada departamento em background
-    for (const dept of DEPARTMENTS) {
+    // Lista de departamentos a atualizar
+    const depts = departmentsToUpdate && departmentsToUpdate.length > 0 
+      ? departmentsToUpdate.filter(d => DEPARTMENTS.includes(d as any))
+      : DEPARTMENTS;
+    
+    // Buscar atividades para cada departamento especificado (ou todos, se não especificado)
+    for (const dept of depts) {
       const cacheKey = `activities_dept_${dept}`;
       const cachedData = CACHE_PERSISTENTE_POR_DEPT.get(cacheKey);
       

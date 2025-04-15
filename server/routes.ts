@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth } from "./auth";
 import { WebSocketServer, WebSocket } from "ws";
+import { atualizarCachePersistenteDepartamentos } from "./solucao-emergencial";
 import { 
   insertActivitySchema, 
   insertActivityProgressSchema,
