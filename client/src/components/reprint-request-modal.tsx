@@ -147,7 +147,7 @@ export default function ReprintRequestModal({ isOpen, onClose, activity, onSucce
       
       console.log("🔥 Validação de campos concluída com sucesso");
       
-      // Preparar dados simplificados - reduzindo ao mínimo necessário
+      // Preparar dados simplificados - incluindo departamentos de origem e destino
       const dataToSubmit = {
         activityId, // Enviar como número
         requestedBy: formData.requestedBy.trim(),
@@ -155,6 +155,8 @@ export default function ReprintRequestModal({ isOpen, onClose, activity, onSucce
         details: (formData.details || "").trim(),
         quantity: Number(formData.quantity || 1),
         priority: formData.priority || "normal",
+        fromDepartment: "batida", // Origem é sempre o setor de batida
+        toDepartment: "impressao", // Destino é sempre o setor de impressão
       };
       
       console.log("🔥 Dados simplificados para envio:", JSON.stringify(dataToSubmit, null, 2));
