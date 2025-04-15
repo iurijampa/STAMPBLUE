@@ -836,7 +836,8 @@ export default function DepartmentDashboard() {
                         {historyData
                           .filter(item => {
                             const today = new Date();
-                            const itemDate = new Date(item.completedAt || "");
+                            // Usar createdAt como fallback quando completedAt não estiver disponível
+                            const itemDate = new Date(item.completedAt || item.createdAt);
                             return (
                               itemDate.getDate() === today.getDate() &&
                               itemDate.getMonth() === today.getMonth() &&
@@ -872,7 +873,7 @@ export default function DepartmentDashboard() {
                           ))}
                         {historyData.filter(item => {
                           const today = new Date();
-                          const itemDate = new Date(item.completedAt || "");
+                          const itemDate = new Date(item.completedAt || item.createdAt);
                           return (
                             itemDate.getDate() === today.getDate() &&
                             itemDate.getMonth() === today.getMonth() &&
