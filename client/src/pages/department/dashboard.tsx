@@ -892,7 +892,7 @@ export default function DepartmentDashboard() {
                         {historyData
                           .filter(item => {
                             const today = new Date();
-                            const itemDate = new Date(item.completedAt || "");
+                            const itemDate = new Date(item.completedAt || item.createdAt);
                             const todayDay = today.getDate();
                             const todayMonth = today.getMonth();
                             const todayYear = today.getFullYear();
@@ -940,7 +940,7 @@ export default function DepartmentDashboard() {
                           ))}
                         {historyData.filter(item => {
                           const today = new Date();
-                          const itemDate = new Date(item.completedAt || "");
+                          const itemDate = new Date(item.completedAt || item.createdAt);
                           const todayDay = today.getDate();
                           const todayMonth = today.getMonth();
                           const todayYear = today.getFullYear();
@@ -971,7 +971,7 @@ export default function DepartmentDashboard() {
                         {historyData
                           .filter(item => {
                             const today = new Date();
-                            const itemDate = new Date(item.completedAt || "");
+                            const itemDate = new Date(item.completedAt || item.createdAt);
                             
                             // Verificar se é mais antigo que 7 dias
                             const sevenDaysAgo = new Date();
@@ -1007,7 +1007,7 @@ export default function DepartmentDashboard() {
                           ))}
                         {historyData.filter(item => {
                           const today = new Date();
-                          const itemDate = new Date(item.completedAt || "");
+                          const itemDate = new Date(item.completedAt || item.createdAt);
                           
                           // Verificar se é mais antigo que 7 dias
                           const sevenDaysAgo = new Date();
