@@ -1006,34 +1006,26 @@ export default function DepartmentDashboard() {
                           .map(activity => (
                             <div 
                               key={`antigo-${activity.id}`}
-                              className="border-l-4 border-l-amber-500 border rounded-lg p-4 hover:shadow-md hover:bg-amber-50 transition-all duration-200 mb-3"
+                              className="border-l-4 border-l-amber-500 border rounded-lg p-3 hover:bg-amber-50 transition-colors mb-2"
                             >
-                              <div className="flex justify-between items-center mb-2">
+                              <div className="flex justify-between items-center mb-1">
                                 <div className="flex gap-2 items-center">
-                                  <div className="bg-amber-100 rounded-full p-1.5">
-                                    <Check className="h-4 w-4 text-amber-600" />
-                                  </div>
-                                  <h4 className="font-bold text-gray-800">{activity.title}</h4>
-                                  <Badge className="bg-amber-100 hover:bg-amber-200 text-amber-800 border-amber-200 ml-2">
+                                  <Check className="h-4 w-4 text-amber-600" />
+                                  <h4 className="font-semibold text-gray-800">{activity.title}</h4>
+                                  <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
                                     Anterior
                                   </Badge>
                                 </div>
-                                <div className="px-2 py-1 rounded bg-amber-50 text-xs font-semibold text-amber-800">
-                                  Pedido #{activity.id}
+                                <div className="text-xs text-neutral-500">
+                                  #{activity.id}
                                 </div>
                               </div>
-                              <div className="ml-8">
-                                <p className="text-sm text-gray-600 mb-2">{activity.description}</p>
-                                <div className="flex items-center gap-3 text-xs text-gray-500 mt-2 bg-gray-50 inline-block px-2 py-1 rounded">
-                                  <span className="font-medium text-amber-700">
-                                    <UserIcon className="h-3 w-3 inline mr-1" />
-                                    {activity.completedBy}
-                                  </span>
+                              <div className="ml-6">
+                                <p className="text-sm text-gray-600 mb-1">{activity.description}</p>
+                                <div className="flex items-center gap-3 text-xs text-gray-500">
+                                  <span className="font-medium text-amber-700">{activity.completedBy}</span>
                                   <span>•</span>
-                                  <span className="text-gray-500">
-                                    <Clock className="h-3 w-3 inline mr-1" />
-                                    {formatDate(activity.completedAt ? new Date(activity.completedAt) : null)}
-                                  </span>
+                                  <span>{formatDate(activity.completedAt ? new Date(activity.completedAt) : null)}</span>
                                 </div>
                               </div>
                             </div>
