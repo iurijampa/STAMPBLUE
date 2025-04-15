@@ -1,6 +1,9 @@
-import { db, cachedQuery, clearCacheByPattern } from "./db";
+import { db, cachedQuery, clearCacheByPattern, CACHE_PERSISTENTE_POR_DEPT } from "./db";
 import { activities, activityProgress, DEPARTMENTS } from "@shared/schema"; 
 import { and, eq, inArray, sql } from "drizzle-orm";
+
+// TTL para cache de atividades pendentes por departamento (15 segundos)
+const CACHE_DEPT_TTL = 15 * 1000;
 
 // Cache de departamentos para não precisar consultar a cada chamada
 const departmentCache: Record<string, number> = {};

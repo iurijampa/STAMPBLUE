@@ -8,7 +8,11 @@ export const sql = postgres(connectionString, { max: 10, idle_timeout: 20 });
 export const db = drizzle(sql, { schema });
 
 // Cache de consultas preparadas para melhorar performance
-const queryCache = new Map<string, any>();
+const queryCache = new Map<string, { data: any, timestamp: number }>();
+
+// Cache persistente pré-computado - super otimizado para atividades pendentes por departamento
+export const CACHE_PERSISTENTE_POR_DEPT = new Map<string, { data: any, timestamp: number }>();
+const CACHE_TTL_DEPT_ACTIVITIES = 30 * 1000; // 30 segundos
 
 // Função auxiliar para criar um cliente de pool de conexões com cache
 export async function withPool<T>(callback: () => Promise<T>): Promise<T> {
@@ -73,8 +77,7 @@ export async function cachedQuery<T>(key: string, query: () => Promise<T>, ttlMs
     if (isValidCachedData(result)) {
       queryCache.set(key, { 
         data: result, 
-        timestamp: Date.now(),
-        hash: Array.isArray(result) ? result.length : JSON.stringify(result).length // Fingerprint simples
+        timestamp: Date.now()
       });
     } else {
       console.error(`INTEGRIDADE: Resultado da consulta inválido para ${key}, não armazenado em cache`);
