@@ -10,7 +10,7 @@ import { useQuery } from "@tanstack/react-query";
 import { 
   Loader2, CalendarClock, Clock, Eye, RefreshCw, RotateCcw, Printer,
   ArchiveIcon, ListTodo, CheckCircle, InboxIcon, CornerUpLeft, 
-  ClipboardList, Plus, Hammer, CalendarIcon
+  ClipboardList, Plus, Hammer, CalendarIcon, History, Check
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -40,6 +40,9 @@ interface ActivityWithNotes extends Activity {
   returnedBy?: string | null;
   returnNotes?: string | null;
   returnedAt?: Date | null;
+  // Campos para histórico
+  completedAt?: string | null;
+  completedBy?: string | null;
 }
 
 export default function DepartmentDashboard() {
@@ -362,6 +365,32 @@ export default function DepartmentDashboard() {
     }
   }, [userDepartment, user, refetchActivities, playBeepSound, toast]);
   
+  // Buscar histórico de atividades concluídas pelo departamento
+  const { 
+    data: historyData = [], 
+    isLoading: historyLoading, 
+    refetch: refetchHistory
+  } = useQuery({
+    queryKey: [`/api/activities/history/${department}`],
+    queryFn: async () => {
+      console.log(`Buscando histórico de atividades para ${department}...`);
+      const historyStartTime = Date.now();
+      const response = await fetch(`/api/activities/history/${department}`, {
+        credentials: 'include'
+      });
+      
+      if (response.status === 401) {
+        navigate("/auth");
+        return [];
+      }
+      
+      const data = await response.json();
+      console.log(`Histórico carregado em ${Date.now() - historyStartTime}ms. Total: ${data.length}`);
+      return data as (ActivityWithNotes & { completedAt: string; completedBy: string })[];
+    },
+    enabled: !!department && !userLoading,
+  });
+  
   // Buscar estatísticas do departamento
   const { data: stats = { pendingCount: 0, completedCount: 0 }, isLoading: statsLoading, refetch: refetchStats } = useQuery({
     queryKey: ["/api/department/stats", userDepartment],
@@ -419,6 +448,7 @@ export default function DepartmentDashboard() {
     // Recarregar dados após a conclusão de uma atividade
     refetchActivities();
     refetchStats();
+    refetchHistory();
   };
   
   // Função para tratar o retorno da atividade
@@ -578,200 +608,426 @@ export default function DepartmentDashboard() {
             </div>
           )}
           
-          <Card>
-            <CardHeader>
-              <CardTitle>Atividades Pendentes</CardTitle>
-              <CardDescription>
-                Lista de atividades que precisam ser processadas pelo seu departamento
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {/* Carregamento de atividades com esqueleto */}
-              {activitiesLoading ? (
-                <ActivitySkeleton />
-              ) : activitiesData && activitiesData.length > 0 ? (
-                <div className="space-y-4">
-                  {/* Ordena atividades por data de entrega */}
-                  {[...activitiesData]
-                    .sort((a, b) => {
-                      // Se ambos têm deadline, ordena por data
-                      if (a.deadline && b.deadline) {
-                        return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
-                      }
-                      // Se apenas a atividade A tem deadline, ela vem primeiro
-                      else if (a.deadline) {
-                        return -1;
-                      }
-                      // Se apenas a atividade B tem deadline, ela vem primeiro
-                      else if (b.deadline) {
-                        return 1;
-                      }
-                      // Se nenhuma tem deadline, mantém a ordem original
-                      return 0;
-                    })
-                    .map((activity) => (
-                    <div 
-                      key={activity.id}
-                      className="border rounded-lg p-4 hover:bg-neutral-50 transition-colors"
-                    >
-                      <div className="flex justify-between items-start">
-                        <div className="flex gap-4">
-                          {/* Miniatura da imagem */}
-                          <div className="w-16 h-16 min-w-16 rounded overflow-hidden border bg-neutral-100 flex items-center justify-center">
-                            {activity.image ? (
-                              <img 
-                                src={activity.image} 
-                                alt={`Imagem de ${activity.title}`} 
-                                className="w-full h-full object-cover"
-                              />
-                            ) : (
-                              <span className="text-xs text-neutral-400">Sem imagem</span>
-                            )}
-                          </div>
-                          
-                          <div className="flex-1">
-                            <div className="flex flex-wrap items-center gap-2 mb-2">
-                              {/* Nome do pedido em destaque */}
-                              <h3 className="text-xl font-bold w-full">{activity.title}</h3>
-                              
-                              {/* ID do pedido */}
-                              <div className="bg-gray-100 px-2 py-1 rounded text-sm">
-                                ID: #{activity.id}
-                              </div>
-                              
-                              {/* Status do setor em que está */}
-                              <Badge className="text-white font-medium bg-blue-600">
-                                Setor: {userDepartment ? capitalize(userDepartment) : "Não definido"}
-                              </Badge>
-                              
-                              {/* Prazo de entrega em destaque */}
-                              <Badge 
-                                variant="outline" 
-                                className={cn("font-medium text-white px-3 py-1", getDeadlineColor(activity.deadline))}
-                              >
-                                <CalendarIcon className="w-4 h-4 mr-1" />
-                                {activity.deadline ? formatDate(activity.deadline) : "Sem prazo"}
-                              </Badge>
-                            </div>
-                            
-                            {/* Descrição do pedido */}
-                            <p className="text-neutral-600 line-clamp-2 my-2">
-                              {activity.description}
-                            </p>
-                            
-                            {/* Informações de retorno, se o pedido foi retornado */}
-                            {activity.wasReturned && (
-                              <div className="bg-red-50 p-2 rounded-md mb-2 border border-red-200">
-                                <p className="font-medium text-red-800 text-sm">
-                                  Pedido retornado pelo próximo setor
-                                </p>
-                                <p className="text-sm text-red-700">
-                                  <span className="font-medium">Retornado por:</span> {activity.returnedBy || "Não informado"}
-                                </p>
-                                {activity.returnNotes && (
-                                  <p className="text-sm text-red-700">
-                                    <span className="font-medium">Motivo:</span> {activity.returnNotes}
-                                  </p>
-                                )}
-                                {activity.returnedAt && (
-                                  <p className="text-xs text-red-600 mt-1">
-                                    <span className="font-medium">Data:</span> {formatDate(activity.returnedAt)}
-                                  </p>
-                                )}
-                              </div>
-                            )}
-                            
-                            {/* Observações do setor anterior */}
-                            {activity.previousNotes && !activity.wasReturned && (
-                              <div className="bg-amber-50 p-2 rounded-md mb-2 border border-amber-200">
-                                <p className="font-medium text-amber-800 text-sm">
-                                  Observações do setor anterior ({activity.previousDepartment}):
-                                </p>
-                                <p className="text-sm text-amber-700">
-                                  {activity.previousNotes}
-                                </p>
-                                {activity.previousCompletedBy && (
-                                  <p className="text-xs text-amber-600 mt-1">
-                                    Finalizado por: {activity.previousCompletedBy}
-                                  </p>
-                                )}
-                              </div>
-                            )}
-                            
-                            <div className="flex items-center text-sm text-neutral-500 gap-4 mt-2">
-                              <div className="flex items-center">
-                                <CalendarClock className="h-4 w-4 mr-1" />
-                                <span>Criado: {formatDate(activity.createdAt)}</span>
-                              </div>
-                              
-                              {activity.deadline && (
-                                <div className="flex items-center">
-                                  <Clock className="h-4 w-4 mr-1" />
-                                  <span>
-                                    Entrega em {formatDistanceToNow(new Date(activity.deadline), {
-                                      addSuffix: true, 
-                                      locale: ptBR
-                                    })}
-                                  </span>
+          <Tabs defaultValue="pendentes" className="w-full">
+            <TabsList className="mb-4">
+              <TabsTrigger value="pendentes" className="flex items-center gap-1">
+                <ListTodo className="h-4 w-4" />
+                <span>Atividades Pendentes</span>
+              </TabsTrigger>
+              <TabsTrigger value="historico" className="flex items-center gap-1">
+                <History className="h-4 w-4" />
+                <span>Histórico</span>
+              </TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="pendentes">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Atividades Pendentes</CardTitle>
+                  <CardDescription>
+                    Lista de atividades que precisam ser processadas pelo seu departamento
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {/* Carregamento de atividades com esqueleto */}
+                  {activitiesLoading ? (
+                    <ActivitySkeleton />
+                  ) : activitiesData && activitiesData.length > 0 ? (
+                    <div className="space-y-4">
+                      {/* Ordena atividades por data de entrega */}
+                      {[...activitiesData]
+                        .sort((a, b) => {
+                          // Se ambos têm deadline, ordena por data
+                          if (a.deadline && b.deadline) {
+                            return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
+                          }
+                          // Se apenas a atividade A tem deadline, ela vem primeiro
+                          else if (a.deadline) {
+                            return -1;
+                          }
+                          // Se apenas a atividade B tem deadline, ela vem primeiro
+                          else if (b.deadline) {
+                            return 1;
+                          }
+                          // Se nenhuma tem deadline, mantém a ordem original
+                          return 0;
+                        })
+                        .map((activity) => (
+                          <div 
+                            key={activity.id}
+                            className="border rounded-lg p-4 hover:bg-neutral-50 transition-colors"
+                          >
+                            <div className="flex justify-between items-start">
+                              <div className="flex gap-4">
+                                {/* Miniatura da imagem */}
+                                <div className="w-16 h-16 min-w-16 rounded overflow-hidden border bg-neutral-100 flex items-center justify-center">
+                                  {activity.image ? (
+                                    <img 
+                                      src={activity.image} 
+                                      alt={`Imagem de ${activity.title}`} 
+                                      className="w-full h-full object-cover"
+                                    />
+                                  ) : (
+                                    <span className="text-xs text-neutral-400">Sem imagem</span>
+                                  )}
                                 </div>
-                              )}
+                                
+                                <div className="flex-1">
+                                  <div className="flex flex-wrap items-center gap-2 mb-2">
+                                    {/* Nome do pedido em destaque */}
+                                    <h3 className="text-xl font-bold w-full">{activity.title}</h3>
+                                    
+                                    {/* ID do pedido */}
+                                    <div className="bg-gray-100 px-2 py-1 rounded text-sm">
+                                      ID: #{activity.id}
+                                    </div>
+                                    
+                                    {/* Status do setor em que está */}
+                                    <Badge className="text-white font-medium bg-blue-600">
+                                      Setor: {userDepartment ? capitalize(userDepartment) : "Não definido"}
+                                    </Badge>
+                                    
+                                    {/* Prazo de entrega em destaque */}
+                                    <Badge 
+                                      variant="outline" 
+                                      className={cn("font-medium text-white px-3 py-1", getDeadlineColor(activity.deadline))}
+                                    >
+                                      <CalendarIcon className="w-4 h-4 mr-1" />
+                                      {activity.deadline ? formatDate(activity.deadline) : "Sem prazo"}
+                                    </Badge>
+                                  </div>
+                                  
+                                  {/* Descrição do pedido */}
+                                  <p className="text-neutral-600 line-clamp-2 my-2">
+                                    {activity.description}
+                                  </p>
+                                  
+                                  {/* Informações de retorno, se o pedido foi retornado */}
+                                  {activity.wasReturned && (
+                                    <div className="bg-red-50 p-2 rounded-md mb-2 border border-red-200">
+                                      <p className="font-medium text-red-800 text-sm">
+                                        Pedido retornado pelo próximo setor
+                                      </p>
+                                      <p className="text-sm text-red-700">
+                                        <span className="font-medium">Retornado por:</span> {activity.returnedBy || "Não informado"}
+                                      </p>
+                                      {activity.returnNotes && (
+                                        <p className="text-sm text-red-700">
+                                          <span className="font-medium">Motivo:</span> {activity.returnNotes}
+                                        </p>
+                                      )}
+                                      {activity.returnedAt && (
+                                        <p className="text-xs text-red-600 mt-1">
+                                          <span className="font-medium">Data:</span> {formatDate(activity.returnedAt)}
+                                        </p>
+                                      )}
+                                    </div>
+                                  )}
+                                  
+                                  {/* Observações do setor anterior */}
+                                  {activity.previousNotes && !activity.wasReturned && (
+                                    <div className="bg-amber-50 p-2 rounded-md mb-2 border border-amber-200">
+                                      <p className="font-medium text-amber-800 text-sm">
+                                        Observações do setor anterior ({activity.previousDepartment}):
+                                      </p>
+                                      <p className="text-sm text-amber-700">
+                                        {activity.previousNotes}
+                                      </p>
+                                      {activity.previousCompletedBy && (
+                                        <p className="text-xs text-amber-600 mt-1">
+                                          Finalizado por: {activity.previousCompletedBy}
+                                        </p>
+                                      )}
+                                    </div>
+                                  )}
+                                  
+                                  <div className="flex items-center text-sm text-neutral-500 gap-4 mt-2">
+                                    <div className="flex items-center">
+                                      <CalendarClock className="h-4 w-4 mr-1" />
+                                      <span>Criado: {formatDate(activity.createdAt)}</span>
+                                    </div>
+                                    
+                                    {activity.deadline && (
+                                      <div className="flex items-center">
+                                        <Clock className="h-4 w-4 mr-1" />
+                                        <span>
+                                          Entrega em {formatDistanceToNow(new Date(activity.deadline), {
+                                            addSuffix: true, 
+                                            locale: ptBR
+                                          })}
+                                        </span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                              
+                              <div className="flex flex-col gap-2">
+                                <Button 
+                                  variant="outline" 
+                                  size="sm"
+                                  className="flex items-center"
+                                  onClick={() => setViewActivity(activity)}
+                                >
+                                  <Eye className="h-4 w-4 mr-1" />
+                                  <span>Visualizar</span>
+                                </Button>
+                                
+                                <Button 
+                                  variant="default" 
+                                  size="sm"
+                                  onClick={() => setCompleteActivity(activity)}
+                                >
+                                  Concluir
+                                </Button>
+                                
+                                <Button 
+                                  variant="outline" 
+                                  size="sm"
+                                  className="flex items-center text-yellow-600 hover:text-yellow-700"
+                                  onClick={() => setReturnActivity(activity)}
+                                >
+                                  <RotateCcw className="h-4 w-4 mr-1" />
+                                  <span>Retornar</span>
+                                </Button>
+                                
+                                {/* Botão de solicitar reimpressão (apenas para o setor de Batida) */}
+                                {userDepartment === "batida" && (
+                                  <Button 
+                                    variant="outline" 
+                                    size="sm"
+                                    className="flex items-center text-blue-600 hover:text-blue-700"
+                                    onClick={() => setReprintActivity(activity)}
+                                  >
+                                    <Printer className="h-4 w-4 mr-1" />
+                                    <span>Solicitar Reimpressão</span>
+                                  </Button>
+                                )}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                        
-                        <div className="flex flex-col gap-2">
-                          <Button 
-                            variant="outline" 
-                            size="sm"
-                            className="flex items-center"
-                            onClick={() => setViewActivity(activity)}
-                          >
-                            <Eye className="h-4 w-4 mr-1" />
-                            <span>Visualizar</span>
-                          </Button>
-                          
-                          <Button 
-                            variant="default" 
-                            size="sm"
-                            onClick={() => setCompleteActivity(activity)}
-                          >
-                            Concluir
-                          </Button>
-                          
-                          <Button 
-                            variant="outline" 
-                            size="sm"
-                            className="flex items-center text-yellow-600 hover:text-yellow-700"
-                            onClick={() => setReturnActivity(activity)}
-                          >
-                            <RotateCcw className="h-4 w-4 mr-1" />
-                            <span>Retornar</span>
-                          </Button>
-                          
-                          {/* Botão de solicitar reimpressão (apenas para o setor de Batida) */}
-                          {userDepartment === "batida" && (
-                            <Button 
-                              variant="outline" 
-                              size="sm"
-                              className="flex items-center text-blue-600 hover:text-blue-700"
-                              onClick={() => setReprintActivity(activity)}
+                        ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 text-neutral-500">
+                      Nenhuma atividade pendente encontrada para o seu departamento.
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+            
+            <TabsContent value="historico">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Histórico de Atividades</CardTitle>
+                  <CardDescription>
+                    Pedidos já processados pelo seu departamento
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {historyLoading ? (
+                    <ActivitySkeleton />
+                  ) : historyData && historyData.length > 0 ? (
+                    <div className="space-y-6">
+                      {/* Agrupando por período */}
+                      <div>
+                        <h3 className="text-sm font-semibold mb-3 text-neutral-600 border-b pb-1">Hoje</h3>
+                        {historyData
+                          .filter(item => {
+                            const today = new Date();
+                            const itemDate = new Date(item.completedAt || "");
+                            return (
+                              itemDate.getDate() === today.getDate() &&
+                              itemDate.getMonth() === today.getMonth() &&
+                              itemDate.getFullYear() === today.getFullYear()
+                            );
+                          })
+                          .map(activity => (
+                            <div 
+                              key={`hoje-${activity.id}`}
+                              className="border rounded-lg p-3 hover:bg-neutral-50 transition-colors mb-2"
                             >
-                              <Printer className="h-4 w-4 mr-1" />
-                              <span>Solicitar Reimpressão</span>
-                            </Button>
-                          )}
-                        </div>
+                              <div className="flex justify-between items-center mb-1">
+                                <div className="flex gap-2 items-center">
+                                  <Check className="h-4 w-4 text-green-500" />
+                                  <h4 className="font-semibold">{activity.title}</h4>
+                                  <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                                    Concluído
+                                  </Badge>
+                                </div>
+                                <div className="text-xs text-neutral-500">
+                                  Pedido #{activity.id}
+                                </div>
+                              </div>
+                              <div className="ml-6">
+                                <p className="text-sm text-neutral-600 mb-1">{activity.description}</p>
+                                <div className="flex items-center gap-3 text-xs text-neutral-500">
+                                  <span className="font-medium">Finalizado por: {activity.completedBy}</span>
+                                  <span>•</span>
+                                  <span>{formatDate(activity.completedAt ? new Date(activity.completedAt) : null)}</span>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        {historyData.filter(item => {
+                          const today = new Date();
+                          const itemDate = new Date(item.completedAt || "");
+                          return (
+                            itemDate.getDate() === today.getDate() &&
+                            itemDate.getMonth() === today.getMonth() &&
+                            itemDate.getFullYear() === today.getFullYear()
+                          );
+                        }).length === 0 && (
+                          <p className="text-sm text-neutral-500 italic text-center py-2">
+                            Nenhuma atividade concluída hoje
+                          </p>
+                        )}
+                      </div>
+                      
+                      {/* Esta semana */}
+                      <div>
+                        <h3 className="text-sm font-semibold mb-3 text-neutral-600 border-b pb-1">Esta Semana</h3>
+                        {historyData
+                          .filter(item => {
+                            const today = new Date();
+                            const itemDate = new Date(item.completedAt || "");
+                            const todayDay = today.getDate();
+                            const todayMonth = today.getMonth();
+                            const todayYear = today.getFullYear();
+                            
+                            // Excluir itens de hoje
+                            if (
+                              itemDate.getDate() === todayDay &&
+                              itemDate.getMonth() === todayMonth &&
+                              itemDate.getFullYear() === todayYear
+                            ) {
+                              return false;
+                            }
+                            
+                            // Verificar se está na mesma semana (últimos 7 dias)
+                            const sevenDaysAgo = new Date();
+                            sevenDaysAgo.setDate(today.getDate() - 7);
+                            return itemDate >= sevenDaysAgo && itemDate <= today;
+                          })
+                          .map(activity => (
+                            <div 
+                              key={`semana-${activity.id}`}
+                              className="border rounded-lg p-3 hover:bg-neutral-50 transition-colors mb-2"
+                            >
+                              <div className="flex justify-between items-center mb-1">
+                                <div className="flex gap-2 items-center">
+                                  <Check className="h-4 w-4 text-green-500" />
+                                  <h4 className="font-semibold">{activity.title}</h4>
+                                  <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                                    Concluído
+                                  </Badge>
+                                </div>
+                                <div className="text-xs text-neutral-500">
+                                  Pedido #{activity.id}
+                                </div>
+                              </div>
+                              <div className="ml-6">
+                                <p className="text-sm text-neutral-600 mb-1">{activity.description}</p>
+                                <div className="flex items-center gap-3 text-xs text-neutral-500">
+                                  <span className="font-medium">Finalizado por: {activity.completedBy}</span>
+                                  <span>•</span>
+                                  <span>{formatDate(activity.completedAt ? new Date(activity.completedAt) : null)}</span>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        {historyData.filter(item => {
+                          const today = new Date();
+                          const itemDate = new Date(item.completedAt || "");
+                          const todayDay = today.getDate();
+                          const todayMonth = today.getMonth();
+                          const todayYear = today.getFullYear();
+                          
+                          // Excluir itens de hoje
+                          if (
+                            itemDate.getDate() === todayDay &&
+                            itemDate.getMonth() === todayMonth &&
+                            itemDate.getFullYear() === todayYear
+                          ) {
+                            return false;
+                          }
+                          
+                          // Verificar se está na mesma semana (últimos 7 dias)
+                          const sevenDaysAgo = new Date();
+                          sevenDaysAgo.setDate(today.getDate() - 7);
+                          return itemDate >= sevenDaysAgo && itemDate <= today;
+                        }).length === 0 && (
+                          <p className="text-sm text-neutral-500 italic text-center py-2">
+                            Nenhuma atividade concluída nesta semana
+                          </p>
+                        )}
+                      </div>
+                      
+                      {/* Mais Antigos */}
+                      <div>
+                        <h3 className="text-sm font-semibold mb-3 text-neutral-600 border-b pb-1">Mais Antigos</h3>
+                        {historyData
+                          .filter(item => {
+                            const today = new Date();
+                            const itemDate = new Date(item.completedAt || "");
+                            
+                            // Verificar se é mais antigo que 7 dias
+                            const sevenDaysAgo = new Date();
+                            sevenDaysAgo.setDate(today.getDate() - 7);
+                            return itemDate < sevenDaysAgo;
+                          })
+                          .map(activity => (
+                            <div 
+                              key={`antigo-${activity.id}`}
+                              className="border rounded-lg p-3 hover:bg-neutral-50 transition-colors mb-2"
+                            >
+                              <div className="flex justify-between items-center mb-1">
+                                <div className="flex gap-2 items-center">
+                                  <Check className="h-4 w-4 text-green-500" />
+                                  <h4 className="font-semibold">{activity.title}</h4>
+                                  <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                                    Concluído
+                                  </Badge>
+                                </div>
+                                <div className="text-xs text-neutral-500">
+                                  Pedido #{activity.id}
+                                </div>
+                              </div>
+                              <div className="ml-6">
+                                <p className="text-sm text-neutral-600 mb-1">{activity.description}</p>
+                                <div className="flex items-center gap-3 text-xs text-neutral-500">
+                                  <span className="font-medium">Finalizado por: {activity.completedBy}</span>
+                                  <span>•</span>
+                                  <span>{formatDate(activity.completedAt ? new Date(activity.completedAt) : null)}</span>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        {historyData.filter(item => {
+                          const today = new Date();
+                          const itemDate = new Date(item.completedAt || "");
+                          
+                          // Verificar se é mais antigo que 7 dias
+                          const sevenDaysAgo = new Date();
+                          sevenDaysAgo.setDate(today.getDate() - 7);
+                          return itemDate < sevenDaysAgo;
+                        }).length === 0 && (
+                          <p className="text-sm text-neutral-500 italic text-center py-2">
+                            Nenhuma atividade concluída anterior a esta semana
+                          </p>
+                        )}
                       </div>
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-8 text-neutral-500">
-                  Nenhuma atividade pendente encontrada para o seu departamento.
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                  ) : (
+                    <div className="text-center py-8 text-neutral-500">
+                      Nenhuma atividade concluída encontrada para o seu departamento.
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
           
           {/* Modal de visualização de atividade */}
           <ViewActivityModal 
