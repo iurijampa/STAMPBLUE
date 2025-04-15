@@ -1,14 +1,256 @@
-import { createContext, ReactNode, useContext } from 'react';
-import { useWebSocket } from './use-websocket-fixed';
+import { createContext, ReactNode, useContext, useCallback, useEffect, useRef, useState } from 'react';
+import { useAuth } from './use-auth';
+import { useToast } from './use-toast';
+import { queryClient } from '@/lib/queryClient';
+
+// CONFIGURAÇÃO TURBO-OTIMIZADA 3.0 SIMPLIFICADA
+// Configurações principais
+const MIN_POLLING_INTERVAL = 4000; // 4 segundos - atualizações ultra-frequentes
+const MAX_POLLING_INTERVAL = 15000; // 15 segundos - intervalo máximo
+const RECONNECT_DELAY = 3000; // 3 segundos - reconexão rápida
+const WS_TIMEOUT = 5000; // 5 segundos - timeout de conexão
+
+// Interface mais simples para o contexto WebSocket
+interface WebSocketContextType {
+  connected: boolean;
+  sendMessage: (data: any) => void;
+  departmentListeners: Set<string>;
+  addDepartmentListener: (department: string) => void;
+  removeDepartmentListener: (department: string) => void;
+}
 
 // Criar o contexto para o WebSocket
-type WebSocketContextType = ReturnType<typeof useWebSocket>;
-
 const WebSocketContext = createContext<WebSocketContextType | null>(null);
+
+// Interface para a Window global com a função playSoundAlert
+declare global {
+  interface Window {
+    playSoundAlert?: () => void;
+  }
+}
 
 // Provider para o WebSocket
 export function WebSocketProvider({ children }: { children: ReactNode }) {
-  const webSocketState = useWebSocket();
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [connected, setConnected] = useState(false);
+  const [departmentListeners] = useState<Set<string>>(new Set());
+  
+  // Refs para gerenciar recursos
+  const socketRef = useRef<WebSocket | null>(null);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Função para adicionar um departamento para ouvir
+  const addDepartmentListener = useCallback((department: string) => {
+    if (departmentListeners.has(department)) return;
+    departmentListeners.add(department);
+  }, [departmentListeners]);
+  
+  // Função para remover um departamento para ouvir
+  const removeDepartmentListener = useCallback((department: string) => {
+    if (departmentListeners.has(department)) {
+      departmentListeners.delete(department);
+    }
+  }, [departmentListeners]);
+  
+  // Função para limpar recursos
+  const cleanup = useCallback(() => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+    
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    
+    if (socketRef.current) {
+      try {
+        socketRef.current.close();
+      } catch (e) {
+        // Ignorar erros ao fechar
+      }
+      socketRef.current = null;
+    }
+  }, []);
+  
+  // Função para enviar uma mensagem através do WebSocket
+  const sendMessage = useCallback((data: any) => {
+    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+      try {
+        socketRef.current.send(JSON.stringify(data));
+      } catch (err) {
+        console.error('Erro ao enviar mensagem via WebSocket:', err);
+      }
+    }
+  }, []);
+  
+  // Função para buscar dados via polling
+  const fetchData = useCallback(async () => {
+    if (!user) return;
+    
+    try {
+      // Buscar dados com base no papel do usuário
+      if (user.role === 'admin') {
+        const response = await fetch('/api/activities', { 
+          credentials: 'include',
+          headers: { 'Cache-Control': 'no-cache' }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          queryClient.setQueryData(['/api/activities'], data);
+        }
+      } else {
+        const response = await fetch(`/api/activities/department/${user.role}`, {
+          credentials: 'include',
+          headers: { 'Cache-Control': 'no-cache' }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          queryClient.setQueryData(['/api/department/activities', user.role], data);
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao buscar dados:', error);
+    }
+  }, [user]);
+  
+  // Função para conectar ao WebSocket
+  const connectWebSocket = useCallback(() => {
+    if (!user || socketRef.current) return;
+    
+    cleanup();
+    
+    try {
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const wsUrl = `${protocol}//${window.location.host}/ws`;
+      
+      const socket = new WebSocket(wsUrl);
+      socketRef.current = socket;
+      
+      // Configurar timeout de conexão
+      timeoutRef.current = setTimeout(() => {
+        if (socket.readyState !== WebSocket.OPEN) {
+          socket.close();
+          socketRef.current = null;
+          // Tentar reconectar
+          timeoutRef.current = setTimeout(connectWebSocket, RECONNECT_DELAY);
+        }
+      }, WS_TIMEOUT);
+      
+      socket.onopen = () => {
+        console.log('WebSocket conectado com sucesso!');
+        setConnected(true);
+        
+        if (timeoutRef.current) {
+          clearTimeout(timeoutRef.current);
+          timeoutRef.current = null;
+        }
+        
+        // Enviar autenticação
+        if (user) {
+          sendMessage({
+            type: 'auth',
+            userId: user.id,
+            username: user.username,
+            role: user.role
+          });
+        }
+        
+        // Iniciar polling para garantir dados atualizados
+        fetchData();
+        intervalRef.current = setInterval(fetchData, MIN_POLLING_INTERVAL);
+      };
+      
+      socket.onclose = () => {
+        console.log('WebSocket fechado');
+        setConnected(false);
+        socketRef.current = null;
+        
+        // Tentar reconectar
+        timeoutRef.current = setTimeout(connectWebSocket, RECONNECT_DELAY);
+      };
+      
+      socket.onerror = () => {
+        console.error('Erro no WebSocket');
+        socket.close();
+      };
+      
+      socket.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          
+          if (data.type === 'notification') {
+            // Notificação recebida
+            toast({
+              title: data.title || 'Nova notificação',
+              description: data.message,
+              variant: data.variant || 'default',
+              duration: 5000
+            });
+            
+            // Atualizar cache
+            if (data.refreshQueries && Array.isArray(data.refreshQueries)) {
+              data.refreshQueries.forEach((queryKey: string | string[]) => {
+                queryClient.invalidateQueries({ queryKey: typeof queryKey === 'string' ? [queryKey] : queryKey });
+              });
+            }
+            
+            // Reproduzir som para departamento específico
+            if (data.department && departmentListeners.has(data.department)) {
+              if (window.playSoundAlert) {
+                window.playSoundAlert();
+              }
+            }
+            
+          } else if (data.type === 'data_update') {
+            // Invalidar cache
+            queryClient.invalidateQueries({ queryKey: data.queryKey || ['/api/activities'] });
+            
+            // Reproduzir som para departamento específico
+            if (data.department && departmentListeners.has(data.department)) {
+              if (window.playSoundAlert) {
+                window.playSoundAlert();
+              }
+            }
+            
+            // Atualizar dados imediatamente
+            fetchData();
+          }
+        } catch (err) {
+          console.error('Erro ao processar mensagem:', err);
+        }
+      };
+    } catch (err) {
+      console.error('Erro ao configurar WebSocket:', err);
+      
+      // Tentar reconectar
+      timeoutRef.current = setTimeout(connectWebSocket, RECONNECT_DELAY);
+    }
+  }, [user, cleanup, sendMessage, fetchData, departmentListeners, toast]);
+  
+  // Efeito para conectar/desconectar o WebSocket
+  useEffect(() => {
+    if (user) {
+      connectWebSocket();
+    } else {
+      cleanup();
+    }
+    
+    return cleanup;
+  }, [user, connectWebSocket, cleanup]);
+  
+  const webSocketState: WebSocketContextType = {
+    connected,
+    sendMessage,
+    departmentListeners,
+    addDepartmentListener,
+    removeDepartmentListener
+  };
   
   return (
     <WebSocketContext.Provider value={webSocketState}>
