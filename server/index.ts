@@ -57,8 +57,17 @@ app.use((req, res, next) => {
   next();
 });
 
+// Importar funções de otimização
+import { atualizarCachePersistenteDepartamentos } from "./solucao-emergencial";
+
 (async () => {
   const server = await registerRoutes(app);
+  
+  // Iniciar processo de pré-cálculo para cache persistente de departamentos
+  setInterval(atualizarCachePersistenteDepartamentos, 10 * 1000); // A cada 10 segundos
+  
+  // Executar imediatamente para preencher o cache inicial
+  atualizarCachePersistenteDepartamentos();
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;

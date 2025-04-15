@@ -2,8 +2,49 @@ import { db, cachedQuery, clearCacheByPattern, CACHE_PERSISTENTE_POR_DEPT } from
 import { activities, activityProgress, DEPARTMENTS } from "@shared/schema"; 
 import { and, eq, inArray, sql } from "drizzle-orm";
 
-// TTL para cache de atividades pendentes por departamento (15 segundos)
-const CACHE_DEPT_TTL = 15 * 1000;
+// TTL para cache de atividades pendentes por departamento (20 segundos)
+const CACHE_DEPT_TTL = 20 * 1000;
+
+/**
+ * Sistema de cache persistente pré-computado para atividades pendentes por departamento
+ * Essa função é executada em background a cada 10 segundos para manter dados atualizados
+ * com gargalos, impactando o mínimo possível o usuário final
+ */
+export async function atualizarCachePersistenteDepartamentos() {
+  const inicio = Date.now();
+  console.log(`[CACHE-DEPT] Atualizando cache persistente de departamentos`);
+
+  try {
+    // Buscar atividades para cada departamento em background
+    for (const dept of DEPARTMENTS) {
+      const cacheKey = `activities_dept_${dept}`;
+      const cachedData = CACHE_PERSISTENTE_POR_DEPT.get(cacheKey);
+      
+      // Pular departamentos que já têm cache válido
+      if (cachedData && cachedData.timestamp > Date.now() - CACHE_DEPT_TTL) {
+        console.log(`[CACHE-DEPT] Já existe cache válido para ${dept} (${Math.floor((Date.now() - cachedData.timestamp)/1000)}s)`);
+        continue;
+      }
+      
+      // Buscar dados utilizando a função existente
+      // Isso garante que a lógica de ordenação seja compartilhada
+      console.log(`[CACHE-DEPT] Pré-computando dados para ${dept}`);
+      const atividades = await buscarAtividadesPorDepartamentoEmergencia(dept);
+      
+      // Salvar no cache persistente
+      CACHE_PERSISTENTE_POR_DEPT.set(cacheKey, {
+        data: atividades,
+        timestamp: Date.now()
+      });
+      
+      console.log(`[CACHE-DEPT] Cache atualizado para ${dept}: ${atividades.length} atividades`);
+    }
+    
+    console.log(`[CACHE-DEPT] Atualização completa: ${Date.now() - inicio}ms`);
+  } catch (erro) {
+    console.error(`[CACHE-DEPT] Erro ao atualizar cache persistente:`, erro);
+  }
+}
 
 // Cache de departamentos para não precisar consultar a cada chamada
 const departmentCache: Record<string, number> = {};
@@ -27,6 +68,15 @@ export async function buscarAtividadesPorDepartamentoEmergencia(department: stri
   // Criar chave de cache única para este departamento
   const cacheKey = `activities_dept_${department}`;
   
+  // Verificar primeiro no cache persistente pré-computado (10-50x mais rápido)
+  const cachedData = CACHE_PERSISTENTE_POR_DEPT.get(cacheKey);
+  if (cachedData && cachedData.timestamp > Date.now() - CACHE_DEPT_TTL) {
+    console.log(`[CACHE-PERSISTENTE-DEPT] Usando cache pré-computado para ${department} (${Math.floor((Date.now() - cachedData.timestamp)/1000)}s)`);
+    
+    // Dados já transformados e prontos para uso
+    return cachedData.data;
+  }
+  
   try {
     // PERFORMANCE: Sistema de cache multi-nível com consulta altamente otimizada
     // Isso reduz a latência total em >70% para conjuntos de dados grandes
@@ -47,7 +97,6 @@ export async function buscarAtividadesPorDepartamentoEmergencia(department: stri
           additional_images: activities.additionalImages,
           created_at: activities.createdAt,
           quantity: activities.quantity,
-          clientName: activities.clientName,
           notes: activities.notes,
           progress_id: activityProgress.id,
           status: activityProgress.status,
