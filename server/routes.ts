@@ -19,23 +19,35 @@ import { db } from "./db";
 import { createBackup } from "./backup";
 import { and, eq, sql } from "drizzle-orm";
 
-// LRU Cache otimizado para alta performance
+// LRU Cache ultra-otimizado para máxima performance e eficiência
 class LRUCache {
-  private cache: Map<string, { value: any, expiry: number }>;
+  private cache: Map<string, { value: any, expiry: number, lastAccess: number }>;
   private maxSize: number;
   private hits: number = 0;
   private misses: number = 0;
   private lastCleanup: number = Date.now();
-  private cleanupInterval: number = 60000; // 1 minuto
+  private cleanupInterval: number = 30000; // 30 segundos - mais frequente para maior eficiência
+  private totalRequests: number = 0;
+  private evictions: number = 0;
+  private autocleanEnabled: boolean = true;
 
-  constructor(maxSize: number = 200) { // Aumentado para 200 itens
+  constructor(maxSize: number = 800) { // Aumentado para 800 itens para maior eficiência
     this.cache = new Map();
     this.maxSize = maxSize;
+    
+    // Iniciar limpeza periódica automática para evitar acúmulo de entradas expiradas
+    if (this.autocleanEnabled) {
+      setInterval(() => this.periodicCleanup(), this.cleanupInterval);
+    }
   }
 
   get(key: string): any {
-    // Performance: verificar expiração periódica em vez de em cada get
-    this.periodicCleanup();
+    this.totalRequests++;
+    
+    // Performance: verificar expiração apenas periodicamente ou quando o cache estiver cheio
+    if (this.totalRequests % 100 === 0 || this.cache.size > this.maxSize * 0.9) {
+      this.periodicCleanup();
+    }
     
     if (!this.cache.has(key)) {
       this.misses++;
@@ -51,21 +63,45 @@ class LRUCache {
       return null;
     }
 
+    // Atualizar o timestamp de último acesso para implementar LRU corretamente
+    item.lastAccess = Date.now();
+    
+    // Se o cache ficar muito grande, remover os itens menos usados
+    if (this.totalRequests % 1000 === 0 && this.cache.size > this.maxSize * 0.8) {
+      this.evictLeastRecentlyUsed();
+    }
+    
     this.hits++;
     return item.value;
   }
 
   set(key: string, value: any, ttlMs: number = 30000): void {
-    // Performance: verificar apenas periodicamente se o cache está cheio
+    // Performance: verificar apenas quando o cache estiver realmente cheio
     if (this.cache.size >= this.maxSize) {
-      // Remover 10% dos itens mais antigos de uma vez
-      const keysToRemove = Math.max(1, Math.floor(this.maxSize * 0.1));
-      const keys = Array.from(this.cache.keys()).slice(0, keysToRemove);
-      keys.forEach(k => this.cache.delete(k));
+      this.evictLeastRecentlyUsed(Math.max(1, Math.floor(this.maxSize * 0.1)));
     }
     
-    const expiry = ttlMs ? Date.now() + ttlMs : 0;
-    this.cache.set(key, { value, expiry });
+    const now = Date.now();
+    const expiry = ttlMs ? now + ttlMs : 0;
+    this.cache.set(key, { value, expiry, lastAccess: now });
+  }
+  
+  // Remover os itens menos usados recentemente
+  private evictLeastRecentlyUsed(count: number = 1): void {
+    const now = Date.now();
+    const entries = Array.from(this.cache.entries())
+      .map(([key, item]) => ({ key, lastAccess: item.lastAccess || 0 }))
+      .sort((a, b) => a.lastAccess - b.lastAccess)
+      .slice(0, count);
+      
+    entries.forEach(entry => {
+      this.cache.delete(entry.key);
+      this.evictions++;
+    });
+    
+    if (entries.length > 0) {
+      console.log(`[CACHE] Removidos ${entries.length} itens menos usados recentemente. Total de evicções: ${this.evictions}`);
+    }
   }
 
   // Remover item específico
@@ -1535,14 +1571,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
   
   // WebSocket server para atualizações em tempo real
-  // Configuração otimizada para melhor performance
+  // Configuração ultra-otimizada para máxima estabilidade e performance
   const wss = new WebSocketServer({ 
     server: httpServer, 
     path: '/ws',
     // Configurações para melhorar a estabilidade e performance
     clientTracking: true,
     // Definindo o tamanho máximo da mensagem para evitar ataques DoS
-    maxPayload: 1024 * 50 // 50KB
+    maxPayload: 1024 * 64, // 64KB - mais espaço para payloads maiores
+    // Aumentar o timeout de ping para reduzir desconexões
+    perMessageDeflate: {
+      zlibDeflateOptions: {
+        // Usar uma configuração de compressão Zlib mais rápida
+        level: 1,
+        // Otimização de memória
+        memLevel: 7,
+      },
+      // Não aplicar compressão a mensagens pequenas
+      threshold: 1024 // Apenas mensagens maiores que 1KB
+    }
   });
   
   // Armazenar conexões WebSocket por departamento usando Set para melhor performance
@@ -1588,37 +1635,94 @@ export async function registerRoutes(app: Express): Promise<Server> {
     console.log('[websocket] Servidor WebSocket encerrado.');
   });
   
-  // Função para enviar atualizações para um departamento específico
+  // Função otimizada para enviar atualizações para um departamento específico
   function notifyDepartment(department: string, data: any) {
-    // Enviar para todas as conexões do departamento
-    if (connections[department]) {
-      connections[department].forEach(ws => {
-        try {
-          if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify(data));
-          }
-        } catch (error) {
-          console.error(`[websocket] Erro ao enviar mensagem para ${department}:`, error);
-        }
-      });
+    // Adicionar timestamp para rastreamento de latência
+    const messageWithTimestamp = {
+      ...data,
+      server_timestamp: Date.now()
+    };
+    
+    // Serializar a mensagem apenas uma vez para todas as conexões (economia de CPU)
+    const serializedMessage = JSON.stringify(messageWithTimestamp);
+    
+    // Verificar se o departamento existe e tem conexões para evitar processamento desnecessário
+    const departmentConnections = connections[department];
+    if (!departmentConnections || departmentConnections.size === 0) {
+      return 0; // Retornar 0 conexões notificadas
     }
+    
+    // Contador de mensagens enviadas com sucesso
+    let successCount = 0;
+    
+    // Enviar para todas as conexões do departamento em um único loop otimizado
+    departmentConnections.forEach(ws => {
+      try {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(serializedMessage);
+          successCount++;
+        }
+      } catch (error) {
+        console.error(`[websocket] Erro ao enviar mensagem para ${department}:`, error);
+      }
+    });
+    
+    // Retornar o número de conexões notificadas com sucesso (útil para debugging)
+    return successCount;
   }
   
-  // Função para enviar atualizações para todos
+  // Função otimizada para enviar atualizações para todos os departamentos
   function notifyAll(data: any) {
-    // Para cada departamento
+    // Adicionar timestamp para rastreamento de latência
+    const messageWithTimestamp = {
+      ...data,
+      server_timestamp: Date.now()
+    };
+    
+    // Serializar a mensagem apenas uma vez para todas as conexões (economia de CPU)
+    const serializedMessage = JSON.stringify(messageWithTimestamp);
+    
+    // Resultados por departamento para fins de logging e debugging
+    const results: Record<string, number> = {};
+    let totalSuccess = 0;
+    
+    // Otimizado: processamento de departamentos em um único loop
     Object.entries(connections).forEach(([dept, conns]) => {
-      // Para cada conexão no departamento
+      if (conns.size === 0) {
+        results[dept] = 0;
+        return; // Pular departamentos vazios
+      }
+      
+      // Contador de sucesso por departamento
+      let deptSuccessCount = 0;
+      
+      // Enviar para todas as conexões do departamento
       conns.forEach(ws => {
         try {
           if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify(data));
+            ws.send(serializedMessage);
+            deptSuccessCount++;
+            totalSuccess++;
           }
         } catch (error) {
           console.error(`[websocket] Erro ao enviar mensagem para todos (${dept}):`, error);
         }
       });
+      
+      results[dept] = deptSuccessCount;
     });
+    
+    // Se houver conexões notificadas, registrar estatísticas no log
+    if (totalSuccess > 0) {
+      console.log(`[websocket] Notificação enviada para ${totalSuccess} conexões:`, 
+                  Object.entries(results)
+                  .filter(([_, count]) => count > 0)
+                  .map(([dept, count]) => `${dept}=${count}`)
+                  .join(', '));
+    }
+    
+    // Retornar o total de conexões notificadas com sucesso
+    return totalSuccess;
   }
   
   // Exportar as funções de notificação para uso em outras partes do código
@@ -1627,66 +1731,148 @@ export async function registerRoutes(app: Express): Promise<Server> {
     notifyAll
   };
   
+  // Configurar WebSocket server com melhor tratamento de erros e performance
   wss.on('connection', (ws, req) => {
     console.log('[websocket] Nova conexão estabelecida');
     
-    // Adicionar manipuladores de mensagens recebidas do cliente
+    // Identificador único para esta conexão (para debugging)
+    const connectionId = Math.random().toString(36).substring(2, 10);
+    
+    // Propriedades para rastrear estado da conexão
+    let isAlive = true;
+    let registeredDepartment: string | null = null;
+    
+    // Função otimizada para enviar resposta com tratamento de erro embutido
+    const sendResponse = (data: any) => {
+      try {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify(data));
+          return true;
+        }
+      } catch (err) {
+        console.error(`[websocket:${connectionId}] Erro ao enviar mensagem:`, err);
+      }
+      return false;
+    };
+    
+    // Setup para heartbeat para detectar conexões quebradas mais rapidamente
+    ws.on('pong', () => {
+      isAlive = true;
+    });
+    
+    // Ping periódico do lado do servidor (a cada 30 segundos)
+    const pingInterval = setInterval(() => {
+      if (ws.readyState !== WebSocket.OPEN) {
+        clearInterval(pingInterval);
+        return;
+      }
+      
+      if (!isAlive) {
+        clearInterval(pingInterval);
+        console.log(`[websocket:${connectionId}] Conexão inativa detectada, terminando`);
+        return ws.terminate();
+      }
+      
+      isAlive = false;
+      try {
+        ws.ping();
+      } catch (err) {
+        console.error(`[websocket:${connectionId}] Erro ao enviar ping:`, err);
+        clearInterval(pingInterval);
+        try { ws.terminate(); } catch (e) {}
+      }
+    }, 30000);
+    
+    // Manipulador de mensagens otimizado com tratamento de erro melhorado
     ws.on('message', (message) => {
       try {
         const data = JSON.parse(message.toString());
         
-        // Responder a ping com pong para manter a conexão ativa
+        // Responder a ping com pong (otimizado para latência mínima)
         if (data.type === 'ping') {
-          // Enviando de volta o timestamp original para medir latência, se disponível
-          ws.send(JSON.stringify({ 
+          // Alta prioridade - resposta imediata sem processamento extra
+          return sendResponse({ 
             type: 'pong', 
             timestamp: data.timestamp || Date.now(),
             server_time: Date.now()
-          }));
-          return;
+          });
         }
         
-        // Registrar a conexão em um departamento específico
+        // Registrar com departamento (otimizado para evitar operações repetidas)
         if (data.type === 'register' && data.department) {
           // Verificar se o departamento é válido
-          if (connections[data.department]) {
-            // Remover esta conexão de qualquer outro departamento primeiro
+          if (!connections[data.department]) {
+            return sendResponse({ 
+              type: 'register_error', 
+              message: `Departamento inválido: ${data.department}` 
+            });
+          }
+          
+          // Verificar se já está registrado no mesmo departamento
+          if (registeredDepartment === data.department) {
+            return sendResponse({ 
+              type: 'register_confirm', 
+              department: data.department,
+              message: `Já conectado ao departamento ${data.department}` 
+            });
+          }
+          
+          // Remover de qualquer departamento anterior
+          if (registeredDepartment) {
+            connections[registeredDepartment].delete(ws);
+          } else {
+            // Remover de todos os departamentos (caso tenha registros pendentes)
             Object.keys(connections).forEach(dept => {
               connections[dept].delete(ws);
             });
-            
-            // Adicionar a conexão ao departamento correto
-            connections[data.department].add(ws);
-            console.log(`[websocket] Cliente registrado no departamento: ${data.department}`);
-            
-            // Enviar confirmação para o cliente
-            try {
-              ws.send(JSON.stringify({ 
-                type: 'register_confirm', 
-                department: data.department,
-                message: `Conectado ao departamento ${data.department}` 
-              }));
-            } catch (error) {
-              console.error(`[websocket] Erro ao enviar confirmação para ${data.department}:`, error);
-            }
           }
+          
+          // Registrar no novo departamento
+          connections[data.department].add(ws);
+          registeredDepartment = data.department;
+          console.log(`[websocket:${connectionId}] Cliente registrado no departamento: ${data.department}`);
+          
+          // Enviar confirmação com sucesso
+          return sendResponse({ 
+            type: 'register_confirm', 
+            department: data.department,
+            message: `Conectado ao departamento ${data.department}`,
+            connection_id: connectionId
+          });
         }
       } catch (error) {
-        console.error('[websocket] Erro ao processar mensagem:', error);
+        console.error(`[websocket:${connectionId}] Erro ao processar mensagem:`, error);
       }
     });
     
-    // Limpar conexões quando cliente desconectar
-    ws.on('close', () => {
-      console.log('[websocket] Cliente desconectado');
+    // Manipulador de erro otimizado para evitar crashes
+    ws.on('error', (err) => {
+      console.error(`[websocket:${connectionId}] Erro na conexão:`, err);
+      clearInterval(pingInterval);
       
-      // Remover conexão de todos os departamentos
-      Object.keys(connections).forEach(dept => {
-        if (connections[dept].has(ws)) {
-          connections[dept].delete(ws);
-          console.log(`[websocket] Conexão removida do departamento: ${dept}`);
-        }
-      });
+      // Remover de todos os departamentos para garantir limpeza completa
+      if (registeredDepartment) {
+        connections[registeredDepartment].delete(ws);
+        console.log(`[websocket:${connectionId}] Conexão com erro removida do departamento: ${registeredDepartment}`);
+      }
+      
+      try {
+        ws.terminate();
+      } catch (e) {
+        console.error(`[websocket:${connectionId}] Erro ao terminar conexão com erro:`, e);
+      }
+    });
+    
+    // Manipulador otimizado para limpeza eficiente ao desconectar
+    ws.on('close', () => {
+      console.log(`[websocket:${connectionId}] Cliente desconectado`);
+      clearInterval(pingInterval);
+      
+      // Remover apenas do departamento registrado (mais eficiente)
+      if (registeredDepartment && connections[registeredDepartment]) {
+        connections[registeredDepartment].delete(ws);
+        console.log(`[websocket:${connectionId}] Conexão removida do departamento: ${registeredDepartment}`);
+      }
     });
   });
   
