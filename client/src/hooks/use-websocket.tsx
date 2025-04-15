@@ -3,18 +3,25 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useToast } from './use-toast';
 import { queryClient } from '@/lib/queryClient';
 
-// CONFIGURAÇÃO OTIMIZADA PARA MÁXIMA ESTABILIDADE E MENOR CONSUMO DE RECURSOS
-// Intervalo para heartbeat mais longo para reduzir tráfego
-const HEARTBEAT_INTERVAL = 120000; // 2 minutos - reduz tráfego de rede
-// Estratégia de back-off exponencial para reconexão mais suave
-const INITIAL_RECONNECT_DELAY = 2000; // 2 segundos inicial para evitar tempestade de conexões
-const MAX_RECONNECT_DELAY = 45000; // máximo 45 segundos para longos períodos sem conexão
-// Menos tentativas antes de pausa
-const MAX_RECONNECT_ATTEMPTS = 3; // Reduzido para menos tentativas com tempo maior entre elas
-// Pausa mais longa entre séries de tentativas para dar tempo ao servidor se recuperar
-const RECONNECT_PAUSE = 20000; // 20 segundos
-// Intervalo mínimo maior entre atualizações via polling para evitar sobrecarga
-const MIN_POLLING_INTERVAL = 10000; // 10 segundos - menor número de chamadas desnecessárias
+// CONFIGURAÇÃO ULTRA-OTIMIZADA PARA MÁXIMA ESTABILIDADE, CONFIABILIDADE E EFICIÊNCIA DE RECURSOS
+// Configurações de polling - equilíbrio entre atualizações e economia de recursos
+const MIN_POLLING_INTERVAL = 8000; // 8 segundos - menor número de chamadas mas mais frequente
+const MAX_POLLING_INTERVAL = 30000; // 30 segundos - máximo intervalo para garantir dados sempre atualizados
+const POLLING_BACKOFF_FACTOR = 1.5; // Aumenta gradualmente o tempo entre polling
+
+// Configurações de WebSocket - otimização para máxima estabilidade
+const HEARTBEAT_INTERVAL = 90000; // 1.5 minutos - mais frequente para detectar problemas antes
+const HEARTBEAT_TIMEOUT = 9000; // 9 segundos - timeout mais tolerante para redes lentas
+const WS_CONNECT_TIMEOUT = 7000; // 7 segundos - timeout para estabelecer conexão
+
+// Configurações de reconexão - estratégia inteligente adaptativa
+const INITIAL_RECONNECT_DELAY = 1800; // 1.8 segundos inicial - resposta mais rápida no primeiro erro
+const MAX_RECONNECT_DELAY = 35000; // 35 segundos - limite máximo reduzido para reconexão mais rápida
+const RECONNECT_BACKOFF_FACTOR = 1.4; // Fator de crescimento do atraso - crescimento mais suave
+const JITTER_MAX = 0.2; // 20% de variação aleatória para evitar reconexões simultâneas
+const MAX_RECONNECT_ATTEMPTS = 3; // 3 tentativas antes de pausa mais longa
+const RECONNECT_PAUSE = 20000; // 20 segundos de pausa após várias tentativas
+const MAX_CONSECUTIVE_ERRORS = 5; // Após 5 erros consecutivos, fazer polling mais agressivo
 
 export function useWebSocket() {
   const { user } = useAuth();
@@ -32,6 +39,7 @@ export function useWebSocket() {
   const reconnectDelayRef = useRef(INITIAL_RECONNECT_DELAY);
   const reconnectAttemptsRef = useRef(0);
   const pendingPongRef = useRef(false);
+  const consecutiveErrorsRef = useRef(0); // Rastrear erros consecutivos
   
   // Flag para controlar se o componente está montado
   const isMountedRef = useRef(true);
@@ -243,8 +251,56 @@ export function useWebSocket() {
         heartbeatIntervalRef.current = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL);
       };
       
+      // Timeout para detecção de falha na conexão inicial (7 segundos)
+      const connectionTimeoutId = setTimeout(() => {
+        // Se após 7 segundos ainda não recebemos onopen, a conexão falhou silenciosamente
+        if (socketRef.current && socketRef.current.readyState !== WebSocket.OPEN) {
+          console.log('Timeout de conexão WebSocket (7s), iniciando reconexão imediata...');
+          
+          try {
+            // Tentar fechar a conexão atual e reconectar
+            if (socketRef.current) {
+              socketRef.current.close(1000, "Connection timeout");
+            }
+          } catch (e) {
+            console.error("Erro ao fechar conexão após timeout:", e);
+          }
+          
+          // Forçar atualização de dados via polling como fallback
+          refreshDataPeriodically();
+          
+          // Iniciar reconexão com backoff exponencial
+          // Se tivermos atingido o máximo de tentativas, fazer uma pausa maior
+          if (reconnectAttemptsRef.current > MAX_RECONNECT_ATTEMPTS) {
+            // Pausa maior antes de tentar novamente
+            setTimeout(() => {
+              reconnectAttemptsRef.current = 0;
+              reconnectDelayRef.current = INITIAL_RECONNECT_DELAY;
+              connect();
+            }, RECONNECT_PAUSE);
+          } else {
+            // Caso contrário, tentativa normal com backoff
+            reconnectAttemptsRef.current += 1;
+            
+            // Calcular atraso com jitter para evitar tempestade de conexões
+            const jitter = 0.85 + (Math.random() * 0.3); // 0.85-1.15
+            
+            const delay = Math.min(
+              reconnectDelayRef.current * RECONNECT_BACKOFF_FACTOR * jitter,
+              MAX_RECONNECT_DELAY
+            );
+            
+            console.log(`Reconexão imediata em ${(delay/1000).toFixed(1)}s após timeout de conexão...`);
+            
+            setTimeout(() => connect(), delay);
+          }
+        }
+      }, WS_CONNECT_TIMEOUT);
+      
       // Manipulador de eventos para mensagens recebidas
       socket.onmessage = (event) => {
+        // Limpar o timeout de conexão inicial pois recebemos uma mensagem
+        clearTimeout(connectionTimeoutId);
         if (!isMountedRef.current) return;
         
         try {
@@ -424,13 +480,45 @@ export function useWebSocket() {
         }
       };
       
-      // Manipulador de eventos para erros - MODO DE EMERGÊNCIA
+      // Manipulador de eventos para erros - MODO ULTRA OTIMIZADO
       socket.onerror = (event) => {
         if (!isMountedRef.current) return;
         
         console.error('Erro WebSocket detectado, aguardando ciclo normal de reconexão...', event);
         setError('Reconectando...');
         setConnected(false);
+        
+        // Limpar o timeout de conexão inicial se existir
+        clearTimeout(connectionTimeoutId);
+        
+        // Atualizar dados imediatamente via polling como fallback de emergência
+        refreshDataPeriodically();
+        
+        // Gestão inteligente de reconexão - incrementar contador de erros consecutivos
+        consecutiveErrorsRef.current++;
+        
+        // Gestão adaptativa mais inteligente baseada em consecutiveErrorsRef
+        if (consecutiveErrorsRef.current >= MAX_CONSECUTIVE_ERRORS) {
+          // Após muitos erros seguidos, usar estratégia mais agressiva de polling
+          console.log(`${MAX_CONSECUTIVE_ERRORS} erros consecutivos detectados, ativando modo super agressivo de polling`);
+          
+          // Forçar várias atualizações em rápida sucessão
+          const forcedRefreshes = [];
+          for (let i = 1; i <= 3; i++) {
+            forcedRefreshes.push(
+              new Promise(resolve => {
+                setTimeout(() => {
+                  refreshDataPeriodically().then(resolve);
+                }, i * 2000); // 2s, 4s, 6s
+              })
+            );
+          }
+          
+          // Executar atualizações forçadas
+          Promise.all(forcedRefreshes).catch(err => {
+            console.error('Erro nas atualizações de emergência:', err);
+          });
+        }
         
         // Modo otimizado: Não forçar reconexão imediata para evitar tempestade de conexões
         // O manipulador onclose cuidará da reconexão com backoff exponencial
