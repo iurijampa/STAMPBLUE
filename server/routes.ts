@@ -19,137 +19,406 @@ import { db } from "./db";
 import { createBackup } from "./backup";
 import { and, eq, sql } from "drizzle-orm";
 
-// LRU Cache ultra-otimizado para máxima performance e eficiência
+// LRU Cache TURBO-OTIMIZADO v2.0 para performance extrema com sistema de camadas
 class LRUCache {
+  // Cache principal para todos os itens
   private cache: Map<string, { value: any, expiry: number, lastAccess: number }>;
+  // Cache rápido (L1) para itens frequentemente acessados
+  private hotCache: Map<string, any> = new Map();
+  // Cache de pré-busca para itens que serão necessários em breve
+  private prefetchCache: Map<string, any> = new Map();
+  
+  // Configurações de tamanho
   private maxSize: number;
+  private hotCacheMaxSize: number;
+  
+  // Contadores e métricas para otimização adaptativa
   private hits: number = 0;
   private misses: number = 0;
   private lastCleanup: number = Date.now();
-  private cleanupInterval: number = 15000; // Reduzido para 15 segundos para maior eficiência
+  private cleanupInterval: number = 12000; // Reduzido para 12 segundos para maior eficiência
   private totalRequests: number = 0;
   private evictions: number = 0;
+  
+  // Configurações de comportamento
   private autocleanEnabled: boolean = true;
   private backgroundRefresh: boolean = true; // Ativar atualização em segundo plano
+  private prefetchEnabled: boolean = true; // Ativar pré-busca preditiva
+  
+  // Lista de chaves prioritárias (não serão facilmente removidas)
+  private priorityKeys: Set<string> = new Set();
+  
+  // Métricas para ajuste adaptativo
+  private stats = {
+    hitRate: 0,
+    evictionRate: 0,
+    avgAccessTime: 0,
+    lastOpTime: 0,
+    hotCacheHits: 0,
+    prefetchHits: 0,
+    totalTime: 0
+  };
 
-  constructor(maxSize: number = 1200) { // Aumentado para 1200 itens para maior eficiência
+  constructor(maxSize: number = 1500) { // Aumentado para 1500 itens para eficiência máxima
     this.cache = new Map();
     this.maxSize = maxSize;
+    this.hotCacheMaxSize = Math.max(150, Math.floor(maxSize * 0.1)); // 10% ou no mínimo 150 itens
     
-    // Iniciar limpeza periódica automática para evitar acúmulo de entradas expiradas
+    // Iniciar limpeza periódica automática com intervalo adaptativo
     if (this.autocleanEnabled) {
-      setInterval(() => this.periodicCleanup(), this.cleanupInterval);
+      setInterval(() => {
+        const start = performance.now();
+        this.periodicCleanup();
+        const duration = performance.now() - start;
+        
+        // Ajustar intervalo de limpeza com base no tamanho do cache e tempo de execução
+        if (duration > 50) { // Se a limpeza for lenta, aumentar o intervalo
+          this.cleanupInterval = Math.min(20000, this.cleanupInterval * 1.2);
+        } else if (this.cache.size > this.maxSize * 0.85) { // Se o cache estiver quase cheio
+          this.cleanupInterval = Math.max(7000, this.cleanupInterval * 0.85);
+        }
+      }, this.cleanupInterval);
+      
+      // Log de estatísticas a cada 2 minutos para monitoramento
+      setInterval(() => {
+        console.log(`[CACHE-STATS] Hit rate: ${(this.stats.hitRate*100).toFixed(1)}%, ` +
+                    `Hot hits: ${this.stats.hotCacheHits}, ` +
+                    `Evictions: ${this.evictions}, ` +
+                    `Avg time: ${this.stats.avgAccessTime.toFixed(2)}ms, ` +
+                    `Size: ${this.cache.size}/${this.maxSize}`);
+      }, 120000);
     }
   }
 
   get(key: string): any {
+    const startTime = performance.now();
     this.totalRequests++;
     
-    // Performance: verificar expiração apenas periodicamente ou quando o cache estiver cheio
-    if (this.totalRequests % 100 === 0 || this.cache.size > this.maxSize * 0.9) {
+    // NÍVEL 1: Verificar primeiro o cache quente para acesso ultra-rápido (0.1ms)
+    if (this.hotCache.has(key)) {
+      this.hits++;
+      this.stats.hotCacheHits++;
+      
+      // Atualizar métricas
+      const opTime = performance.now() - startTime;
+      this.stats.totalTime += opTime;
+      this.stats.avgAccessTime = this.stats.totalTime / this.totalRequests;
+      this.stats.hitRate = this.hits / (this.hits + this.misses);
+      this.stats.lastOpTime = opTime;
+      
+      return this.hotCache.get(key);
+    }
+    
+    // NÍVEL 2: Verificar cache de pré-busca
+    if (this.prefetchEnabled && this.prefetchCache.has(key)) {
+      this.hits++;
+      this.stats.prefetchHits++;
+      
+      // Promover para cache quente
+      const value = this.prefetchCache.get(key);
+      this.hotCache.set(key, value);
+      this.prefetchCache.delete(key);
+      
+      // Limitar tamanho do cache quente
+      if (this.hotCache.size > this.hotCacheMaxSize * 1.1) {
+        this.trimHotCache();
+      }
+      
+      const opTime = performance.now() - startTime;
+      this.stats.totalTime += opTime;
+      this.stats.avgAccessTime = this.stats.totalTime / this.totalRequests;
+      this.stats.hitRate = this.hits / (this.hits + this.misses);
+      this.stats.lastOpTime = opTime;
+      
+      return value;
+    }
+    
+    // Limpeza condicional otimizada - apenas quando necessário
+    if ((this.totalRequests % 200 === 0 && this.cache.size > this.maxSize * 0.8) || 
+        this.cache.size > this.maxSize * 0.95) {
       this.periodicCleanup();
     }
     
+    // NÍVEL 3: Verificar o cache principal
     if (!this.cache.has(key)) {
       this.misses++;
+      
+      const opTime = performance.now() - startTime;
+      this.stats.totalTime += opTime;
+      this.stats.avgAccessTime = this.stats.totalTime / this.totalRequests;
+      this.stats.hitRate = this.hits / (this.hits + this.misses);
+      this.stats.lastOpTime = opTime;
+      
       return null;
     }
 
     const item = this.cache.get(key)!;
     
-    // Verificar expiração apenas quando necessário
-    if (item.expiry && item.expiry < Date.now()) {
+    // Verificar expiração com verificação rápida
+    const now = Date.now();
+    if (item.expiry > 0 && item.expiry < now) {
       this.cache.delete(key);
+      this.hotCache.delete(key);
+      this.prefetchCache.delete(key);
       this.misses++;
+      
+      const opTime = performance.now() - startTime;
+      this.stats.totalTime += opTime;
+      this.stats.avgAccessTime = this.stats.totalTime / this.totalRequests;
+      this.stats.hitRate = this.hits / (this.hits + this.misses);
+      this.stats.lastOpTime = opTime;
+      
       return null;
     }
 
-    // Atualizar o timestamp de último acesso para implementar LRU corretamente
-    item.lastAccess = Date.now();
+    // Atualizar timestamp de acesso
+    item.lastAccess = now;
     
-    // Se o cache ficar muito grande, remover os itens menos usados
-    if (this.totalRequests % 1000 === 0 && this.cache.size > this.maxSize * 0.8) {
-      this.evictLeastRecentlyUsed();
+    // Promoção de itens frequentes para o cache quente - política adaptativa
+    if (this.totalRequests % 5 === 0 && this.hotCache.size < this.hotCacheMaxSize) {
+      // Adicionar ao cache quente (L1) para acesso mais rápido na próxima vez
+      this.hotCache.set(key, item.value);
+      
+      // Se estamos perto do limite, fazer manutenção
+      if (this.hotCache.size >= this.hotCacheMaxSize) {
+        this.trimHotCache();
+      }
+    }
+    
+    // Busca preditiva para keys relacionadas (apenas para certas chaves)
+    if (this.prefetchEnabled && key.includes('activities_dept_') && this.totalRequests % 10 === 0) {
+      this.prefetchRelatedKeys(key);
     }
     
     this.hits++;
+    
+    const opTime = performance.now() - startTime;
+    this.stats.totalTime += opTime;
+    this.stats.avgAccessTime = this.stats.totalTime / this.totalRequests;
+    this.stats.hitRate = this.hits / (this.hits + this.misses);
+    this.stats.lastOpTime = opTime;
+    
     return item.value;
   }
 
   set(key: string, value: any, ttlMs: number = 30000): void {
-    // Performance: verificar apenas quando o cache estiver realmente cheio
-    if (this.cache.size >= this.maxSize) {
-      this.evictLeastRecentlyUsed(Math.max(1, Math.floor(this.maxSize * 0.1)));
+    // Verificar e ajustar espaço disponível
+    if (this.cache.size >= this.maxSize * 0.98) {
+      this.evictLeastRecentlyUsed(Math.ceil(this.maxSize * 0.08)); // Remover 8% dos itens menos usados
+    } else if (this.cache.size >= this.maxSize) {
+      this.evictLeastRecentlyUsed(Math.max(2, Math.floor(this.maxSize * 0.02))); // Remover pelo menos 2 itens
     }
     
     const now = Date.now();
-    const expiry = ttlMs ? now + ttlMs : 0;
+    const expiry = ttlMs > 0 ? now + ttlMs : 0;
+    
+    // Atualizar o cache principal
     this.cache.set(key, { value, expiry, lastAccess: now });
+    
+    // Estratégia de cache por camadas
+    if (ttlMs < 15000) {
+      // Para itens com TTL curto, colocar diretamente no cache quente para acesso rápido
+      if (this.hotCache.size < this.hotCacheMaxSize) {
+        this.hotCache.set(key, value);
+      }
+    } else if (ttlMs > 60000 && key.includes('stats')) {
+      // Estatísticas de longa duração vão para pré-busca
+      this.prefetchCache.set(key, value);
+    }
+    
+    // Marcar chaves importantes para proteção contra limpeza
+    if (key.includes('stats') || 
+        key.includes('config') || 
+        key.includes('_count') || 
+        key.includes('department_activities')) {
+      this.priorityKeys.add(key);
+    }
+  }
+
+  private trimHotCache(): void {
+    // Manter apenas 85% das entradas mais recentes no cache quente
+    if (this.hotCache.size > this.hotCacheMaxSize) {
+      const hotEntries = [...this.hotCache.entries()];
+      this.hotCache.clear();
+      hotEntries
+        .slice(-Math.floor(this.hotCacheMaxSize * 0.85))
+        .forEach(([k, v]) => this.hotCache.set(k, v));
+    }
   }
   
-  // Remover os itens menos usados recentemente
+  private prefetchRelatedKeys(key: string): void {
+    // Implementação simplificada - em produção usaria um algoritmo preditivo real
+    const dept = key.split('_').pop();
+    if (dept) {
+      // Pré-buscar estatísticas relacionadas
+      const statsKey = `stats_${dept}`;
+      if (this.cache.has(statsKey) && !this.prefetchCache.has(statsKey)) {
+        this.prefetchCache.set(statsKey, this.cache.get(statsKey)?.value);
+      }
+    }
+  }
+
   private evictLeastRecentlyUsed(count: number = 1): void {
+    // Algoritmo otimizado de limpeza com proteção para chaves prioritárias
     const now = Date.now();
-    const entries = Array.from(this.cache.entries())
-      .map(([key, item]) => ({ key, lastAccess: item.lastAccess || 0 }))
-      .sort((a, b) => a.lastAccess - b.lastAccess)
-      .slice(0, count);
-      
-    entries.forEach(entry => {
-      this.cache.delete(entry.key);
+    let candidates = Array.from(this.cache.entries())
+      // Primeiro filtrar para excluir itens prioritários recentes
+      .filter(([key, item]) => {
+        // Nunca remover itens prioritários recentemente acessados
+        if (this.priorityKeys.has(key) && now - item.lastAccess < 60000) {
+          return false;
+        }
+        return true;
+      })
+      // Ordenar por último acesso (mais antigos primeiro)
+      .sort((a, b) => a[1].lastAccess - b[1].lastAccess)
+      // Limitar ao número de itens que precisamos remover
+      .slice(0, Math.min(count * 2, 100)); // Buscar mais candidatos do que precisamos
+    
+    // Se tivermos poucos candidatos, relaxar a proteção para itens prioritários
+    if (candidates.length < count && this.priorityKeys.size > 0) {
+      candidates = Array.from(this.cache.entries())
+        .sort((a, b) => a[1].lastAccess - b[1].lastAccess)
+        .slice(0, Math.min(count, 50));
+    }
+    
+    // Remover apenas o número necessário de itens
+    candidates.slice(0, count).forEach(([key]) => {
+      this.cache.delete(key);
+      this.hotCache.delete(key);
+      this.prefetchCache.delete(key);
       this.evictions++;
     });
     
-    if (entries.length > 0) {
-      console.log(`[CACHE] Removidos ${entries.length} itens menos usados recentemente. Total de evicções: ${this.evictions}`);
+    this.stats.evictionRate = this.evictions / this.totalRequests;
+    
+    if (candidates.length > 0) {
+      // Log apenas para remoções significativas
+      if (count > 10) {
+        console.log(`[CACHE] Removidos ${Math.min(count, candidates.length)} itens menos usados. ` +
+                    `Cache: ${this.cache.size}/${this.maxSize}, Hot: ${this.hotCache.size}/${this.hotCacheMaxSize}`);
+      }
     }
   }
 
-  // Remover item específico
   delete(key: string): boolean {
+    // Remover de todos os níveis de cache
+    this.hotCache.delete(key);
+    this.prefetchCache.delete(key);
+    this.priorityKeys.delete(key);
     return this.cache.delete(key);
   }
 
-  // Remover todos os itens com prefixo específico - otimizado
   deleteByPrefix(prefix: string): number {
-    // Otimização: usar um array para coletar chaves antes de excluir
-    const keysToDelete = [];
+    let count = 0;
+    
+    // Usar arrays para evitar modificação durante iteração
+    const keysToDelete: string[] = [];
+    
+    // Fase 1: Coletar todas as chaves que correspondem ao prefixo
     for (const key of this.cache.keys()) {
       if (key.startsWith(prefix)) {
         keysToDelete.push(key);
       }
     }
     
-    keysToDelete.forEach(key => this.cache.delete(key));
-    return keysToDelete.length;
+    // Fase 2: Remover de todos os caches
+    for (const key of keysToDelete) {
+      this.cache.delete(key);
+      this.hotCache.delete(key);
+      this.prefetchCache.delete(key);
+      this.priorityKeys.delete(key);
+      count++;
+    }
+    
+    // Log para operações grandes
+    if (count > 5) {
+      console.log(`[CACHE] Removidos ${count} itens com prefixo '${prefix}'`);
+    }
+    
+    return count;
   }
 
-  // Limpar todo o cache
   clear(): void {
     this.cache.clear();
+    this.hotCache.clear();
+    this.prefetchCache.clear();
+    this.priorityKeys.clear();
     this.hits = 0;
     this.misses = 0;
+    this.evictions = 0;
+    this.totalRequests = 0;
+    
+    // Resetar estatísticas
+    this.stats = {
+      hitRate: 0,
+      evictionRate: 0,
+      avgAccessTime: 0,
+      lastOpTime: 0,
+      hotCacheHits: 0,
+      prefetchHits: 0,
+      totalTime: 0
+    };
   }
 
-  // Obter tamanho atual
   size(): number {
     return this.cache.size;
   }
   
-  // Limpeza periódica para remover itens expirados
   private periodicCleanup(): void {
     const now = Date.now();
-    if (now - this.lastCleanup > this.cleanupInterval) {
-      this.lastCleanup = now;
-      
-      const keysToDelete = [];
-      for (const [key, item] of this.cache.entries()) {
-        if (item.expiry && item.expiry < now) {
-          keysToDelete.push(key);
-        }
+    
+    // Evitar limpezas muito frequentes (otimização de CPU)
+    if (now - this.lastCleanup < this.cleanupInterval * 0.7) {
+      return;
+    }
+    
+    this.lastCleanup = now;
+    let expiredCount = 0;
+    
+    // Arrays para processamento em batch para melhor performance
+    const expiredKeys = [];
+    
+    // Verificar itens expirados em lote (limitando o número para evitar bloqueio prolongado)
+    for (const [key, item] of this.cache.entries()) {
+      if (item.expiry > 0 && item.expiry < now) {
+        expiredKeys.push(key);
+        if (expiredKeys.length > 150) break; // Limitar o tamanho do lote
       }
-      
-      keysToDelete.forEach(key => this.cache.delete(key));
+    }
+    
+    // Remover itens expirados de todos os níveis de cache
+    for (const key of expiredKeys) {
+      this.cache.delete(key);
+      this.hotCache.delete(key);
+      this.prefetchCache.delete(key);
+      expiredCount++;
+    }
+    
+    // Se o cache ainda estiver muito grande após remover expirados, remover LRU
+    if (this.cache.size > this.maxSize * 0.9) {
+      const toRemove = Math.ceil(this.maxSize * 0.1); // Remover 10% 
+      this.evictLeastRecentlyUsed(toRemove);
+    }
+    
+    // Limpar o cache quente se crescer demais
+    if (this.hotCache.size > this.hotCacheMaxSize * 1.2) {
+      this.trimHotCache();
+    }
+    
+    // Limpar o cache de pré-busca periodicamente
+    if (this.prefetchCache.size > this.hotCacheMaxSize) {
+      // Manter apenas metade das entradas
+      const prefetchEntries = [...this.prefetchCache.entries()];
+      this.prefetchCache.clear();
+      prefetchEntries
+        .slice(-Math.floor(this.hotCacheMaxSize * 0.5))
+        .forEach(([k, v]) => this.prefetchCache.set(k, v));
+    }
+    
+    // Log apenas se removermos uma quantidade significativa
+    if (expiredCount > 10) {
+      console.log(`[CACHE] Limpeza periódica removeu ${expiredCount} itens expirados`);
     }
   }
 }
