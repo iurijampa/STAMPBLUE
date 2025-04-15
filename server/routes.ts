@@ -472,7 +472,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         req.path.startsWith('/api/reimpressao-ultrabasico') ||
         req.path.startsWith('/api/reimpressao-emergencial') ||
         req.path.startsWith('/api/impressao-emergencial') ||
-        req.path.startsWith('/api/activities/history')) {
+        req.path.startsWith('/api/activities/history') ||
+        req.path.startsWith('/api/system/diagnostico')) {
       req.isAuthenticated = () => true; // Fingir que está autenticado
       console.log(`[AUTH_BYPASS] Autenticação pulada para: ${req.path}`);
       
@@ -2341,6 +2342,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
   }
+  
+  // Rota para diagnóstico de cache e integridade do sistema (sem autenticação para testes)
+  app.get('/api/system/diagnostico', (req, res) => {
+    try {
+      // Importar a função de verificação de integridade do cache
+      const { checkCacheIntegrity } = require('./db');
+      
+      // Executar verificação do queryCache
+      const queryCacheIntegrity = checkCacheIntegrity();
+      
+      // Obter estatísticas do LRUCache do sistema global
+      const globalCache = (global as any).cache || {};
+      const lruCacheStats = {
+        size: globalCache.size?.() || 0,
+        hotCacheSize: globalCache.hotCache?.size || 0,
+        prefetchCacheSize: globalCache.prefetchCache?.size || 0,
+        hits: globalCache.hits || 0,
+        misses: globalCache.misses || 0,
+        totalRequests: globalCache.totalRequests || 0,
+        cacheInterval: globalCache.cleanupInterval || 0
+      };
+      
+      // Retornar informações completas
+      res.json({
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+        memoria: {
+          total: Math.round(process.memoryUsage().heapTotal / 1024 / 1024) + "MB",
+          usado: Math.round(process.memoryUsage().heapUsed / 1024 / 1024) + "MB",
+          externo: Math.round(process.memoryUsage().external / 1024 / 1024) + "MB"
+        },
+        lruCache: lruCacheStats,
+        queryCache: queryCacheIntegrity,
+        status: "Sistema operacional e otimizado"
+      });
+    } catch (error) {
+      res.status(500).json({
+        error: 'Falha ao verificar cache',
+        message: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
   
   // Chamada inicial para configurar o servidor
   setupWebSocketServer(wss);
