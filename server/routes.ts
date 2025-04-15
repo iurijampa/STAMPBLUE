@@ -581,12 +581,247 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Setup authentication routes
   setupAuth(app);
 
+  // Endpoints otimizados para o dashboard do admin
+  // Nova rota específica para pedidos concluídos (mais eficiente)
+  app.get("/api/activities/concluidos", isAuthenticated, async (req, res) => {
+    try {
+      if (req.user && req.user.role === "admin") {
+        // 1. Usar cabeçalhos de cache agressivos para o browser
+        res.setHeader('Cache-Control', 'private, max-age=30');
+        
+        // 2. Verificar se temos em cache
+        const cacheKey = `activities_concluidos_admin_${req.user.id}_ultra`;
+        const cachedData = cache.get(cacheKey);
+        
+        if (cachedData) {
+          console.log(`[CACHE-ULTRA] Usando dados em cache para ${cacheKey}`);
+          return res.json(cachedData);
+        }
+        
+        console.time('[PERF] Carregamento pedidos concluídos');
+        
+        // Consulta SQL otimizada diretamente para pedidos concluídos
+        // Isso evita diversas consultas ao obter todos os progressos
+        try {
+          // Abordagem SQL otimizada
+          const query = sql`
+            SELECT a.*, 
+                  'concluido' as "currentDepartment",
+                  a."clientName" as client,
+                  a.description as "clientInfo"
+            FROM activities a
+            WHERE EXISTS (
+              SELECT 1 FROM activity_progress ap 
+              WHERE ap."activityId" = a.id 
+              AND ap.department = 'embalagem' 
+              AND ap.status = 'completed'
+            )
+          `;
+          
+          const result = await db.execute(query);
+          
+          // Guardar em cache por 30 segundos e no hot cache
+          cache.set(cacheKey, result, 30000);
+          console.timeEnd('[PERF] Carregamento pedidos concluídos');
+          
+          // Marcar como cache prioritário
+          if ((cache as any).priorityKeys && typeof (cache as any).priorityKeys.add === 'function') {
+            (cache as any).priorityKeys.add(cacheKey);
+          }
+          
+          return res.json(result);
+        } catch (sqlError) {
+          console.error("[ERRO-SQL] Falha na query otimizada:", sqlError);
+          
+          // Fallback para método tradicional se SQL falhar
+          const activities = await storage.getAllActivities();
+          const withEmbalagem = [];
+          
+          // Buscar apenas os que foram concluídos pela embalagem
+          for (const activity of activities) {
+            const progresses = await storage.getActivityProgress(activity.id);
+            const embalagemProgress = progresses.find(p => 
+              p.department === 'embalagem' && p.status === 'completed'
+            );
+            
+            if (embalagemProgress) {
+              withEmbalagem.push({
+                ...activity,
+                currentDepartment: 'concluido',
+                client: activity.clientName,
+                clientInfo: activity.description || null,
+                progress: progresses
+              });
+            }
+          }
+          
+          cache.set(cacheKey, withEmbalagem, 30000);
+          console.timeEnd('[PERF] Carregamento pedidos concluídos (fallback)');
+          
+          return res.json(withEmbalagem);
+        }
+      } else {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+    } catch (error) {
+      console.error("[ERROR] Erro no carregamento de concluídos:", error);
+      res.status(500).json({ message: "Erro ao buscar pedidos concluídos" });
+    }
+  });
+  
+  // Nova rota específica para pedidos em produção (mais eficiente)
+  app.get("/api/activities/em-producao", isAuthenticated, async (req, res) => {
+    try {
+      if (req.user && req.user.role === "admin") {
+        // 1. Usar cabeçalhos de cache agressivos para o browser
+        res.setHeader('Cache-Control', 'private, max-age=30');
+        
+        // 2. Verificar se temos em cache
+        const cacheKey = `activities_em_producao_admin_${req.user.id}_ultra`;
+        const cachedData = cache.get(cacheKey);
+        
+        if (cachedData) {
+          console.log(`[CACHE-ULTRA] Usando dados em cache para ${cacheKey}`);
+          return res.json(cachedData);
+        }
+        
+        console.time('[PERF] Carregamento pedidos em-producao');
+        
+        try {
+          // Abordagem SQL otimizada para pedidos em produção
+          const query = sql`
+            WITH LatestProgress AS (
+              SELECT 
+                "activityId",
+                department,
+                status,
+                ROW_NUMBER() OVER(PARTITION BY "activityId" ORDER BY 
+                  CASE department 
+                    WHEN 'gabarito' THEN 1 
+                    WHEN 'impressao' THEN 2 
+                    WHEN 'batida' THEN 3 
+                    WHEN 'costura' THEN 4 
+                    WHEN 'embalagem' THEN 5
+                  END DESC) as rn
+              FROM activity_progress
+              WHERE status = 'pending'
+            )
+            SELECT 
+              a.*,
+              a."clientName" as client,
+              a.description as "clientInfo",
+              COALESCE(lp.department, 'gabarito') as "currentDepartment"
+            FROM activities a
+            LEFT JOIN LatestProgress lp ON lp."activityId" = a.id AND lp.rn = 1
+            WHERE NOT EXISTS (
+              SELECT 1 FROM activity_progress ap 
+              WHERE ap."activityId" = a.id 
+              AND ap.department = 'embalagem' 
+              AND ap.status = 'completed'
+            )
+          `;
+          
+          const result = await db.execute(query);
+          
+          // Guardar em cache por 30 segundos e no hot cache
+          cache.set(cacheKey, result, 30000);
+          console.timeEnd('[PERF] Carregamento pedidos em-producao');
+          
+          // Marcar como cache prioritário
+          if ((cache as any).priorityKeys && typeof (cache as any).priorityKeys.add === 'function') {
+            (cache as any).priorityKeys.add(cacheKey);
+          }
+          
+          return res.json(result);
+        } catch (sqlError) {
+          console.error("[ERRO-SQL] Falha na query otimizada:", sqlError);
+          
+          // Fallback para método tradicional se SQL falhar
+          const activities = await storage.getAllActivities();
+          const emProducao = [];
+          
+          // Processar atividades em lotes
+          const batchSize = 10;
+          for (let i = 0; i < activities.length; i += batchSize) {
+            const batch = activities.slice(i, i + batchSize);
+            
+            // Processar cada lote em paralelo
+            const processedBatch = await Promise.all(batch.map(async (activity) => {
+              const progresses = await storage.getActivityProgress(activity.id);
+              
+              // Verificar se foi concluído pela embalagem
+              const embalagemProgress = progresses.find(p => 
+                p.department === 'embalagem' && p.status === 'completed'
+              );
+              
+              // Se foi concluído, pular
+              if (embalagemProgress) return null;
+              
+              // Encontrar o departamento atual
+              const pendingProgress = progresses
+                .filter(p => p.status === 'pending')
+                .sort((a, b) => {
+                  const deptOrder = ['gabarito', 'impressao', 'batida', 'costura', 'embalagem'];
+                  return deptOrder.indexOf(a.department as any) - deptOrder.indexOf(b.department as any);
+                })[0];
+              
+              return {
+                ...activity,
+                currentDepartment: pendingProgress ? pendingProgress.department : 'gabarito',
+                client: activity.clientName,
+                clientInfo: activity.description || null,
+                progress: progresses
+              };
+            }));
+            
+            // Filtrar nulos e adicionar ao resultado
+            emProducao.push(...processedBatch.filter(Boolean));
+          }
+          
+          cache.set(cacheKey, emProducao, 30000);
+          console.timeEnd('[PERF] Carregamento pedidos em-producao (fallback)');
+          
+          return res.json(emProducao);
+        }
+      } else {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+    } catch (error) {
+      console.error("[ERROR] Erro no carregamento de em-producao:", error);
+      res.status(500).json({ message: "Erro ao buscar pedidos em produção" });
+    }
+  });
+  
   // API routes
-  // Activities
+  // Activities - original method (mantido para compatibilidade)
   app.get("/api/activities", isAuthenticated, async (req, res) => {
     try {
       // Adiciona cabeçalhos de cache para o navegador
       res.setHeader('Cache-Control', 'private, max-age=15');
+      
+      // Novo: Redirecionamento para APIs otimizadas quando o tipo é específico
+      const tipoFiltro = req.query.tipo;
+      if (req.user.role === 'admin' && tipoFiltro) {
+        if (tipoFiltro === 'concluidos') {
+          // Redirecionar para endpoint otimizado internamente
+          const response = await fetch(`http://localhost:${process.env.PORT || 5000}/api/activities/concluidos`, {
+            headers: {
+              'Cookie': req.headers.cookie || ''
+            }
+          });
+          const data = await response.json();
+          return res.json(data);
+        } else if (tipoFiltro === 'em-producao') {
+          // Redirecionar para endpoint otimizado internamente
+          const response = await fetch(`http://localhost:${process.env.PORT || 5000}/api/activities/em-producao`, {
+            headers: {
+              'Cookie': req.headers.cookie || ''
+            }
+          });
+          const data = await response.json();
+          return res.json(data);
+        }
+      }
       
       // Cria uma chave de cache baseada no usuário
       const cacheKey = `activities_main_${req.user.role}_${req.user.id}`;
@@ -594,11 +829,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Verificar se o header específico para invalidar o cache está presente
       const bypassCache = req.headers['x-bypass-cache'] === 'true';
       
-      // Obter o tipo específico (em-produção ou concluídos)
-      const tipoFiltro = req.query.tipo || 'todos';
-      
       // Modificar a chave do cache com base no tipo de filtro
-      const cacheKeyWithType = `${cacheKey}_${tipoFiltro}`;
+      const cacheKeyWithType = `${cacheKey}_${tipoFiltro || 'todos'}`;
       
       // Se tiver em cache e não estiver ignorando o cache, retorna imediatamente
       const cachedData = !bypassCache ? cache.get(cacheKeyWithType) : null;

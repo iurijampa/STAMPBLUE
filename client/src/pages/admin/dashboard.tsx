@@ -47,32 +47,31 @@ export default function AdminDashboard() {
     }
   }, [user, navigate, toast]);
 
-  // Função para atualizar dados
-  const handleRefresh = () => {
-    // Invalidar todas as queries de atividades (geral, concluídos e em-producao)
-    queryClient.invalidateQueries({ 
-      queryKey: ["/api/activities"]
-    });
+  // Função utilitária para invalidar todas as queries importantes
+  const invalidateAllQueries = () => {
+    // Invalidar todas as rotas de atividades (incluindo as novas rotas otimizadas)
+    queryClient.invalidateQueries({ queryKey: ["/api/activities"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/activities/concluidos"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/activities/em-producao"] });
     
     // Invalidar estatísticas
-    queryClient.invalidateQueries({ 
-      queryKey: ["/api/stats"]
-    });
+    queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
     
     // Invalidar notificações
-    queryClient.invalidateQueries({ 
-      queryKey: ["/api/notifications"]
-    });
+    queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
     
     // Invalidar contagem por departamentos
-    queryClient.invalidateQueries({ 
-      queryKey: ["/api/stats/department-counts"]
-    });
+    queryClient.invalidateQueries({ queryKey: ["/api/stats/department-counts"] });
     
-    // Fazer solicitação para diagnóstico para verificar status do cache  
+    // Verificar diagnóstico do sistema
     fetch("/api/system/diagnostico")
       .then(resp => resp.json())
       .catch(err => console.error("Erro ao carregar diagnóstico:", err));
+  };
+  
+  // Função para atualizar dados
+  const handleRefresh = () => {
+    invalidateAllQueries();
     
     toast({
       title: "Atualizado",
@@ -545,26 +544,43 @@ function ActivitiesList(showCompleted: boolean = false) {
   const [filterStatus, setFilterStatus] = useState<string | null>(null);
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   
-  // Determinar o tipo de lista a ser carregada baseado no parâmetro
+  // Usar as rotas otimizadas específicas para cada tipo
   const tipoLista = showCompleted ? 'concluidos' : 'em-producao';
+  const endpointOtimizado = showCompleted 
+    ? '/api/activities/concluidos' 
+    : '/api/activities/em-producao';
   
-  // Otimização: Usar queryKey específica para cada tipo de lista e parâmetros na URL
-  // isso permite que o backend filtre os dados corretamente
+  // Log para monitoramento
+  console.time(`[PERF] Carregamento ${tipoLista}`);
+  
+  // Otimização: Usar rotas específicas e otimizadas para cada tipo de lista
   const { data: activities, isLoading } = useQuery({
-    queryKey: ["/api/activities", tipoLista],
+    queryKey: [endpointOtimizado],
     queryFn: async () => {
-      console.time(`[PERF] Carregamento ${tipoLista}`);
-      const response = await fetch(`/api/activities?tipo=${tipoLista}`, {
-        headers: {
-          'Cache-Control': 'max-age=30' // usar cache do navegador para melhorar performance
+      try {
+        const response = await fetch(endpointOtimizado, {
+          headers: {
+            'Cache-Control': 'max-age=60', // cache mais agressivo
+            'Pragma': 'no-cache' // forçar refresh em desenvolvimento
+          }
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Erro ao buscar atividades (código ${response.status})`);
         }
-      });
-      if (!response.ok) {
-        throw new Error(`Erro ao buscar atividades (${tipoLista})`);
+        
+        const data = await response.json();
+        console.timeEnd(`[PERF] Carregamento ${tipoLista}`);
+        return data;
+      } catch (err) {
+        console.error(`Erro carregando ${tipoLista}:`, err);
+        console.timeEnd(`[PERF] Carregamento ${tipoLista}`);
+        
+        // Fallback para endpoint antigo
+        console.log(`[FALLBACK] Usando endpoint antigo para ${tipoLista}`);
+        const fallbackResponse = await fetch(`/api/activities?tipo=${tipoLista}`);
+        return await fallbackResponse.json();
       }
-      const data = await response.json();
-      console.timeEnd(`[PERF] Carregamento ${tipoLista}`);
-      return data;
     },
     staleTime: 30000, // 30 segundos - reduz chamadas frequentes à API
     refetchOnWindowFocus: false, // Evita recarregar quando a janela ganha foco
