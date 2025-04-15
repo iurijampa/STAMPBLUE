@@ -147,10 +147,28 @@ export default function AdminDashboard() {
           <StatsAndDepartmentsOverview />
         </div>
         
-        {/* Separação entre pedidos em produção e concluídos */}
-        <div className="space-y-6 mt-8">
-          {ActivitiesList(false)} {/* Pedidos em produção */}
-          {ActivitiesList(true)}  {/* Pedidos concluídos */}
+        {/* Pedidos em produção */}
+        <div className="space-y-8 mt-8">
+          <div>
+            {ActivitiesList(false)}
+          </div>
+          
+          {/* Separador visual */}
+          <div className="relative my-10">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t border-gray-300" />
+            </div>
+            <div className="relative flex justify-center">
+              <span className="bg-white dark:bg-gray-900 px-4 text-sm text-muted-foreground">
+                Histórico de pedidos finalizados
+              </span>
+            </div>
+          </div>
+          
+          {/* Pedidos concluídos */}
+          <div>
+            {ActivitiesList(true)}
+          </div>
         </div>
         
         {/* Abas para navegação */}
