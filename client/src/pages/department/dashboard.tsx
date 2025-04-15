@@ -5,12 +5,13 @@ import { useLocation, useParams } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { useCallback, useEffect, useState, useRef } from "react";
-import { User, Activity } from "@shared/schema";
+import { User as UserSchema, Activity } from "@shared/schema";
 import { useQuery } from "@tanstack/react-query";
 import { 
   Loader2, CalendarClock, Clock, Eye, RefreshCw, RotateCcw, Printer,
   ArchiveIcon, ListTodo, CheckCircle, InboxIcon, CornerUpLeft, 
-  ClipboardList, Plus, Hammer, CalendarIcon, History, Check
+  ClipboardList, Plus, Hammer, CalendarIcon, History, Check,
+  Calendar, CalendarDays, Archive, Star, X, UserIcon
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -83,7 +84,7 @@ export default function DepartmentDashboard() {
         navigate("/admin/dashboard");
       }
       
-      return userData as User;
+      return userData as UserSchema;
     }
   });
   
@@ -832,7 +833,13 @@ export default function DepartmentDashboard() {
                     <div className="space-y-6">
                       {/* Agrupando por período */}
                       <div>
-                        <h3 className="text-sm font-semibold mb-3 text-neutral-600 border-b pb-1">Hoje</h3>
+                        <div className="flex items-center gap-2 mb-3">
+                          <div className="bg-blue-500 rounded-md p-1.5 text-white">
+                            <CalendarClock className="h-4 w-4" />
+                          </div>
+                          <h3 className="text-base font-bold text-blue-700">Pedidos de Hoje</h3>
+                        </div>
+                        
                         {historyData
                           .filter(item => {
                             const today = new Date();
@@ -847,14 +854,14 @@ export default function DepartmentDashboard() {
                           .map(activity => (
                             <div 
                               key={`hoje-${activity.id}`}
-                              className="border rounded-lg p-3 hover:bg-neutral-50 transition-colors mb-2"
+                              className="border-l-4 border-l-blue-500 border rounded-lg p-3 hover:bg-blue-50 transition-colors mb-2"
                             >
                               <div className="flex justify-between items-center mb-1">
                                 <div className="flex gap-2 items-center">
-                                  <Check className="h-4 w-4 text-green-500" />
-                                  <h4 className="font-semibold">{activity.title}</h4>
-                                  <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                                    Concluído
+                                  <Check className="h-4 w-4 text-blue-600" />
+                                  <h4 className="font-semibold text-gray-800">{activity.title}</h4>
+                                  <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                                    Hoje
                                   </Badge>
                                 </div>
                                 <div className="text-xs text-neutral-500">
@@ -862,9 +869,9 @@ export default function DepartmentDashboard() {
                                 </div>
                               </div>
                               <div className="ml-6">
-                                <p className="text-sm text-neutral-600 mb-1">{activity.description}</p>
-                                <div className="flex items-center gap-3 text-xs text-neutral-500">
-                                  <span className="font-medium">Finalizado por: {activity.completedBy}</span>
+                                <p className="text-sm text-gray-600 mb-1">{activity.description}</p>
+                                <div className="flex items-center gap-3 text-xs text-gray-500">
+                                  <span className="font-medium text-blue-700">{activity.completedBy}</span>
                                   <span>•</span>
                                   <span>{formatDate(activity.completedAt ? new Date(activity.completedAt) : null)}</span>
                                 </div>
@@ -880,15 +887,24 @@ export default function DepartmentDashboard() {
                             itemDate.getFullYear() === today.getFullYear()
                           );
                         }).length === 0 && (
-                          <p className="text-sm text-neutral-500 italic text-center py-2">
-                            Nenhuma atividade concluída hoje
-                          </p>
+                          <div className="border border-dashed border-gray-300 rounded-lg p-6 text-center">
+                            <Calendar className="h-10 w-10 mx-auto text-gray-400 mb-2" />
+                            <p className="text-gray-500">
+                              Nenhuma atividade concluída hoje
+                            </p>
+                          </div>
                         )}
                       </div>
                       
                       {/* Esta semana */}
                       <div>
-                        <h3 className="text-sm font-semibold mb-3 text-neutral-600 border-b pb-1">Esta Semana</h3>
+                        <div className="flex items-center gap-2 mb-4">
+                          <div className="bg-emerald-600 rounded-md p-2 text-white">
+                            <Calendar className="h-5 w-5" />
+                          </div>
+                          <h3 className="text-lg font-bold text-emerald-700">Esta Semana</h3>
+                        </div>
+                        
                         {historyData
                           .filter(item => {
                             const today = new Date();
@@ -914,24 +930,24 @@ export default function DepartmentDashboard() {
                           .map(activity => (
                             <div 
                               key={`semana-${activity.id}`}
-                              className="border rounded-lg p-3 hover:bg-neutral-50 transition-colors mb-2"
+                              className="border-l-4 border-l-emerald-500 border rounded-lg p-3 hover:bg-emerald-50 transition-colors mb-2"
                             >
                               <div className="flex justify-between items-center mb-1">
                                 <div className="flex gap-2 items-center">
-                                  <Check className="h-4 w-4 text-green-500" />
-                                  <h4 className="font-semibold">{activity.title}</h4>
-                                  <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                                    Concluído
+                                  <Check className="h-4 w-4 text-emerald-600" />
+                                  <h4 className="font-semibold text-gray-800">{activity.title}</h4>
+                                  <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
+                                    Esta semana
                                   </Badge>
                                 </div>
                                 <div className="text-xs text-neutral-500">
-                                  Pedido #{activity.id}
+                                  #{activity.id}
                                 </div>
                               </div>
                               <div className="ml-6">
-                                <p className="text-sm text-neutral-600 mb-1">{activity.description}</p>
-                                <div className="flex items-center gap-3 text-xs text-neutral-500">
-                                  <span className="font-medium">Finalizado por: {activity.completedBy}</span>
+                                <p className="text-sm text-gray-600 mb-1">{activity.description}</p>
+                                <div className="flex items-center gap-3 text-xs text-gray-500">
+                                  <span className="font-medium text-emerald-700">{activity.completedBy}</span>
                                   <span>•</span>
                                   <span>{formatDate(activity.completedAt ? new Date(activity.completedAt) : null)}</span>
                                 </div>
@@ -959,15 +975,24 @@ export default function DepartmentDashboard() {
                           sevenDaysAgo.setDate(today.getDate() - 7);
                           return itemDate >= sevenDaysAgo && itemDate <= today;
                         }).length === 0 && (
-                          <p className="text-sm text-neutral-500 italic text-center py-2">
-                            Nenhuma atividade concluída nesta semana
-                          </p>
+                          <div className="border border-dashed border-gray-300 rounded-lg p-6 text-center">
+                            <CalendarDays className="h-10 w-10 mx-auto text-gray-400 mb-2" />
+                            <p className="text-gray-500">
+                              Nenhuma atividade concluída nesta semana
+                            </p>
+                          </div>
                         )}
                       </div>
                       
                       {/* Mais Antigos */}
                       <div>
-                        <h3 className="text-sm font-semibold mb-3 text-neutral-600 border-b pb-1">Mais Antigos</h3>
+                        <div className="flex items-center gap-2 mb-4">
+                          <div className="bg-amber-600 rounded-md p-2 text-white">
+                            <ArchiveIcon className="h-5 w-5" />
+                          </div>
+                          <h3 className="text-lg font-bold text-amber-700">Histórico Anterior</h3>
+                        </div>
+                        
                         {historyData
                           .filter(item => {
                             const today = new Date();
@@ -981,26 +1006,34 @@ export default function DepartmentDashboard() {
                           .map(activity => (
                             <div 
                               key={`antigo-${activity.id}`}
-                              className="border rounded-lg p-3 hover:bg-neutral-50 transition-colors mb-2"
+                              className="border-l-4 border-l-amber-500 border rounded-lg p-4 hover:shadow-md hover:bg-amber-50 transition-all duration-200 mb-3"
                             >
-                              <div className="flex justify-between items-center mb-1">
+                              <div className="flex justify-between items-center mb-2">
                                 <div className="flex gap-2 items-center">
-                                  <Check className="h-4 w-4 text-green-500" />
-                                  <h4 className="font-semibold">{activity.title}</h4>
-                                  <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                                    Concluído
+                                  <div className="bg-amber-100 rounded-full p-1.5">
+                                    <Check className="h-4 w-4 text-amber-600" />
+                                  </div>
+                                  <h4 className="font-bold text-gray-800">{activity.title}</h4>
+                                  <Badge className="bg-amber-100 hover:bg-amber-200 text-amber-800 border-amber-200 ml-2">
+                                    Anterior
                                   </Badge>
                                 </div>
-                                <div className="text-xs text-neutral-500">
+                                <div className="px-2 py-1 rounded bg-amber-50 text-xs font-semibold text-amber-800">
                                   Pedido #{activity.id}
                                 </div>
                               </div>
-                              <div className="ml-6">
-                                <p className="text-sm text-neutral-600 mb-1">{activity.description}</p>
-                                <div className="flex items-center gap-3 text-xs text-neutral-500">
-                                  <span className="font-medium">Finalizado por: {activity.completedBy}</span>
+                              <div className="ml-8">
+                                <p className="text-sm text-gray-600 mb-2">{activity.description}</p>
+                                <div className="flex items-center gap-3 text-xs text-gray-500 mt-2 bg-gray-50 inline-block px-2 py-1 rounded">
+                                  <span className="font-medium text-amber-700">
+                                    <UserIcon className="h-3 w-3 inline mr-1" />
+                                    {activity.completedBy}
+                                  </span>
                                   <span>•</span>
-                                  <span>{formatDate(activity.completedAt ? new Date(activity.completedAt) : null)}</span>
+                                  <span className="text-gray-500">
+                                    <Clock className="h-3 w-3 inline mr-1" />
+                                    {formatDate(activity.completedAt ? new Date(activity.completedAt) : null)}
+                                  </span>
                                 </div>
                               </div>
                             </div>
@@ -1014,9 +1047,12 @@ export default function DepartmentDashboard() {
                           sevenDaysAgo.setDate(today.getDate() - 7);
                           return itemDate < sevenDaysAgo;
                         }).length === 0 && (
-                          <p className="text-sm text-neutral-500 italic text-center py-2">
-                            Nenhuma atividade concluída anterior a esta semana
-                          </p>
+                          <div className="border border-dashed border-gray-300 rounded-lg p-6 text-center">
+                            <Archive className="h-10 w-10 mx-auto text-gray-400 mb-2" />
+                            <p className="text-gray-500">
+                              Nenhuma atividade concluída anterior a esta semana
+                            </p>
+                          </div>
                         )}
                       </div>
                     </div>
