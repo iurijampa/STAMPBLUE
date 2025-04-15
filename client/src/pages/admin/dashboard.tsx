@@ -147,10 +147,11 @@ export default function AdminDashboard() {
           <StatsAndDepartmentsOverview />
         </div>
         
-        {/* Pedidos em produção */}
+        {/* Layout invertido - Pedidos concluídos em cima */}
         <div className="space-y-8 mt-8">
+          {/* Pedidos concluídos */}
           <div>
-            {ActivitiesList(false)}
+            {ActivitiesList(true)}
           </div>
           
           {/* Separador visual */}
@@ -160,14 +161,14 @@ export default function AdminDashboard() {
             </div>
             <div className="relative flex justify-center">
               <span className="bg-white dark:bg-gray-900 px-4 text-sm text-muted-foreground">
-                Histórico de pedidos finalizados
+                Pedidos em produção
               </span>
             </div>
           </div>
           
-          {/* Pedidos concluídos */}
+          {/* Pedidos em produção */}
           <div>
-            {ActivitiesList(true)}
+            {ActivitiesList(false)}
           </div>
         </div>
         
