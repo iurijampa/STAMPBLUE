@@ -1,5 +1,5 @@
 import { createContext, ReactNode, useContext } from 'react';
-import { useWebSocket } from './use-websocket';
+import { useWebSocket } from './use-websocket-fixed';
 
 // Criar o contexto para o WebSocket
 type WebSocketContextType = ReturnType<typeof useWebSocket>;

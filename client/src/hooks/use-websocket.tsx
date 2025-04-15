@@ -17,7 +17,7 @@ const WS_CONNECT_TIMEOUT = 7000; // 7 segundos - timeout para estabelecer conex�
 // Configurações de reconexão - estratégia inteligente adaptativa
 const INITIAL_RECONNECT_DELAY = 1800; // 1.8 segundos inicial - resposta mais rápida no primeiro erro
 const MAX_RECONNECT_DELAY = 35000; // 35 segundos - limite máximo reduzido para reconexão mais rápida
-const RECONNECT_BACKOFF_FACTOR = 1.4; // Fator de crescimento do atraso - crescimento mais suave
+const RECONNECT_BACKOFF_FACTOR = 1.5; // Fator de crescimento do atraso - otimizado
 const JITTER_MAX = 0.2; // 20% de variação aleatória para evitar reconexões simultâneas
 const MAX_RECONNECT_ATTEMPTS = 3; // 3 tentativas antes de pausa mais longa
 const RECONNECT_PAUSE = 20000; // 20 segundos de pausa após várias tentativas

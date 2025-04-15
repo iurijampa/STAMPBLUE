@@ -1572,7 +1572,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // WebSocket server para atualizações em tempo real
   // Configuração ultra-otimizada para máxima estabilidade e performance
-  const wss = new WebSocketServer({ 
+  let wss = new WebSocketServer({ 
     server: httpServer, 
     path: '/ws',
     // Configurações para melhorar a estabilidade e performance
@@ -1591,6 +1591,82 @@ export async function registerRoutes(app: Express): Promise<Server> {
       threshold: 1024 // Apenas mensagens maiores que 1KB
     }
   });
+  
+  // Sistema de monitoramento e auto-recuperação do servidor WebSocket
+  let wsErrors = 0;
+  const MAX_WS_ERRORS = 10;
+  const monitorWSServer = () => {
+    // Resetar contador de erros a cada 5 minutos
+    setInterval(() => {
+      if (wsErrors > 0) {
+        console.log(`[WSS] Resetando contador de erros (era ${wsErrors})`);
+        wsErrors = 0;
+      }
+    }, 5 * 60 * 1000); // 5 minutos
+    
+    // Verificar integridade do servidor WebSocket a cada minuto
+    setInterval(() => {
+      try {
+        const clientCount = Array.from(wss.clients).length;
+        
+        // Se o servidor tiver problemas (muitos erros), reiniciá-lo
+        if (wsErrors > MAX_WS_ERRORS) {
+          console.log(`[WSS] Detectados ${wsErrors} erros no servidor WebSocket. Reiniciando servidor...`);
+          
+          try {
+            // Fechar todas as conexões existentes
+            wss.clients.forEach(client => {
+              try {
+                client.close(1012, "Server restart"); // Código 1012 = Server Restart
+              } catch (e) {
+                // Ignorar erros ao tentar fechar conexões
+              }
+            });
+            
+            // Fechar o servidor
+            wss.close(() => {
+              console.log("[WSS] Servidor WebSocket fechado com sucesso, criando nova instância...");
+              
+              // Criar novo servidor
+              wss = new WebSocketServer({ 
+                server: httpServer, 
+                path: '/ws',
+                clientTracking: true,
+                maxPayload: 1024 * 64
+              });
+              
+              // Reconectar os handlers (isso vai chamar o código abaixo que configura os event listeners)
+              setupWebSocketServer(wss);
+              
+              console.log("[WSS] Novo servidor WebSocket iniciado com sucesso!");
+              wsErrors = 0;
+            });
+          } catch (restartError) {
+            console.error("[WSS] Erro ao reiniciar servidor WebSocket:", restartError);
+          }
+        } else {
+          // Log periódico da saúde do servidor (só a cada 10 minutos)
+          const now = new Date();
+          if (now.getMinutes() % 10 === 0 && now.getSeconds() < 10) {
+            console.log(`[WSS] Servidor WebSocket saudável com ${clientCount} clientes conectados. Erros: ${wsErrors}`);
+          }
+        }
+      } catch (monitorError) {
+        console.error("[WSS] Erro ao monitorar servidor WebSocket:", monitorError);
+      }
+    }, 60 * 1000); // 1 minuto
+  };
+  
+  // Iniciar monitoramento
+  monitorWSServer();
+  
+  // Função para configurar event listeners do servidor WebSocket
+  function setupWebSocketServer(server) {
+    // Incrementar contador de erros quando ocorrer erro no WebSocket
+    server.on('error', (error) => {
+      console.error("[WSS] Erro global no servidor WebSocket:", error);
+      wsErrors++;
+    });
   
   // Armazenar conexões WebSocket por departamento usando Set para melhor performance
   // Set é mais eficiente para inserção/remoção frequente do que Array
@@ -1875,6 +1951,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     });
   });
+  }
+  
+  // Chamada inicial para configurar o servidor
+  setupWebSocketServer(wss);
   
   return httpServer;
 }
