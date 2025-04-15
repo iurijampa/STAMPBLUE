@@ -1493,6 +1493,99 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Erro ao buscar estatísticas do departamento" });
     }
   });
+  
+  // Obter histórico de atividades concluídas por um departamento
+  app.get("/api/activities/history/:department", isAuthenticated, async (req, res) => {
+    try {
+      let department = req.params.department;
+      
+      // Sempre usar o departamento do usuário logado se não for admin
+      if (req.user && req.user.role !== "admin") {
+        department = req.user.role;
+      }
+      
+      console.log(`[DEBUG] Buscando histórico de atividades para o departamento: ${department}`);
+      
+      // Verificar se o departamento é válido
+      if (!DEPARTMENTS.includes(department as any) && department !== "admin") {
+        return res.status(400).json({ message: "Departamento inválido" });
+      }
+      
+      // Adiciona cabeçalhos de cache para o navegador
+      res.setHeader('Cache-Control', 'private, max-age=30');
+      
+      // Cria uma chave de cache baseada no usuário
+      const cacheKey = `activities_history_${department}_${req.user.id}`;
+      const cachedData = cache.get(cacheKey);
+      
+      // Se tiver em cache, retorna imediatamente (grande ganho de performance)
+      if (cachedData) {
+        console.log(`[CACHE] Usando dados em cache para ${cacheKey}`);
+        return res.json(cachedData);
+      }
+      
+      // Buscar todos os progressos concluídos para este departamento via SQL
+      try {
+        // Obter todos os progressos concluídos para este departamento
+        const completedProgress = await db
+          .select()
+          .from(activityProgress)
+          .where(
+            and(
+              eq(activityProgress.department, department),
+              eq(activityProgress.status, "completed")
+            )
+          );
+          
+        console.log(`[DEBUG] Encontrados ${completedProgress.length} progressos concluídos para o departamento ${department}`);
+        
+        // Buscar as atividades correspondentes com detalhes completos
+        const completedActivities = [];
+        
+        for (const progress of completedProgress) {
+          try {
+            // Buscar atividade com detalhes completos
+            const activity = await db
+              .select()
+              .from(activities)
+              .where(eq(activities.id, progress.activityId));
+              
+            if (activity && activity.length > 0) {
+              completedActivities.push({
+                ...activity[0],
+                completedAt: progress.completedAt,
+                completedBy: progress.completedBy,
+                notes: progress.notes
+              });
+            }
+          } catch (error) {
+            console.error(`Erro ao buscar atividade ${progress.activityId}:`, error);
+            // Continuar mesmo se uma atividade não for encontrada
+          }
+        }
+        
+        // Ordenar por data de conclusão (mais recente primeiro)
+        completedActivities.sort((a, b) => {
+          if (!a.completedAt) return 1;
+          if (!b.completedAt) return -1;
+          return new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime();
+        });
+        
+        console.log(`[DEBUG] Encontradas ${completedActivities.length} atividades concluídas para o departamento: ${department}`);
+        
+        // Guardar em cache por 30 segundos
+        cache.set(cacheKey, completedActivities, 30000);
+        
+        res.json(completedActivities);
+      } catch (error) {
+        console.error(`Erro SQL na busca de histórico:`, error);
+        throw new Error(`Erro ao consultar o banco de dados: ${error.message}`);
+      }
+    } catch (error) {
+      console.error("Erro ao buscar histórico de atividades:", error);
+      res.status(500).json({ message: "Erro ao buscar histórico de atividades" });
+    }
+  });
 
   // Backup system endpoints (admin only)
   app.get("/api/backup", isAdmin, async (req, res) => {
