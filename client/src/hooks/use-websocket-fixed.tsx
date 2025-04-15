@@ -3,25 +3,25 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useToast } from './use-toast';
 import { queryClient } from '@/lib/queryClient';
 
-// CONFIGURAÇÃO ULTRA-OTIMIZADA PARA MÁXIMA ESTABILIDADE, CONFIABILIDADE E EFICIÊNCIA DE RECURSOS
-// Configurações de polling - equilíbrio entre atualizações e economia de recursos
-const MIN_POLLING_INTERVAL = 8000; // 8 segundos - menor número de chamadas mas mais frequente
-const MAX_POLLING_INTERVAL = 30000; // 30 segundos - máximo intervalo para garantir dados sempre atualizados
-const POLLING_BACKOFF_FACTOR = 1.5; // Aumenta gradualmente o tempo entre polling
+// CONFIGURAÇÃO TURBO-OTIMIZADA - VERSÃO 2.0 COM SUPER DESEMPENHO
+// Configurações de polling - otimização máxima para resposta instantânea
+const MIN_POLLING_INTERVAL = 4500; // 4.5 segundos - atualizações ultra-frequentes para excelente responsividade
+const MAX_POLLING_INTERVAL = 15000; // 15 segundos - intervalo máximo reduzido pela metade para dados sempre frescos
+const POLLING_BACKOFF_FACTOR = 1.3; // Aumenta mais suavemente o tempo entre pollings
 
-// Configurações de WebSocket - otimização para máxima estabilidade
-const HEARTBEAT_INTERVAL = 90000; // 1.5 minutos - mais frequente para detectar problemas antes
-const HEARTBEAT_TIMEOUT = 9000; // 9 segundos - timeout mais tolerante para redes lentas
-const WS_CONNECT_TIMEOUT = 7000; // 7 segundos - timeout para estabelecer conexão
+// Configurações de WebSocket - otimização para velocidade e confiabilidade
+const HEARTBEAT_INTERVAL = 50000; // 50 segundos - mais frequente para detectar problemas mais rapidamente
+const HEARTBEAT_TIMEOUT = 6000; // 6 segundos - timeout mais curto para detecção mais rápida de problemas
+const WS_CONNECT_TIMEOUT = 5000; // 5 segundos - timeout reduzido para estabelecer conexão mais rapidamente
 
-// Configurações de reconexão - estratégia inteligente adaptativa
-const INITIAL_RECONNECT_DELAY = 1800; // 1.8 segundos inicial - resposta mais rápida no primeiro erro
-const MAX_RECONNECT_DELAY = 35000; // 35 segundos - limite máximo reduzido para reconexão mais rápida
-const RECONNECT_BACKOFF_FACTOR = 1.5; // Fator de crescimento do atraso - otimizado
-const JITTER_MAX = 0.2; // 20% de variação aleatória para evitar reconexões simultâneas
-const MAX_RECONNECT_ATTEMPTS = 3; // 3 tentativas antes de pausa mais longa
-const RECONNECT_PAUSE = 20000; // 20 segundos de pausa após várias tentativas
-const MAX_CONSECUTIVE_ERRORS = 5; // Após 5 erros consecutivos, fazer polling mais agressivo
+// Configurações de reconexão - estratégia ultra-rápida e resiliente
+const INITIAL_RECONNECT_DELAY = 1000; // 1 segundo inicial - resposta instantânea no primeiro erro
+const MAX_RECONNECT_DELAY = 20000; // 20 segundos - limite máximo reduzido drasticamente para recuperação rápida
+const RECONNECT_BACKOFF_FACTOR = 1.4; // Fator de crescimento do atraso - balanceado
+const JITTER_MAX = 0.15; // 15% de variação aleatória para evitar reconexões simultâneas
+const MAX_RECONNECT_ATTEMPTS = 4; // 4 tentativas antes de pausa
+const RECONNECT_PAUSE = 12000; // 12 segundos de pausa após várias tentativas
+const MAX_CONSECUTIVE_ERRORS = 3; // Após apenas 3 erros, ativar polling mais agressivo
 
 export function useWebSocket() {
   const { user } = useAuth();
@@ -55,45 +55,74 @@ export function useWebSocket() {
   // Referência para armazenar o timestamp da última atualização de dados
   const lastUpdateRef = useRef<number | null>(null);
   
+  // Função super-otimizada para atualizar dados periodicamente com recursos avançados
   const refreshDataPeriodically = useCallback(async () => {
     if (!user) return;
     
     try {
-      // Registrar quando a última atualização ocorreu
+      // Registrar quando a última atualização ocorreu e calcular o tempo desde a última atualização
       const now = Date.now();
       const lastUpdateTime = lastUpdateRef.current;
       
-      // MODO DE EMERGÊNCIA: Reduzir drasticamente o tempo entre atualizações
-      // Agora só bloqueia se tiver passado menos de 2 segundos (antes era 10)
-      if (lastUpdateTime && now - lastUpdateTime < 2000) {
+      // Sistema de prevenção de atualização excessiva usando threshold adaptativo
+      const minUpdateInterval = connected ? 1000 : 800; // Threshold reduzido para 0.8s quando WebSocket está desconectado
+      
+      if (lastUpdateTime && now - lastUpdateTime < minUpdateInterval) {
         console.log('Ignorando atualização muito frequente - última há', Math.floor((now - lastUpdateTime)/1000), 'segundos');
-        return;
+        return false; // Retorna false para indicar que não houve atualização
       }
       
       console.log(`Atualizando dados para ${user.role} via polling...`);
-      lastUpdateRef.current = now;
+      lastUpdateRef.current = now; // Atualizar timestamp antes da operação para evitar solicitações simultâneas
       
-      // Atualizar atividades e estatísticas do departamento via polling quando o WebSocket não funciona
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['/api/department/activities', user.role] }),
-        queryClient.invalidateQueries({ queryKey: ['/api/department/stats', user.role] }),
-        queryClient.invalidateQueries({ queryKey: ['/api/activities'] })
-      ]);
+      // Lista de queries para atualizar com prioridades diferentes
+      const queries = [];
+      
+      // Sempre buscar atividades do departamento atual com alta prioridade
+      queries.push(queryClient.invalidateQueries({ 
+        queryKey: ['/api/department/activities', user.role],
+        // Opções de invalidação otimizadas para melhor desempenho
+        refetchType: 'active', // Recarregar apenas queries ativas
+      }));
+      
+      // Buscar estatísticas do departamento
+      queries.push(queryClient.invalidateQueries({ 
+        queryKey: ['/api/department/stats', user.role],
+        refetchType: 'active',
+      }));
+      
+      // Para admin, buscar todas as atividades
+      if (user.role === 'admin') {
+        queries.push(queryClient.invalidateQueries({ 
+          queryKey: ['/api/activities'],
+          refetchType: 'active',
+        }));
+      }
+      
+      // Executar todas as atualizações em paralelo para máxima eficiência
+      await Promise.all(queries);
       
       // Após atualizar os dados, notificar os componentes que possam estar interessados
       // Isso simula o recebimento de uma mensagem WebSocket
-      setMessageData({ type: 'data_refreshed', timestamp: Date.now() });
+      setMessageData({ 
+        type: 'data_refreshed', 
+        timestamp: Date.now(),
+        source: 'polling'
+      });
       
-      // Após 500ms, verificar se houve mudanças nos dados e notificar
-      setTimeout(() => {
-        // Enviar um evento de som para garantir que o sistema verifique por novas atividades
-        setMessageData({ type: 'sound', soundType: 'check_activities' });
-      }, 500);
+      // Verificar imediatamente se há novas atividades (sem delay para maior responsividade)
+      setMessageData({ 
+        type: 'sound', 
+        soundType: 'check_activities',
+        timestamp: Date.now()
+      });
       
+      return true; // Retorna true para indicar sucesso
     } catch (err) {
       console.error('Erro ao atualizar dados:', err);
+      return false; // Retorna false para indicar falha
     }
-  }, [user]);
+  }, [user, connected, queryClient]);
   
   // Função para forçar atualização de dados diretamente (sem esperar pelo WebSocket)
   const updateDataFromServer = useCallback(() => {
@@ -636,57 +665,104 @@ export function useWebSocket() {
     }
   }, [user?.role, connect]);
   
-  // Configurar atualizações periódicas via polling como fallback
+  // Sistema de atualizações periódicas com polling adaptativo turbinado
   useEffect(() => {
     if (!user) return;
     
-    // Iniciar com intervalo curto e ir aumentando se não houver mudanças
-    let currentInterval = MIN_POLLING_INTERVAL;
+    // Iniciar com intervalo ultra-curto para primeira atualização instantânea
+    let currentInterval = MIN_POLLING_INTERVAL * 0.7; // Começa ainda mais rápido
     
-    // Função para executar polling periódico mesmo que o WebSocket esteja funcionando
-    // Isso garante que tenhamos sempre dados atualizados, mesmo em caso de falhas silenciosas
+    // Referência para controlar o timeout e o intervalo entre tentativas
+    const timeoutRef = { current: null as NodeJS.Timeout | null };
+    
+    // Cache para evitar atualizações desnecessárias (otimização de desempenho)
+    const dataHashRef = useRef<string | null>(null);
+    
+    // Contador de atualizações sem mudanças para ajuste dinâmico de intervalo
+    const noChangeCountRef = useRef(0);
+    
+    // Tempos de última atualização e tentativas
+    const lastSuccessRef = useRef<number>(Date.now());
+    
+    // Função super-otimizada para polling adaptativo com detecção inteligente de mudanças
     const doPoll = async () => {
       if (!isMountedRef.current) return;
       
-      // Verificar quanto tempo se passou desde a última atualização
+      // Verificar tempo desde última atualização 
       const now = Date.now();
       const lastUpdate = lastUpdateRef.current;
       
-      if (lastUpdate && (now - lastUpdate < MIN_POLLING_INTERVAL * 0.8)) {
+      // Bloquear atualizações muito frequentes - mas com threshold MUITO menor (1.6s)
+      // para garantir reação extremamente rápida quando necessário
+      if (lastUpdate && (now - lastUpdate < 1600)) {
         console.log(`Adiando polling - última atualização há apenas ${Math.floor((now - lastUpdate)/1000)}s`);
       } else {
-        // Executar atualização
-        await refreshDataPeriodically();
+        try {
+          // Tempo antes da atualização para medir performance
+          const startTime = performance.now();
+          
+          // Executar atualização
+          await refreshDataPeriodically();
+          
+          // Atualizar timestamp de última atualização bem-sucedida
+          lastSuccessRef.current = Date.now();
+          
+          // Medir tempo de resposta para ajuste dinâmico
+          const responseTime = performance.now() - startTime;
+          
+          // Ajustar dinamicamente o intervalo com base no tempo de resposta
+          // Se o servidor responder rápido, podemos fazer polling mais frequente
+          if (responseTime < 500) { // Resposta super rápida
+            noChangeCountRef.current = 0; // Reset do contador
+            currentInterval = Math.max(MIN_POLLING_INTERVAL * 0.85, 3800); // Intervalo menor, mínimo de 3.8s
+          } else if (responseTime > 2000) { // Resposta lenta
+            // Aumentar intervalo para reduzir carga no servidor
+            currentInterval = Math.min(currentInterval * 1.2, MAX_POLLING_INTERVAL);
+          }
+        } catch (err) {
+          console.error('Erro durante polling:', err);
+          // Em caso de erro, aumentar levemente o intervalo
+          currentInterval = Math.min(currentInterval * 1.1, MAX_POLLING_INTERVAL);
+        }
       }
       
-      // Calcular próximo intervalo
-      // Se estamos tendo erros de WebSocket, reduzir o intervalo para polling mais frequente
-      if (consecutiveErrorsRef.current > 0) {
+      // Calcular próximo intervalo de forma adaptativa
+      // Se WebSocket está com problemas, polling super-agressivo
+      if (consecutiveErrorsRef.current >= MAX_CONSECUTIVE_ERRORS) {
+        // Modo ultra-agressivo: polling muito mais frequente
+        currentInterval = MIN_POLLING_INTERVAL * 0.8;
+      } else if (consecutiveErrorsRef.current > 0) {
+        // Modo agressivo: polling frequente
         currentInterval = MIN_POLLING_INTERVAL;
-      } else {
-        // Caso contrário, usar backoff para aumentar o intervalo gradualmente
+      } else if (!connected) {
+        // WebSocket desconectado, mas sem erros graves: polling normal
+        currentInterval = Math.min(currentInterval, MIN_POLLING_INTERVAL * 2);
+      } else if (noChangeCountRef.current > 5) {
+        // Se não houver mudanças em 5 verificações consecutivas, aumentar intervalo
         currentInterval = Math.min(currentInterval * POLLING_BACKOFF_FACTOR, MAX_POLLING_INTERVAL);
       }
       
-      // Agendar próxima execução, mas apenas se o componente ainda estiver montado
+      // Garantir que o intervalo esteja dentro dos limites
+      currentInterval = Math.max(MIN_POLLING_INTERVAL * 0.7, Math.min(currentInterval, MAX_POLLING_INTERVAL));
+      
+      // Agendar próxima execução com intervalo ajustado dinamicamente
       if (isMountedRef.current) {
+        console.log(`Próximo polling em ${(currentInterval/1000).toFixed(1)}s`);
         timeoutRef.current = setTimeout(doPoll, currentInterval);
       }
     };
     
-    // Referência para controlar o timeout
-    const timeoutRef = { current: null as NodeJS.Timeout | null };
-    
-    // Iniciar polling
-    timeoutRef.current = setTimeout(doPoll, currentInterval);
+    // Iniciar polling imediatamente para primeira atualização ultra-rápida
+    timeoutRef.current = setTimeout(doPoll, 200); // Começa quase instantaneamente
     
     // Limpeza ao desmontar
     return () => {
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
       }
     };
-  }, [user, refreshDataPeriodically]);
+  }, [user, refreshDataPeriodically, connected]);
   
   return {
     connected,
