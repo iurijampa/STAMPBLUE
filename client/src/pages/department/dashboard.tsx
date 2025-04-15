@@ -807,8 +807,16 @@ export default function DepartmentDashboard() {
           {/* Seção de solicitações de reimpressão (para o setor de Batida) */}
           {userDepartment === "batida" && (
             <div className="mt-8">
-              <div className="mb-4">
+              <div className="mb-4 flex justify-between items-center">
                 <h3 className="text-lg font-semibold">Sistema de Reimpressão</h3>
+                <Button 
+                  variant="outline" 
+                  className="h-8 bg-blue-50 text-blue-600 hover:bg-blue-100 border-blue-200"
+                  onClick={() => setReprintActivity(activitiesData[0])}
+                >
+                  <Plus className="h-4 w-4 mr-1" />
+                  Nova Solicitação
+                </Button>
               </div>
               
               {/* Solicitações sempre visíveis */}

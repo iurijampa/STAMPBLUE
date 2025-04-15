@@ -324,4 +324,7 @@ router.post('/:id/cancelar', (req: Request, res: Response) => {
 // Removida a definição duplicada da função listarSolicitacoesReimpressao
 // A função agora vem diretamente do módulo emergency-storage.ts
 
+// Exportando funções específicas para que possam ser usadas em outros módulos
+export { listarSolicitacoesReimpressao };
+
 export default router;

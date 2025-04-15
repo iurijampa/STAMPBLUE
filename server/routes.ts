@@ -158,7 +158,8 @@ const cache = new LRUCache(800); // Suporta até 800 itens em cache (aumentado)
 // Expor globalmente para uso em outras partes do código
 (global as any).cache = cache;
 import impressaoRouter from "./solucao-impressao";
-import emergencialRouter, { listarSolicitacoesReimpressao } from "./reimpressao-emergencial";
+import emergencialRouter from "./reimpressao-emergencial";
+import { listarSolicitacoesReimpressao } from "./emergency-storage";
 import { 
   buscarAtividadesPorDepartamentoEmergencia, 
   criarProgressoProximoDepartamentoEmergencia, 
@@ -1073,9 +1074,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       console.log(`🔥 ROTA EMERGENCIAL PARA IMPRESSÃO ATIVADA`);
       
-      // Obter solicitações da API emergencial
-      const emergencialRequests = require('./reimpressao-emergencial');
-      const allRequests = emergencialRequests.listarSolicitacoesReimpressao();
+      // Usar a função importada diretamente de emergency-storage
+      const allRequests = listarSolicitacoesReimpressao();
       
       // Filtra apenas as solicitações para este departamento
       const filteredRequests = allRequests.filter(req => req.toDepartment === "impressao");
@@ -1095,18 +1095,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let department = req.params.department;
       
       // Usuários não-admin só podem ver solicitações para seu próprio departamento
-      if (req.user.role !== "admin") {
+      if (req.user && req.user.role !== "admin") {
         department = req.user.role;
       }
       
       console.log(`REDIRECIONANDO PARA API EMERGENCIAL: departamento ${department}`);
       
-      // SOLUÇÃO EMERGENCIAL: Redirecionando para API emergencial
-      const emergencialRequests = require('./reimpressao-emergencial');
-      const allRequests = emergencialRequests.listarSolicitacoesReimpressao();
+      // SOLUÇÃO EMERGENCIAL: Usando a função importada diretamente
+      const allRequests = listarSolicitacoesReimpressao();
       
       // Filtra apenas as solicitações para este departamento
-      const filteredRequests = allRequests.filter(req => req.toDepartment === department);
+      const filteredRequests = allRequests.filter(request => request.toDepartment === department);
       
       // Enriquecer os dados com informações da atividade (já estão incluídas na solução emergencial)
       const enrichedRequests = filteredRequests;
