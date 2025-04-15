@@ -147,9 +147,10 @@ export default function AdminDashboard() {
           <StatsAndDepartmentsOverview />
         </div>
         
-        {/* Lista de todas as atividades primeiro */}
+        {/* Separação entre pedidos em produção e concluídos */}
         <div className="space-y-6 mt-8">
-          {ActivitiesList()}
+          {ActivitiesList(false)} {/* Pedidos em produção */}
+          {ActivitiesList(true)}  {/* Pedidos concluídos */}
         </div>
         
         {/* Abas para navegação */}
@@ -491,8 +492,8 @@ const departmentOptions = [
   { value: "embalagem", label: "Embalagem", icon: <Package className="h-4 w-4 mr-1" /> },
 ];
 
-// Componente para listar todas as atividades
-function ActivitiesList() {
+// Componente para listar atividades (em produção ou concluídas)
+function ActivitiesList(showCompleted: boolean = false) {
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -620,7 +621,14 @@ function ActivitiesList() {
     if (!activities) return [];
     
     // Primeiro filtra as atividades conforme os critérios
-    const filtered = filterActivities(activities);
+    let filtered = filterActivities(activities);
+    
+    // Filtrar por pedidos concluídos ou em produção
+    filtered = filtered.filter(activity => {
+      const currentDept = activity.currentDepartment || activity.department || '';
+      const isCompleted = currentDept === 'concluido';
+      return showCompleted ? isCompleted : !isCompleted;
+    });
     
     // Depois ordena por prazo (deadline)
     return [...filtered].sort((a, b) => {
@@ -636,19 +644,33 @@ function ActivitiesList() {
         ? dateA.getTime() - dateB.getTime() 
         : dateB.getTime() - dateA.getTime();
     });
-  }, [activities, searchQuery, filterStatus, sortOrder]);
+  }, [activities, searchQuery, filterStatus, sortOrder, showCompleted]);
 
   return (
     <>
       <div className="bg-white dark:bg-gray-900 p-6 rounded-lg shadow-sm">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-bold">Pedidos</h2>
-          <Button 
-            onClick={() => setCreateModalOpen(true)}
-            className="bg-gray-900 text-white dark:bg-primary"
-          >
-            Novo Pedido
-          </Button>
+          <h2 className="text-xl font-bold flex items-center">
+            {showCompleted ? (
+              <>
+                <CheckCircle2 className="mr-2 h-5 w-5 text-green-500" />
+                Pedidos Concluídos
+              </>
+            ) : (
+              <>
+                <Clock className="mr-2 h-5 w-5 text-amber-500" />
+                Pedidos em Produção
+              </>
+            )}
+          </h2>
+          {!showCompleted && (
+            <Button 
+              onClick={() => setCreateModalOpen(true)}
+              className="bg-gray-900 text-white dark:bg-primary"
+            >
+              Novo Pedido
+            </Button>
+          )}
         </div>
         
         {/* Barra de pesquisa */}
