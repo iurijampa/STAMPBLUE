@@ -811,19 +811,6 @@ export default function DepartmentDashboard() {
                 <h3 className="text-lg font-semibold">Sistema de Reimpressão</h3>
               </div>
               
-              {/* Card para ferramenta de teste de reimpressão */}
-              <Card className="mb-4 border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-900">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base">Ferramenta de Teste</CardTitle>
-                  <CardDescription>
-                    Use este botão para criar uma solicitação de teste com imagem
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <CreateReprintRequest />
-                </CardContent>
-              </Card>
-              
               {/* Solicitações sempre visíveis */}
               <ReprintRequestsList department={userDepartment} />
             </div>
