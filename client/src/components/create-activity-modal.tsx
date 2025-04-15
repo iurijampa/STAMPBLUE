@@ -13,7 +13,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { CalendarIcon } from "lucide-react";
+import { CalendarIcon, InfoIcon } from "lucide-react";
 
 interface CreateActivityModalProps {
   isOpen: boolean;
@@ -31,6 +31,7 @@ export default function CreateActivityModal({ isOpen, onClose, onSuccess }: Crea
   const [additionalImageFiles, setAdditionalImageFiles] = useState<File[]>([]);
   const [priority, setPriority] = useState<string>("normal");
   const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]);
+  const [initialDepartment, setInitialDepartment] = useState<string>("gabarito");
   const [deadline, setDeadline] = useState<Date | undefined>(undefined);
 
   const handleAddDepartment = (department: string) => {
@@ -116,6 +117,7 @@ export default function CreateActivityModal({ isOpen, onClose, onSuccess }: Crea
         additionalImages: additionalImagesData,
         priority,
         deadline: deadline ? deadline.toISOString() : null,
+        initialDepartment: initialDepartment, // Departamento inicial selecionado
         workflowSteps: selectedDepartments.map(department => ({
           department,
           order: selectedDepartments.indexOf(department) + 1,
@@ -323,6 +325,30 @@ export default function CreateActivityModal({ isOpen, onClose, onSuccess }: Crea
                 </PopoverContent>
               </Popover>
             </div>
+          </div>
+          
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Label htmlFor="initialDepartment">Departamento Inicial</Label>
+              <div className="relative group">
+                <InfoIcon className="h-4 w-4 text-muted-foreground cursor-help" />
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 w-64 p-2 bg-background text-xs rounded-md shadow-md border border-border opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                  O pedido começará diretamente a partir deste departamento, pulando os departamentos anteriores.
+                </div>
+              </div>
+            </div>
+            <Select value={initialDepartment} onValueChange={setInitialDepartment}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione o departamento inicial" />
+              </SelectTrigger>
+              <SelectContent>
+                {DEPARTMENTS.map((department) => (
+                  <SelectItem key={department} value={department}>
+                    {department.charAt(0).toUpperCase() + department.slice(1)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           
           <div className="space-y-2">

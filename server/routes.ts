@@ -562,16 +562,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const activity = await storage.createActivity(validatedData);
       
-      // Initialize the activity progress for the first department (gabarito)
+      // Obter o departamento inicial através do corpo da requisição ou usar gabarito como padrão
+      const initialDepartment = req.body.initialDepartment || "gabarito";
+      
+      // Initialize the activity progress for the initial department
       await storage.createActivityProgress({
         activityId: activity.id,
-        department: "gabarito",
+        department: initialDepartment,
         status: "pending",
       });
       
-      // Create notifications for users of the first department
-      const gabaritoDeptUsers = await storage.getUsersByRole("gabarito");
-      for (const user of gabaritoDeptUsers) {
+      // Create notifications for users of the initial department
+      const departmentUsers = await storage.getUsersByRole(initialDepartment);
+      for (const user of departmentUsers) {
         await storage.createNotification({
           userId: user.id,
           activityId: activity.id,
@@ -579,9 +582,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // Enviar notificação websocket para o departamento gabarito
+      // Enviar notificação websocket para o departamento inicial
       if ((global as any).wsNotifications) {
-        (global as any).wsNotifications.notifyDepartment('gabarito', {
+        (global as any).wsNotifications.notifyDepartment(initialDepartment, {
           type: 'new_activity',
           activity
         });
