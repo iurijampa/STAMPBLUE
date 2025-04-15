@@ -26,12 +26,13 @@ class LRUCache {
   private hits: number = 0;
   private misses: number = 0;
   private lastCleanup: number = Date.now();
-  private cleanupInterval: number = 30000; // 30 segundos - mais frequente para maior eficiência
+  private cleanupInterval: number = 15000; // Reduzido para 15 segundos para maior eficiência
   private totalRequests: number = 0;
   private evictions: number = 0;
   private autocleanEnabled: boolean = true;
+  private backgroundRefresh: boolean = true; // Ativar atualização em segundo plano
 
-  constructor(maxSize: number = 800) { // Aumentado para 800 itens para maior eficiência
+  constructor(maxSize: number = 1200) { // Aumentado para 1200 itens para maior eficiência
     this.cache = new Map();
     this.maxSize = maxSize;
     
@@ -154,7 +155,7 @@ class LRUCache {
 }
 
 // Cache global otimizado para uso em toda a aplicação
-const cache = new LRUCache(800); // Suporta até 800 itens em cache (aumentado)
+const cache = new LRUCache(1200); // Suporta até 1200 itens em cache (aumentado para melhor performance)
 // Expor globalmente para uso em outras partes do código
 (global as any).cache = cache;
 import impressaoRouter from "./solucao-impressao";
