@@ -2227,6 +2227,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // OTIMIZAÇÃO CRÍTICA - Cache pré-computado persistente para contagem por departamento
+  // Esta versão usa cache persistente em memória com TTL médio e regeneração em background
+  let CACHE_PERSISTENTE_DEPT_COUNTS = null;
+  let CACHE_TIMESTAMP_DEPT_COUNTS = 0;
+  let CACHE_UPDATING_DEPT_COUNTS = false;
+  const CACHE_TTL_DEPT_COUNTS = 60 * 1000; // 1 minuto (pode ser ajustado conforme necessidade)
+  
+  // Função para atualizar cache de contagem por departamento em background
+  async function atualizarCacheDeptCounts() {
+    if (CACHE_UPDATING_DEPT_COUNTS) return; // Evita atualizações concorrentes
+    
+    try {
+      CACHE_UPDATING_DEPT_COUNTS = true;
+      console.time('[CACHE-DEPT-COUNTS] Atualizando cache persistente');
+      
+      // Resultado final
+      const result: Record<string, number> = {};
+      
+      // Buscas paralelas são mais rápidas que sequenciais
+      await Promise.all(DEPARTMENTS.map(async (dept) => {
+        try {
+          // Usar a função de emergência para obter atividades de cada departamento
+          const activities = await buscarAtividadesPorDepartamentoEmergencia(dept);
+          result[dept] = activities.length;
+        } catch (err) {
+          console.error(`[ERROR] Erro ao contar atividades para ${dept}:`, err);
+          result[dept] = 0; // Valor padrão em caso de erro
+        }
+      }));
+      
+      // Atualizar cache persistente
+      CACHE_PERSISTENTE_DEPT_COUNTS = result;
+      CACHE_TIMESTAMP_DEPT_COUNTS = Date.now();
+      
+      console.timeEnd('[CACHE-DEPT-COUNTS] Atualizando cache persistente');
+    } catch (error) {
+      console.error('[CACHE-DEPT-COUNTS] Erro ao atualizar cache:', error);
+    } finally {
+      CACHE_UPDATING_DEPT_COUNTS = false;
+    }
+  }
+  
+  // Iniciar cache em background na inicialização do servidor
+  atualizarCacheDeptCounts();
+  
+  // Programar atualização periódica do cache a cada 1 minuto
+  setInterval(() => {
+    atualizarCacheDeptCounts();
+  }, CACHE_TTL_DEPT_COUNTS);
+  
   // Rota para obter o contador de atividades por departamento (para o dashboard admin)
   app.get("/api/stats/department-counts", async (req, res) => {
     try {
@@ -2244,26 +2294,79 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Adiciona cabeçalhos de cache para o navegador
-      res.setHeader('Cache-Control', 'public, max-age=30');
+      res.setHeader('Cache-Control', 'public, max-age=60');
       
-      // Resultado final
-      const result: Record<string, number> = {};
-      
-      // Buscas paralelas são mais rápidas que sequenciais
-      await Promise.all(DEPARTMENTS.map(async (dept) => {
-        try {
-          // Usar a função de emergência para obter atividades de cada departamento
-          const activities = await buscarAtividadesPorDepartamentoEmergencia(dept);
-          result[dept] = activities.length;
-        } catch (err) {
-          console.error(`[ERROR] Erro ao contar atividades para ${dept}:`, err);
-          result[dept] = 0; // Valor padrão em caso de erro
+      // Usar cache persistente pré-computado se estiver disponível e válido
+      if (CACHE_PERSISTENTE_DEPT_COUNTS && (Date.now() - CACHE_TIMESTAMP_DEPT_COUNTS < CACHE_TTL_DEPT_COUNTS)) {
+        console.log(`[CACHE-PERSISTENTE] Usando cache pré-computado para contagem por departamento (${(Date.now() - CACHE_TIMESTAMP_DEPT_COUNTS)/1000}s)`);
+        
+        // Programar atualização em background se estiver próximo de expirar
+        if (Date.now() - CACHE_TIMESTAMP_DEPT_COUNTS > CACHE_TTL_DEPT_COUNTS * 0.8) {
+          setTimeout(() => atualizarCacheDeptCounts(), 100);
         }
-      }));
+        
+        return res.json(CACHE_PERSISTENTE_DEPT_COUNTS);
+      }
       
-      res.json(result);
+      // Cache não disponível ou expirado, executar consulta
+      console.time('[PERF] Carregamento contagem por departamento');
+      
+      try {
+        // Usar cache LRU como segunda camada de proteção
+        const cacheKey = `department_counts_${req.user ? req.user.id : 'anonymous'}`;
+        const cachedData = cache.get(cacheKey);
+        
+        if (cachedData) {
+          console.log(`[CACHE-LRU] Usando cache LRU para ${cacheKey}`);
+          
+          // Programar atualização de cache persistente em background
+          setTimeout(() => atualizarCacheDeptCounts(), 10);
+          
+          return res.json(cachedData);
+        }
+        
+        // Resultado final
+        const result: Record<string, number> = {};
+        
+        // Buscas paralelas são mais rápidas que sequenciais
+        await Promise.all(DEPARTMENTS.map(async (dept) => {
+          try {
+            // Usar a função de emergência para obter atividades de cada departamento
+            const activities = await buscarAtividadesPorDepartamentoEmergencia(dept);
+            result[dept] = activities.length;
+          } catch (err) {
+            console.error(`[ERROR] Erro ao contar atividades para ${dept}:`, err);
+            result[dept] = 0; // Valor padrão em caso de erro
+          }
+        }));
+        
+        // Atualizar ambos os caches
+        cache.set(cacheKey, result, 30000); // 30 segundos no cache LRU
+        CACHE_PERSISTENTE_DEPT_COUNTS = result;
+        CACHE_TIMESTAMP_DEPT_COUNTS = Date.now();
+        
+        console.timeEnd('[PERF] Carregamento contagem por departamento');
+        
+        return res.json(result);
+      } catch (error) {
+        console.error("[ERROR] Erro ao processar contagem por departamento:", error);
+        
+        // Tentar usar cache persistente mesmo expirado como fallback
+        if (CACHE_PERSISTENTE_DEPT_COUNTS) {
+          console.log('[CACHE-EMERGENCIA] Usando cache persistente expirado para contagem por departamento');
+          return res.json(CACHE_PERSISTENTE_DEPT_COUNTS);
+        }
+        
+        throw error; // Propagar erro para ser tratado abaixo
+      }
     } catch (error) {
       console.error("[ERROR] Erro ao obter contagem por departamento:", error);
+      
+      // Em caso de erro crítico, tenta recuperar do cache persistente
+      if (CACHE_PERSISTENTE_DEPT_COUNTS) {
+        return res.json(CACHE_PERSISTENTE_DEPT_COUNTS);
+      }
+      
       res.status(500).json({ 
         message: "Erro ao obter contagem por departamento", 
         error: error instanceof Error ? error.message : "Erro desconhecido"
