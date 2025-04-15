@@ -581,63 +581,134 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Setup authentication routes
   setupAuth(app);
 
-  // Endpoints otimizados para o dashboard do admin
-  // Nova rota específica para pedidos concluídos (mais eficiente)
+  // OTIMIZAÇÃO CRÍTICA - Cache pré-computado persistente para pedidos concluídos
+  // Esta versão usa cache persistente em memória com TTL longo e regeneração em background
+  let CACHE_PERSISTENTE_CONCLUIDOS = null;
+  let CACHE_TIMESTAMP_CONCLUIDOS = 0;
+  let CACHE_UPDATING_CONCLUIDOS = false;
+  const CACHE_TTL_CONCLUIDOS = 5 * 60 * 1000; // 5 minutos
+  
+  // Função para atualizar cache em background
+  async function atualizarCacheConcluidos() {
+    if (CACHE_UPDATING_CONCLUIDOS) return; // Evita atualizações concorrentes
+    
+    try {
+      CACHE_UPDATING_CONCLUIDOS = true;
+      console.time('[CACHE-CONCLUIDOS] Atualizando cache persistente');
+      
+      // Consulta SQL ultra-otimizada - corrigida para nomes de coluna exatos
+      const query = sql`
+        SELECT a.*, 
+              'concluido' as "currentDepartment",
+              a.client_name as client,
+              a.description as "clientInfo"
+        FROM activities a
+        WHERE EXISTS (
+          SELECT 1 FROM activity_progress ap 
+          WHERE ap.activity_id = a.id 
+          AND ap.department = 'embalagem' 
+          AND ap.status = 'completed'
+        )
+        ORDER BY a.deadline ASC NULLS LAST
+      `;
+      
+      const result = await db.execute(query);
+      
+      // Atualizar cache persistente
+      CACHE_PERSISTENTE_CONCLUIDOS = result;
+      CACHE_TIMESTAMP_CONCLUIDOS = Date.now();
+      
+      console.timeEnd('[CACHE-CONCLUIDOS] Atualizando cache persistente');
+    } catch (error) {
+      console.error('[CACHE-CONCLUIDOS] Erro ao atualizar cache:', error);
+    } finally {
+      CACHE_UPDATING_CONCLUIDOS = false;
+    }
+  }
+  
+  // Iniciar cache em background na inicialização do servidor
+  atualizarCacheConcluidos();
+  
+  // Programar atualização periódica do cache a cada 5 minutos
+  setInterval(() => {
+    atualizarCacheConcluidos();
+  }, CACHE_TTL_CONCLUIDOS);
+  
+  // Endpoint otimizado com cache persistente para pedidos concluídos
   app.get("/api/activities/concluidos", isAuthenticated, async (req, res) => {
     try {
       if (req.user && req.user.role === "admin") {
-        // 1. Usar cabeçalhos de cache agressivos para o browser
-        res.setHeader('Cache-Control', 'private, max-age=30');
+        // Cabeçalhos para cache no browser
+        res.setHeader('Cache-Control', 'private, max-age=60');
         
-        // 2. Verificar se temos em cache
-        const cacheKey = `activities_concluidos_admin_${req.user.id}_ultra`;
-        const cachedData = cache.get(cacheKey);
-        
-        if (cachedData) {
-          console.log(`[CACHE-ULTRA] Usando dados em cache para ${cacheKey}`);
-          return res.json(cachedData);
+        // Usar cache persistente pré-computado se estiver disponível e válido
+        if (CACHE_PERSISTENTE_CONCLUIDOS && (Date.now() - CACHE_TIMESTAMP_CONCLUIDOS < CACHE_TTL_CONCLUIDOS)) {
+          console.log(`[CACHE-PERSISTENTE] Usando cache pré-computado para pedidos concluídos (${(Date.now() - CACHE_TIMESTAMP_CONCLUIDOS)/1000}s)`);
+          
+          // Programar atualização em background se estiver próximo de expirar
+          if (Date.now() - CACHE_TIMESTAMP_CONCLUIDOS > CACHE_TTL_CONCLUIDOS * 0.8) {
+            setTimeout(() => atualizarCacheConcluidos(), 100);
+          }
+          
+          return res.json(CACHE_PERSISTENTE_CONCLUIDOS);
         }
         
+        // Cache não disponível ou expirado, buscar dados e atualizar cache
         console.time('[PERF] Carregamento pedidos concluídos');
         
-        // Consulta SQL otimizada diretamente para pedidos concluídos
-        // Isso evita diversas consultas ao obter todos os progressos
         try {
-          // Abordagem SQL otimizada
+          // Usar cache LRU como segunda camada de proteção
+          const cacheKey = `activities_concluidos_admin_${req.user.id}_ultra`;
+          const cachedData = cache.get(cacheKey);
+          
+          if (cachedData) {
+            console.log(`[CACHE-LRU] Usando cache LRU para ${cacheKey}`);
+            
+            // Programar atualização de cache persistente em background
+            setTimeout(() => atualizarCacheConcluidos(), 10);
+            
+            return res.json(cachedData);
+          }
+          
+          // SQL otimizada como em versões anteriores - corrigida para nomes de coluna exatos
           const query = sql`
             SELECT a.*, 
                   'concluido' as "currentDepartment",
-                  a."clientName" as client,
+                  a.client_name as client,
                   a.description as "clientInfo"
             FROM activities a
             WHERE EXISTS (
               SELECT 1 FROM activity_progress ap 
-              WHERE ap."activityId" = a.id 
+              WHERE ap.activity_id = a.id 
               AND ap.department = 'embalagem' 
               AND ap.status = 'completed'
             )
+            ORDER BY a.deadline ASC NULLS LAST
           `;
           
           const result = await db.execute(query);
           
-          // Guardar em cache por 30 segundos e no hot cache
-          cache.set(cacheKey, result, 30000);
-          console.timeEnd('[PERF] Carregamento pedidos concluídos');
+          // Atualizar ambos os caches
+          cache.set(cacheKey, result, 60000); // 1 minuto
+          CACHE_PERSISTENTE_CONCLUIDOS = result;
+          CACHE_TIMESTAMP_CONCLUIDOS = Date.now();
           
-          // Marcar como cache prioritário
-          if ((cache as any).priorityKeys && typeof (cache as any).priorityKeys.add === 'function') {
-            (cache as any).priorityKeys.add(cacheKey);
-          }
+          console.timeEnd('[PERF] Carregamento pedidos concluídos');
           
           return res.json(result);
         } catch (sqlError) {
-          console.error("[ERRO-SQL] Falha na query otimizada:", sqlError);
+          console.error("[ERRO-SQL] Falha na query otimizada para concluídos:", sqlError);
           
-          // Fallback para método tradicional se SQL falhar
+          // Retornar último cache persistente mesmo se expirado
+          if (CACHE_PERSISTENTE_CONCLUIDOS) {
+            console.log('[CACHE-EMERGENCIA] Usando cache persistente expirado para concluídos');
+            return res.json(CACHE_PERSISTENTE_CONCLUIDOS);
+          }
+          
+          // Fallback completo - usar método tradicional
           const activities = await storage.getAllActivities();
           const withEmbalagem = [];
           
-          // Buscar apenas os que foram concluídos pela embalagem
           for (const activity of activities) {
             const progresses = await storage.getActivityProgress(activity.id);
             const embalagemProgress = progresses.find(p => 
@@ -655,7 +726,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
           }
           
-          cache.set(cacheKey, withEmbalagem, 30000);
+          CACHE_PERSISTENTE_CONCLUIDOS = withEmbalagem;
+          CACHE_TIMESTAMP_CONCLUIDOS = Date.now();
+          
           console.timeEnd('[PERF] Carregamento pedidos concluídos (fallback)');
           
           return res.json(withEmbalagem);
@@ -665,37 +738,131 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     } catch (error) {
       console.error("[ERROR] Erro no carregamento de concluídos:", error);
+      
+      // Em caso de erro, tenta recuperar do cache persistente
+      if (CACHE_PERSISTENTE_CONCLUIDOS) {
+        return res.json(CACHE_PERSISTENTE_CONCLUIDOS);
+      }
+      
       res.status(500).json({ message: "Erro ao buscar pedidos concluídos" });
     }
   });
   
-  // Nova rota específica para pedidos em produção (mais eficiente)
+  // OTIMIZAÇÃO CRÍTICA - Cache pré-computado persistente para pedidos em produção
+  // Esta versão usa cache persistente em memória com TTL longo e regeneração em background
+  let CACHE_PERSISTENTE_EM_PRODUCAO = null;
+  let CACHE_TIMESTAMP_EM_PRODUCAO = 0;
+  let CACHE_UPDATING_EM_PRODUCAO = false;
+  const CACHE_TTL_EM_PRODUCAO = 5 * 60 * 1000; // 5 minutos
+  
+  // Função para atualizar cache em background
+  async function atualizarCacheEmProducao() {
+    if (CACHE_UPDATING_EM_PRODUCAO) return; // Evita atualizações concorrentes
+    
+    try {
+      CACHE_UPDATING_EM_PRODUCAO = true;
+      console.time('[CACHE-EM-PRODUCAO] Atualizando cache persistente');
+      
+      // Consulta SQL ultra-otimizada - corrigida para nomes de coluna exatos
+      const query = sql`
+        WITH LatestProgress AS (
+          SELECT 
+            activity_id,
+            department,
+            status,
+            ROW_NUMBER() OVER(PARTITION BY activity_id ORDER BY 
+              CASE department 
+                WHEN 'gabarito' THEN 1 
+                WHEN 'impressao' THEN 2 
+                WHEN 'batida' THEN 3 
+                WHEN 'costura' THEN 4 
+                WHEN 'embalagem' THEN 5
+              END DESC) as rn
+          FROM activity_progress
+          WHERE status = 'pending'
+        )
+        SELECT 
+          a.*,
+          a.client_name as client,
+          a.description as "clientInfo",
+          COALESCE(lp.department, 'gabarito') as "currentDepartment"
+        FROM activities a
+        LEFT JOIN LatestProgress lp ON lp.activity_id = a.id AND lp.rn = 1
+        WHERE NOT EXISTS (
+          SELECT 1 FROM activity_progress ap 
+          WHERE ap.activity_id = a.id 
+          AND ap.department = 'embalagem' 
+          AND ap.status = 'completed'
+        )
+        ORDER BY a.deadline ASC NULLS LAST
+      `;
+      
+      const result = await db.execute(query);
+      
+      // Atualizar cache persistente
+      CACHE_PERSISTENTE_EM_PRODUCAO = result;
+      CACHE_TIMESTAMP_EM_PRODUCAO = Date.now();
+      
+      console.timeEnd('[CACHE-EM-PRODUCAO] Atualizando cache persistente');
+    } catch (error) {
+      console.error('[CACHE-EM-PRODUCAO] Erro ao atualizar cache:', error);
+    } finally {
+      CACHE_UPDATING_EM_PRODUCAO = false;
+    }
+  }
+  
+  // Iniciar cache em background na inicialização do servidor
+  atualizarCacheEmProducao();
+  
+  // Programar atualização periódica do cache a cada 5 minutos
+  setInterval(() => {
+    atualizarCacheEmProducao();
+  }, CACHE_TTL_EM_PRODUCAO);
+  
+  // Endpoint otimizado com cache persistente para pedidos em produção
   app.get("/api/activities/em-producao", isAuthenticated, async (req, res) => {
     try {
       if (req.user && req.user.role === "admin") {
-        // 1. Usar cabeçalhos de cache agressivos para o browser
-        res.setHeader('Cache-Control', 'private, max-age=30');
+        // Cabeçalhos para cache no browser
+        res.setHeader('Cache-Control', 'private, max-age=60');
         
-        // 2. Verificar se temos em cache
-        const cacheKey = `activities_em_producao_admin_${req.user.id}_ultra`;
-        const cachedData = cache.get(cacheKey);
-        
-        if (cachedData) {
-          console.log(`[CACHE-ULTRA] Usando dados em cache para ${cacheKey}`);
-          return res.json(cachedData);
+        // Usar cache persistente pré-computado se estiver disponível e válido
+        if (CACHE_PERSISTENTE_EM_PRODUCAO && (Date.now() - CACHE_TIMESTAMP_EM_PRODUCAO < CACHE_TTL_EM_PRODUCAO)) {
+          console.log(`[CACHE-PERSISTENTE] Usando cache pré-computado para pedidos em produção (${(Date.now() - CACHE_TIMESTAMP_EM_PRODUCAO)/1000}s)`);
+          
+          // Programar atualização em background se estiver próximo de expirar
+          if (Date.now() - CACHE_TIMESTAMP_EM_PRODUCAO > CACHE_TTL_EM_PRODUCAO * 0.8) {
+            setTimeout(() => atualizarCacheEmProducao(), 100);
+          }
+          
+          return res.json(CACHE_PERSISTENTE_EM_PRODUCAO);
         }
         
+        // Cache não disponível ou expirado, buscar dados e atualizar cache
         console.time('[PERF] Carregamento pedidos em-producao');
         
         try {
-          // Abordagem SQL otimizada para pedidos em produção
+          // Usar cache LRU como segunda camada de proteção
+          const cacheKey = `activities_em_producao_admin_${req.user.id}_ultra`;
+          const cachedData = cache.get(cacheKey);
+          
+          if (cachedData) {
+            console.log(`[CACHE-LRU] Usando cache LRU para ${cacheKey}`);
+            
+            // Programar atualização de cache persistente em background
+            setTimeout(() => atualizarCacheEmProducao(), 10);
+            
+            return res.json(cachedData);
+          }
+          
+          // SQL otimizada corrigida para nomes de coluna exatos
           const query = sql`
             WITH LatestProgress AS (
               SELECT 
-                "activityId",
+                activity_id,
                 department,
                 status,
-                ROW_NUMBER() OVER(PARTITION BY "activityId" ORDER BY 
+                ROW_NUMBER() OVER(PARTITION BY activity_id ORDER BY 
                   CASE department 
                     WHEN 'gabarito' THEN 1 
                     WHEN 'impressao' THEN 2 
@@ -708,35 +875,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
             )
             SELECT 
               a.*,
-              a."clientName" as client,
+              a.client_name as client,
               a.description as "clientInfo",
               COALESCE(lp.department, 'gabarito') as "currentDepartment"
             FROM activities a
-            LEFT JOIN LatestProgress lp ON lp."activityId" = a.id AND lp.rn = 1
+            LEFT JOIN LatestProgress lp ON lp.activity_id = a.id AND lp.rn = 1
             WHERE NOT EXISTS (
               SELECT 1 FROM activity_progress ap 
-              WHERE ap."activityId" = a.id 
+              WHERE ap.activity_id = a.id 
               AND ap.department = 'embalagem' 
               AND ap.status = 'completed'
             )
+            ORDER BY a.deadline ASC NULLS LAST
           `;
           
           const result = await db.execute(query);
           
-          // Guardar em cache por 30 segundos e no hot cache
-          cache.set(cacheKey, result, 30000);
-          console.timeEnd('[PERF] Carregamento pedidos em-producao');
+          // Atualizar ambos os caches
+          cache.set(cacheKey, result, 60000); // 1 minuto
+          CACHE_PERSISTENTE_EM_PRODUCAO = result;
+          CACHE_TIMESTAMP_EM_PRODUCAO = Date.now();
           
-          // Marcar como cache prioritário
-          if ((cache as any).priorityKeys && typeof (cache as any).priorityKeys.add === 'function') {
-            (cache as any).priorityKeys.add(cacheKey);
-          }
+          console.timeEnd('[PERF] Carregamento pedidos em-producao');
           
           return res.json(result);
         } catch (sqlError) {
-          console.error("[ERRO-SQL] Falha na query otimizada:", sqlError);
+          console.error("[ERRO-SQL] Falha na query otimizada para em-producao:", sqlError);
           
-          // Fallback para método tradicional se SQL falhar
+          // Retornar último cache persistente mesmo se expirado
+          if (CACHE_PERSISTENTE_EM_PRODUCAO) {
+            console.log('[CACHE-EMERGENCIA] Usando cache persistente expirado para em-producao');
+            return res.json(CACHE_PERSISTENTE_EM_PRODUCAO);
+          }
+          
+          // Fallback completo - usar método tradicional
           const activities = await storage.getAllActivities();
           const emProducao = [];
           
@@ -778,7 +950,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             emProducao.push(...processedBatch.filter(Boolean));
           }
           
-          cache.set(cacheKey, emProducao, 30000);
+          CACHE_PERSISTENTE_EM_PRODUCAO = emProducao;
+          CACHE_TIMESTAMP_EM_PRODUCAO = Date.now();
+          
           console.timeEnd('[PERF] Carregamento pedidos em-producao (fallback)');
           
           return res.json(emProducao);
@@ -788,6 +962,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     } catch (error) {
       console.error("[ERROR] Erro no carregamento de em-producao:", error);
+      
+      // Em caso de erro, tenta recuperar do cache persistente
+      if (CACHE_PERSISTENTE_EM_PRODUCAO) {
+        return res.json(CACHE_PERSISTENTE_EM_PRODUCAO);
+      }
+      
       res.status(500).json({ message: "Erro ao buscar pedidos em produção" });
     }
   });
@@ -1922,6 +2102,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // Statistics for admin dashboard
+  // OTIMIZAÇÃO CRÍTICA - Cache pré-computado persistente para estatísticas
+  // Esta versão usa cache persistente em memória com TTL longo e regeneração em background
+  let CACHE_PERSISTENTE_ESTATISTICAS = null;
+  let CACHE_TIMESTAMP_ESTATISTICAS = 0;
+  let CACHE_UPDATING_ESTATISTICAS = false;
+  const CACHE_TTL_ESTATISTICAS = 2 * 60 * 1000; // 2 minutos
+  
+  // Função para atualizar cache de estatísticas em background
+  async function atualizarCacheEstatisticas() {
+    if (CACHE_UPDATING_ESTATISTICAS) return; // Evita atualizações concorrentes
+    
+    try {
+      CACHE_UPDATING_ESTATISTICAS = true;
+      console.time('[CACHE-ESTATISTICAS] Atualizando cache persistente');
+      
+      // Buscar diretamente do storage
+      const stats = await storage.getActivityStats();
+      
+      // Atualizar cache persistente
+      CACHE_PERSISTENTE_ESTATISTICAS = stats;
+      CACHE_TIMESTAMP_ESTATISTICAS = Date.now();
+      
+      console.timeEnd('[CACHE-ESTATISTICAS] Atualizando cache persistente');
+    } catch (error) {
+      console.error('[CACHE-ESTATISTICAS] Erro ao atualizar cache:', error);
+    } finally {
+      CACHE_UPDATING_ESTATISTICAS = false;
+    }
+  }
+  
+  // Iniciar cache em background na inicialização do servidor
+  atualizarCacheEstatisticas();
+  
+  // Programar atualização periódica do cache a cada 2 minutos
+  setInterval(() => {
+    atualizarCacheEstatisticas();
+  }, CACHE_TTL_ESTATISTICAS);
+
   app.get("/api/stats", async (req, res) => {
     // Verificar autenticação
     if (!req.isAuthenticated()) {
@@ -1929,9 +2147,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(401).json({ message: "Não autorizado" });
     }
     try {
+      // Cabeçalhos para cache no browser
+      res.setHeader('Cache-Control', 'private, max-age=60');
+      
+      // Usar cache persistente pré-computado se estiver disponível e válido
+      if (CACHE_PERSISTENTE_ESTATISTICAS && (Date.now() - CACHE_TIMESTAMP_ESTATISTICAS < CACHE_TTL_ESTATISTICAS)) {
+        console.log(`[CACHE-PERSISTENTE] Usando cache pré-computado para estatísticas (${(Date.now() - CACHE_TIMESTAMP_ESTATISTICAS)/1000}s)`);
+        
+        // Programar atualização em background se estiver próximo de expirar
+        if (Date.now() - CACHE_TIMESTAMP_ESTATISTICAS > CACHE_TTL_ESTATISTICAS * 0.8) {
+          setTimeout(() => atualizarCacheEstatisticas(), 100);
+        }
+        
+        return res.json(CACHE_PERSISTENTE_ESTATISTICAS);
+      }
+      
+      // Cache não disponível ou expirado, buscar novos dados
+      console.time('[PERF] Carregamento estatísticas');
       const stats = await storage.getActivityStats();
+      console.timeEnd('[PERF] Carregamento estatísticas');
+      
+      // Atualizar cache persistente
+      CACHE_PERSISTENTE_ESTATISTICAS = stats;
+      CACHE_TIMESTAMP_ESTATISTICAS = Date.now();
+      
       res.json(stats);
     } catch (error) {
+      console.error("Erro ao buscar estatísticas:", error);
+      
+      // Tentar usar cache persistente como última opção
+      if (CACHE_PERSISTENTE_ESTATISTICAS) {
+        return res.json(CACHE_PERSISTENTE_ESTATISTICAS);
+      }
+      
       res.status(500).json({ message: "Erro ao buscar estatísticas" });
     }
   });
