@@ -1545,7 +1545,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
           description: req.body.description || '',
           clientName: req.body.clientName || '',
           priority: req.body.priority || 'normal',
-          deadline: req.body.deadline || new Date().toISOString(),
+          deadline: (() => {
+            try {
+              // Verificar se deadline existe e é uma string ISO válida
+              if (req.body.deadline && typeof req.body.deadline === 'string') {
+                // Tentar criar uma data a partir da string para validar
+                const testDate = new Date(req.body.deadline);
+                if (!isNaN(testDate.getTime())) {
+                  return req.body.deadline;
+                }
+              }
+              // Fallback: usar data atual
+              return new Date().toISOString();
+            } catch (err) {
+              console.error('Erro ao processar deadline:', err);
+              return new Date().toISOString();
+            }
+          })(),
           initialDepartment: req.body.initialDepartment || 'gabarito',
           workflowSteps: Array.isArray(req.body.workflowSteps) ? req.body.workflowSteps : [],
         };

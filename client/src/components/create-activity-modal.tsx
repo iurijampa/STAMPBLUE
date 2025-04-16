@@ -75,10 +75,46 @@ export default function CreateActivityModal({ isOpen, onClose, onSuccess }: Crea
     console.time('⚡ [TURBO] Criação de atividade');
     
     // Primeiro, validar todos os dados antes de começar qualquer processamento pesado
+    if (!title.trim()) {
+      toast({
+        title: "Erro ao criar atividade",
+        description: "O título é obrigatório",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (!description.trim()) {
+      toast({
+        title: "Erro ao criar atividade",
+        description: "A descrição é obrigatória",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (!clientName.trim()) {
+      toast({
+        title: "Erro ao criar atividade",
+        description: "O nome do cliente é obrigatório",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     if (selectedDepartments.length === 0) {
       toast({
         title: "Erro ao criar atividade",
         description: "Selecione pelo menos um departamento",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (!initialDepartment) {
+      toast({
+        title: "Erro ao criar atividade",
+        description: "Selecione um departamento inicial",
         variant: "destructive",
       });
       return;
