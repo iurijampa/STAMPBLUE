@@ -589,13 +589,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
 
   // OTIMIZAÇÃO CRÍTICA - Cache pré-computado persistente para pedidos concluídos
-  // Esta versão usa cache persistente em memória com TTL longo e regeneração em background
+  // Esta versão usa cache persistente em memória com TTL médio e regeneração contínua em background
   let CACHE_PERSISTENTE_CONCLUIDOS = null;
   let CACHE_TIMESTAMP_CONCLUIDOS = 0;
   let CACHE_UPDATING_CONCLUIDOS = false;
-  const CACHE_TTL_CONCLUIDOS = 5 * 60 * 1000; // 5 minutos
+  const CACHE_TTL_CONCLUIDOS = 120 * 1000; // Reduzido para 2 minutos para dados mais frescos
   
-  // Função para atualizar cache em background
+  // Sistema de notificação para atualizações de cache
+  const cacheObservers = {
+    'concluidos': new Set<Function>(),
+    'em-producao': new Set<Function>(),
+    'estatisticas': new Set<Function>(),
+    'dept-counts': new Set<Function>()
+  };
+  
+  // Função para assinar notificações de atualização de cache
+  function observeCache(type: 'concluidos' | 'em-producao' | 'estatisticas' | 'dept-counts', callback: Function) {
+    cacheObservers[type].add(callback);
+    return () => cacheObservers[type].delete(callback); // Retorna função para cancelar assinatura
+  }
+  
+  // Função para notificar observadores sobre atualização de cache
+  function notifyCacheObservers(type: 'concluidos' | 'em-producao' | 'estatisticas' | 'dept-counts') {
+    cacheObservers[type].forEach(callback => {
+      try {
+        callback();
+      } catch (e) {
+        console.error(`[CACHE-OBSERVER] Erro ao notificar observador de ${type}:`, e);
+      }
+    });
+  }
+  
+  // Função para atualizar cache em background com notificação
   async function atualizarCacheConcluidos() {
     if (CACHE_UPDATING_CONCLUIDOS) return; // Evita atualizações concorrentes
     
@@ -603,7 +628,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       CACHE_UPDATING_CONCLUIDOS = true;
       console.time('[CACHE-CONCLUIDOS] Atualizando cache persistente');
       
-      // Consulta SQL ultra-otimizada - corrigida para nomes de coluna exatos
+      // Consulta SQL ultra-otimizada com índices - corrigida para nomes de coluna exatos
       const query = sql`
         SELECT a.*, 
               'concluido' as "currentDepartment",
@@ -621,11 +646,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const result = await db.execute(query);
       
+      // Detectar se houve alterações nos dados
+      const houveMudanca = !CACHE_PERSISTENTE_CONCLUIDOS || 
+        JSON.stringify(result) !== JSON.stringify(CACHE_PERSISTENTE_CONCLUIDOS);
+      
       // Atualizar cache persistente
       CACHE_PERSISTENTE_CONCLUIDOS = result;
       CACHE_TIMESTAMP_CONCLUIDOS = Date.now();
       
       console.timeEnd('[CACHE-CONCLUIDOS] Atualizando cache persistente');
+      
+      // Notificar observadores apenas se houve mudança
+      if (houveMudanca) {
+        notifyCacheObservers('concluidos');
+        
+        // Notificar via WebSocket para atualização em tempo real
+        if (typeof (global as any).wsNotifications !== 'undefined') {
+          (global as any).wsNotifications.notifyDepartment('admin', {
+            type: 'cache_updated',
+            cache: 'concluidos',
+            timestamp: Date.now()
+          }, true); // Alta prioridade para entrega imediata
+        }
+      }
     } catch (error) {
       console.error('[CACHE-CONCLUIDOS] Erro ao atualizar cache:', error);
     } finally {
@@ -636,10 +679,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Iniciar cache em background na inicialização do servidor
   atualizarCacheConcluidos();
   
-  // Programar atualização periódica do cache a cada 5 minutos
+  // Programar atualização periódica mais frequente (a cada 2 minutos)
   setInterval(() => {
     atualizarCacheConcluidos();
   }, CACHE_TTL_CONCLUIDOS);
+  
+  // Atualização mais rápida para itens críticos (a cada 45 segundos)
+  setInterval(() => {
+    // Verificar se o cache está ficando velho (mais de 45 segundos)
+    const agora = Date.now();
+    if (agora - CACHE_TIMESTAMP_CONCLUIDOS > 45000) {
+      atualizarCacheConcluidos();
+    }
+  }, 45000);
   
   // Endpoint otimizado com cache persistente para pedidos concluídos
   app.get("/api/activities/concluidos", isAuthenticated, async (req, res) => {
@@ -2636,9 +2688,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // Sistema de monitoramento e auto-recuperação do servidor WebSocket
+  // Sistema de monitoramento e auto-recuperação do servidor WebSocket 
+  // com suporte a mensagens pendentes para alta disponibilidade
   let wsErrors = 0;
   const MAX_WS_ERRORS = 10;
+  
+  // Fila de mensagens pendentes (será inicializada dentro de setupWebSocketServer)
+  const pendingMessages: Record<string, string[]> = {
+    'admin': [],
+    'gabarito': [],
+    'impressao': [],
+    'batida': [],
+    'costura': [],
+    'embalagem': []
+  };
+  
+  // Armazenar última mensagem por tipo para entrega imediata a novas conexões
+  const lastMessageByType: Record<string, string> = {};
+  
   const monitorWSServer = () => {
     // Resetar contador de erros a cada 5 minutos
     setInterval(() => {
@@ -2648,7 +2715,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     }, 5 * 60 * 1000); // 5 minutos
     
-    // Verificar integridade do servidor WebSocket a cada minuto
+    // Verificar integridade do servidor WebSocket a cada 30 segundos (mais frequente)
     setInterval(() => {
       try {
         const clientCount = Array.from(wss.clients).length;
@@ -2757,15 +2824,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Função otimizada para enviar atualizações para um departamento específico
   function notifyDepartment(department: string, data: any, highPriority: boolean = false) {
-    // Adicionar timestamp para rastreamento de latência e flag de prioridade
+    // Adicionar valores para diagnóstico e rastreamento de desempenho
     const messageWithTimestamp = {
       ...data,
       server_timestamp: Date.now(),
-      high_priority: highPriority
+      high_priority: highPriority,
+      message_id: Math.random().toString(36).substring(2, 15),
+      event_source: 'server_push'
     };
     
     // Serializar a mensagem apenas uma vez para todas as conexões (economia de CPU)
     const serializedMessage = JSON.stringify(messageWithTimestamp);
+    
+    // Sempre armazenar a última mensagem por tipo para entrega instantânea a novas conexões
+    if (data.type) {
+      lastMessageByType[`${department}_${data.type}`] = serializedMessage;
+      
+      // Diagnóstico: manter histórico das últimas mensagens por tipo (até 10)
+      const typeKey = `${department}_${data.type}_history`;
+      if (!lastMessageByType[typeKey]) {
+        lastMessageByType[typeKey] = [];
+      }
+      
+      if (Array.isArray(lastMessageByType[typeKey])) {
+        lastMessageByType[typeKey].push({
+          timestamp: Date.now(),
+          message_id: messageWithTimestamp.message_id,
+          type: data.type,
+          department
+        });
+        
+        // Manter apenas as 10 mais recentes
+        if (lastMessageByType[typeKey].length > 10) {
+          lastMessageByType[typeKey].shift();
+        }
+      }
+    }
     
     // Verificar se o departamento existe e tem conexões para evitar processamento desnecessário
     const departmentConnections = connections[department];
@@ -2774,6 +2868,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (highPriority) {
         if (!pendingMessages[department]) {
           pendingMessages[department] = [];
+        }
+        // Limitar a fila para evitar crescimento excessivo
+        while (pendingMessages[department].length >= 50) {
+          pendingMessages[department].shift();  // Remover a mensagem mais antiga
         }
         pendingMessages[department].push(serializedMessage);
         console.log(`[websocket] Mensagem de alta prioridade enfileirada para ${department}`);
@@ -2868,7 +2966,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Exportar as funções de notificação para uso em outras partes do código
   (global as any).wsNotifications = {
     notifyDepartment,
-    notifyAll
+    notifyAll,
+    pendingMessages,      // Exportar fila de mensagens pendentes
+    lastMessageByType     // Exportar cache de últimas mensagens
   };
   
   // Configurar WebSocket server com melhor tratamento de erros e performance
@@ -2881,6 +2981,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // Propriedades para rastrear estado da conexão
     let isAlive = true;
     let registeredDepartment: string | null = null;
+    
+    // Registrar estatística global de conexões ativas
+    (global as any).websocketConnections = ((global as any).websocketConnections || 0) + 1;
     
     // Função otimizada para enviar resposta com tratamento de erro embutido
     const sendResponse = (data: any) => {
@@ -3008,10 +3111,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`[websocket:${connectionId}] Cliente desconectado`);
       clearInterval(pingInterval);
       
+      // Atualizar contador global de conexões
+      (global as any).websocketConnections = Math.max(0, ((global as any).websocketConnections || 1) - 1);
+      
       // Remover apenas do departamento registrado (mais eficiente)
       if (registeredDepartment && connections[registeredDepartment]) {
         connections[registeredDepartment].delete(ws);
         console.log(`[websocket:${connectionId}] Conexão removida do departamento: ${registeredDepartment}`);
+        
+        // Verificar se há mensagens pendentes para este departamento
+        if (pendingMessages[registeredDepartment] && pendingMessages[registeredDepartment].length > 0) {
+          console.log(`[websocket] ${pendingMessages[registeredDepartment].length} mensagens pendentes para ${registeredDepartment} permanecerão na fila para próxima conexão`);
+        }
       }
     });
   });
