@@ -903,11 +903,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/activities/em-producao", isAuthenticated, async (req, res) => {
     try {
       if (req.user && req.user.role === "admin") {
-        // Cabeçalhos para cache no browser
-        res.setHeader('Cache-Control', 'private, max-age=60');
+        // SOLUÇÃO DIRETA: Para resolver o problema dos novos pedidos não aparecendo, desativamos 
+        // temporariamente o cache persistente para garantir que sempre busquemos dados frescos do banco
+        // Cabeçalhos para cache no browser também reduzidos para 1 segundo apenas
+        res.setHeader('Cache-Control', 'private, max-age=1');
         
-        // Usar cache persistente pré-computado se estiver disponível e válido
-        if (CACHE_PERSISTENTE_EM_PRODUCAO && (Date.now() - CACHE_TIMESTAMP_EM_PRODUCAO < CACHE_TTL_EM_PRODUCAO)) {
+        // RESOLUÇÃO DE PROBLEMAS:
+        // Devido ao problema crítico de novos pedidos não aparecendo na lista,
+        // estamos forçando sempre a busca direta no banco de dados para garantir
+        // que dados mais recentes sejam sempre exibidos
+        console.log('[CACHE-CRÍTICO] Desativando cache persistente para em-producao para garantir dados atualizados');
+        
+        // Forçar atualização do cache antes de cada requisição
+        await atualizarCacheEmProducao(true);
+        
+        if (false && CACHE_PERSISTENTE_EM_PRODUCAO && (Date.now() - CACHE_TIMESTAMP_EM_PRODUCAO < CACHE_TTL_EM_PRODUCAO)) {
           console.log(`[CACHE-PERSISTENTE] Usando cache pré-computado para pedidos em produção (${(Date.now() - CACHE_TIMESTAMP_EM_PRODUCAO)/1000}s)`);
           
           // Programar atualização em background se estiver próximo de expirar
@@ -1392,12 +1402,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/activities", isAdmin, async (req, res) => {
     try {
+      // SOLUÇÃO CRÍTICA: Desativar completamente o cache antes de criar a atividade
+      console.log('[CACHE-CRÍTICO] Desativando TODOS os caches antes de criar nova atividade');
+      
+      // 1. Limpar timestamp para forçar recarga completa
+      CACHE_TIMESTAMP_EM_PRODUCAO = 0;
+      // 2. Limpar cache persistente
+      CACHE_PERSISTENTE_EM_PRODUCAO = null;
+      
+      // 3. Limpar todos os caches LRU relacionados a atividades
+      if (cache) {
+        try {
+          // Primeiro os caches mais específicos
+          const prefixosImportantes = [
+            'activities_em_producao_',
+            'activities_main_',
+            'activities_concluidos_'
+          ];
+          
+          for (const prefixo of prefixosImportantes) {
+            console.log(`[CACHE-CRÍTICO] Invalidando caches com prefixo '${prefixo}'`);
+            try {
+              // Use forEach para lidar com iteração
+              Array.from(cache.keys()).forEach(key => {
+                if (key && typeof key === 'string' && key.includes(prefixo)) {
+                  console.log(`[CACHE-CRÍTICO] Removendo cache: ${key}`);
+                  cache.del(key);
+                }
+              });
+            } catch (cacheErr) {
+              console.error(`[CACHE-CRÍTICO] Erro ao limpar cache com prefixo '${prefixo}':`, cacheErr);
+            }
+          }
+        } catch (err) {
+          console.error('[CACHE-CRÍTICO] Erro na limpeza inicial do cache:', err);
+        }
+      }
+
       const validatedData = insertActivitySchema.parse({
         ...req.body,
         createdBy: req.user.id
       });
       
+      console.log('[CACHE-CRÍTICO] Criando nova atividade após limpeza do cache');
       const activity = await storage.createActivity(validatedData);
+      console.log(`[CACHE-CRÍTICO] Nova atividade criada com ID ${activity.id}: ${activity.title}`);
       
       // Obter o departamento inicial através do corpo da requisição ou usar gabarito como padrão
       const initialDepartment = req.body.initialDepartment || "gabarito";
@@ -1408,6 +1457,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         department: initialDepartment,
         status: "pending",
       });
+      console.log(`[CACHE-CRÍTICO] Progresso inicial criado para departamento: ${initialDepartment}`);
       
       // Create notifications for users of the initial department
       const departmentUsers = await storage.getUsersByRole(initialDepartment);
