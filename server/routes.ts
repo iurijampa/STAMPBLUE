@@ -49,6 +49,12 @@ class LRUCache {
   // Lista de chaves prioritárias (não serão facilmente removidas)
   private priorityKeys: Set<string> = new Set();
   
+  // Sistema de fila para mensagens pendentes
+  private pendingMessages: Record<string, string[]> = {};
+  
+  // Armazenamento de última mensagem por tipo para entrega imediata a novas conexões
+  private lastMessageByType: Record<string, string> = {};
+  
   // Métricas para ajuste adaptativo
   private stats = {
     hitRate: 0,
@@ -2750,11 +2756,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // Função otimizada para enviar atualizações para um departamento específico
-  function notifyDepartment(department: string, data: any) {
-    // Adicionar timestamp para rastreamento de latência
+  function notifyDepartment(department: string, data: any, highPriority: boolean = false) {
+    // Adicionar timestamp para rastreamento de latência e flag de prioridade
     const messageWithTimestamp = {
       ...data,
-      server_timestamp: Date.now()
+      server_timestamp: Date.now(),
+      high_priority: highPriority
     };
     
     // Serializar a mensagem apenas uma vez para todas as conexões (economia de CPU)
@@ -2763,6 +2770,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // Verificar se o departamento existe e tem conexões para evitar processamento desnecessário
     const departmentConnections = connections[department];
     if (!departmentConnections || departmentConnections.size === 0) {
+      // Implementar fila para mensagens importantes quando não houver conexões ativas
+      if (highPriority) {
+        if (!pendingMessages[department]) {
+          pendingMessages[department] = [];
+        }
+        pendingMessages[department].push(serializedMessage);
+        console.log(`[websocket] Mensagem de alta prioridade enfileirada para ${department}`);
+      }
       return 0; // Retornar 0 conexões notificadas
     }
     
@@ -2773,6 +2788,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     departmentConnections.forEach(ws => {
       try {
         if (ws.readyState === WebSocket.OPEN) {
+          // Definir prioridade de alta se necessário (menor latência)
+          if (highPriority && typeof ws.setPriority === 'function') {
+            // @ts-ignore - algumas implementações de WebSocket não têm setPriority
+            ws.setPriority(1);
+          }
+          
           ws.send(serializedMessage);
           successCount++;
         }
@@ -2780,6 +2801,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.error(`[websocket] Erro ao enviar mensagem para ${department}:`, error);
       }
     });
+    
+    // Armazenar última mensagem por tipo para entrega imediata a novas conexões
+    if (data.type) {
+      lastMessageByType[`${department}_${data.type}`] = serializedMessage;
+    }
     
     // Retornar o número de conexões notificadas com sucesso (útil para debugging)
     return successCount;
