@@ -1419,36 +1419,102 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // Invalidar caches relacionados a atividades para garantir que o novo pedido apareça
-      console.log('[CACHE] Invalidando caches para garantir visibilidade do novo pedido');
+      // SOLUÇÃO CRÍTICA: Garantir que o novo pedido apareça imediatamente na lista
+      console.log('[CACHE-CRÍTICO] Realizando limpeza profunda do cache para novo pedido');
       
       try {
-        // Limpar todos os caches relevantes
+        // 1. Forçar atualização do cache em-produção ANTES de invalidar outros caches
+        console.log('[CACHE-CRÍTICO] 1. Força atualização síncrona do cache em produção');
+        // Usar versão síncrona para garantir ordem das operações
+        await (async () => {
+          try {
+            // Invalidar timestamp para forçar recarga completa
+            CACHE_TIMESTAMP_EM_PRODUCAO = 0;
+            CACHE_PERSISTENTE_EM_PRODUCAO = null;
+            
+            // Atualizar cache imediatamente
+            const result = await atualizarCacheEmProducao(true);
+            
+            if (result && Array.isArray(result)) {
+              // Verificar manualmente se a nova atividade está no resultado
+              const novaAtividadePresente = result.some(a => a.id === activity.id);
+              console.log(`[CACHE-CRÍTICO] Nova atividade ${activity.id} ${novaAtividadePresente ? 'ESTÁ' : 'NÃO ESTÁ'} no cache atualizado!`);
+              
+              // Se não estiver, adicionar forçadamente
+              if (!novaAtividadePresente) {
+                console.log(`[CACHE-CRÍTICO] Adicionando forçadamente a atividade ${activity.id} ao cache!`);
+                
+                // Determinar departamento atual para formatar igual às outras
+                const atividadeFormatada = {
+                  ...activity,
+                  currentDepartment: initialDepartment,
+                  client: activity.clientName,
+                  clientInfo: activity.description || null
+                };
+                
+                // Adicionar no início da lista (mais alto na lista de prioridades)
+                if (Array.isArray(CACHE_PERSISTENTE_EM_PRODUCAO)) {
+                  CACHE_PERSISTENTE_EM_PRODUCAO.unshift(atividadeFormatada);
+                } else {
+                  CACHE_PERSISTENTE_EM_PRODUCAO = [atividadeFormatada];
+                }
+                
+                console.log(`[CACHE-CRÍTICO] Cache forçadamente atualizado para ${CACHE_PERSISTENTE_EM_PRODUCAO.length} itens`);
+              }
+            }
+          } catch (innerError) {
+            console.error('[CACHE-CRÍTICO] Erro durante atualização síncrona:', innerError);
+          }
+        })();
+        
+        // 2. Limpar cache do LRU
         if (cache) {
-          // Invalidar cache global para todas as atividades
-          const cacheKeyPrefix = 'activities_';
-          const cacheKeys = Array.from(cache.keys())
-            .filter(key => key.startsWith(cacheKeyPrefix));
+          console.log('[CACHE-CRÍTICO] 2. Limpando cache LRU');
           
-          // Invalidar caches relacionados a atividades
-          cacheKeys.forEach(key => {
-            console.log(`[CACHE] Invalidando cache: ${key}`);
+          // 2.1. Invalidar caches com prefixo específico primeiro
+          const prefixosAlvoEspecifico = [
+            'activities_em_producao_admin_',
+            'activities_main_admin_',
+            'activities_concluidos_admin_'
+          ];
+          
+          // Obter todas as chaves
+          const todasChaves = Array.from(cache.keys());
+          
+          // Limpar caches específicos primeiro
+          for (const prefixo of prefixosAlvoEspecifico) {
+            const chavesAlvo = todasChaves.filter(key => key.includes(prefixo));
+            for (const chave of chavesAlvo) {
+              console.log(`[CACHE-CRÍTICO] Invalidando cache específico: ${chave}`);
+              cache.del(chave);
+            }
+          }
+          
+          // 2.2. Limpar outros caches relacionados a atividades
+          const cacheKeyPrefix = 'activities_';
+          const cacheKeys = todasChaves.filter(key => key.startsWith(cacheKeyPrefix));
+          
+          for (const key of cacheKeys) {
+            console.log(`[CACHE-CRÍTICO] Invalidando cache geral: ${key}`);
             cache.del(key);
-          });
+          }
         }
         
-        // Limpar caches persistentes específicos
-        CACHE_TIMESTAMP_EM_PRODUCAO = 0;
+        // 3. Notificar observadores e WebSockets
+        console.log('[CACHE-CRÍTICO] 3. Notificando observadores sobre atualização de cache');
+        notifyCacheObservers('em-producao');
         
-        // Forçar atualização imediata do cache em produção
-        console.log('[CACHE] Forçando atualização do cache em produção');
-        atualizarCacheEmProducao(true).then(result => {
-          console.log(`[CACHE] Cache em produção atualizado com ${result ? result.length : 0} itens`);
-        }).catch(err => {
-          console.error('[CACHE] Erro ao atualizar cache em produção:', err);
-        });
+        if (typeof (global as any).wsNotifications !== 'undefined') {
+          console.log('[CACHE-CRÍTICO] 4. Enviando mensagem WebSocket de atualização de cache');
+          (global as any).wsNotifications.notifyDepartment('admin', {
+            type: 'cache_updated',
+            cache: 'em-producao',
+            timestamp: Date.now(),
+            forceRefresh: true // Indica para o cliente que deve ignorar seu cache local
+          }, true); // Alta prioridade
+        }
       } catch (cacheError) {
-        console.error('[CACHE] Erro ao invalidar caches:', cacheError);
+        console.error('[CACHE-CRÍTICO] Erro durante limpeza profunda:', cacheError);
       }
       
       // Enviar notificação websocket para o departamento inicial
