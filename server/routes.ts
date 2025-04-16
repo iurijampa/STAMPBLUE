@@ -1547,19 +1547,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
           priority: req.body.priority || 'normal',
           deadline: (() => {
             try {
+              console.log('Processando deadline no servidor:', req.body.deadline);
+              
+              // Formato ISO mais seguro
+              const now = new Date();
+              
               // Verificar se deadline existe e é uma string ISO válida
               if (req.body.deadline && typeof req.body.deadline === 'string') {
-                // Tentar criar uma data a partir da string para validar
-                const testDate = new Date(req.body.deadline);
-                if (!isNaN(testDate.getTime())) {
-                  return req.body.deadline;
+                try {
+                  // Tentar criar uma data a partir da string para validar
+                  const testDate = new Date(req.body.deadline);
+                  if (!isNaN(testDate.getTime())) {
+                    console.log('Data válida detectada:', testDate);
+                    return testDate; // Retorna o objeto Date diretamente
+                  } else {
+                    console.warn('Data inválida detectada, usando data atual');
+                  }
+                } catch (innerErr) {
+                  console.error('Erro ao converter string de data:', innerErr);
                 }
               }
-              // Fallback: usar data atual
-              return new Date().toISOString();
+              
+              // Fallback: usar data atual sempre como objeto Date
+              console.log('Usando data atual como fallback');
+              return now; // Objeto Date diretamente
             } catch (err) {
               console.error('Erro ao processar deadline:', err);
-              return new Date().toISOString();
+              // Último fallback: data atual
+              return new Date();
             }
           })(),
           initialDepartment: req.body.initialDepartment || 'gabarito',
