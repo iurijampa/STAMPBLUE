@@ -2,6 +2,13 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Declaração de tipos para janela global */
+/* 
+interface Window {
+  _updateImagesCallback?: (activityId: number) => void;
+}
+*/
+
 /* Animação de pulsação para o botão */
 @keyframes pulse {
   0% {

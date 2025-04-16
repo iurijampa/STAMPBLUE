@@ -109,7 +109,7 @@ export default function CreateActivityModal({ isOpen, onClose, onSuccess }: Crea
       
       // Usar placeholder para imagem principal
       let imageData = PLACEHOLDER_IMAGE;
-      let realImageData = null;
+      let realImageData: string | null = null;
       
       // Iniciar processamento em background (não aguardar)
       if (imageFile) {
