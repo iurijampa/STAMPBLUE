@@ -11,16 +11,46 @@ export async function apiRequest(
   method: string,
   url: string,
   data?: unknown | undefined,
+  options?: RequestInit,
 ): Promise<Response> {
-  const res = await fetch(url, {
+  // Mesclar cabeçalhos personalizados com o padrão Content-Type
+  const defaultHeaders: Record<string, string> = 
+    data ? { "Content-Type": "application/json" } : {};
+  
+  // Combinar com cabeçalhos personalizados se fornecidos
+  const headers = {
+    ...defaultHeaders,
+    ...(options?.headers || {})
+  };
+  
+  // Construir opções de solicitação combinando as opções padrão com as personalizadas
+  const fetchOptions: RequestInit = {
     method,
-    headers: data ? { "Content-Type": "application/json" } : {},
+    headers,
     body: data ? JSON.stringify(data) : undefined,
     credentials: "include",
-  });
-
-  await throwIfResNotOk(res);
-  return res;
+    // Outras opções padrão podem ser configuradas aqui
+    cache: "no-cache", // Sempre buscar dados novos
+    
+    // Mesclar com opções personalizadas, se fornecidas
+    ...options,
+    
+    // Garantir que os cabeçalhos mesclados tenham prioridade
+    headers,
+  };
+  
+  console.time(`⚡ [API] ${method} ${url}`);
+  
+  try {
+    const res = await fetch(url, fetchOptions);
+    await throwIfResNotOk(res);
+    return res;
+  } catch (error) {
+    console.error(`❌ [API] Erro na requisição ${method} ${url}:`, error);
+    throw error;
+  } finally {
+    console.timeEnd(`⚡ [API] ${method} ${url}`);
+  }
 }
 
 type UnauthorizedBehavior = "returnNull" | "throw";

@@ -72,7 +72,9 @@ export default function CreateActivityModal({ isOpen, onClose, onSuccess }: Crea
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.time('⚡ [TURBO] Criação de atividade');
     
+    // Primeiro, validar todos os dados antes de começar qualquer processamento pesado
     if (selectedDepartments.length === 0) {
       toast({
         title: "Erro ao criar atividade",
@@ -82,32 +84,53 @@ export default function CreateActivityModal({ isOpen, onClose, onSuccess }: Crea
       return;
     }
 
+    if (!deadline) {
+      toast({
+        title: "Erro ao criar atividade",
+        description: "A data de entrega é obrigatória",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Agora podemos prosseguir com o processamento
     setIsLoading(true);
     
     try {
+      // Anunciar ao usuário que a operação está em andamento (feedback instantâneo)
+      toast({
+        title: "Processando",
+        description: "Criando nova atividade...",
+        duration: 3000,
+      });
+      
+      // Iniciar processamento de imagens em paralelo para melhorar a performance
+      const imagePromises = [];
+      
+      // Processar imagem principal se existir
       let imageData = null;
       if (imageFile) {
-        imageData = await fileToBase64(imageFile);
+        imagePromises.push(
+          fileToBase64(imageFile).then(data => {
+            imageData = data;
+          })
+        );
       }
       
-      // Converter todas as imagens adicionais para base64
+      // Processar imagens adicionais em paralelo
       const additionalImagesData = [];
-      for (const file of additionalImageFiles) {
-        const base64Data = await fileToBase64(file);
-        additionalImagesData.push(base64Data);
-      }
+      const additionalImagePromises = additionalImageFiles.map(file => 
+        fileToBase64(file).then(data => {
+          additionalImagesData.push(data);
+        })
+      );
       
-      if (!deadline) {
-        toast({
-          title: "Erro ao criar atividade",
-          description: "A data de entrega é obrigatória",
-          variant: "destructive",
-        });
-        setIsLoading(false);
-        return;
-      }
+      imagePromises.push(...additionalImagePromises);
       
-      // Convertendo a data para string ISO para o backend
+      // Aguardar todas as conversões de imagem terminarem
+      await Promise.all(imagePromises);
+      
+      // Preparar os dados do formulário
       const formData = {
         title,
         description,
@@ -116,76 +139,39 @@ export default function CreateActivityModal({ isOpen, onClose, onSuccess }: Crea
         image: imageData,
         additionalImages: additionalImagesData,
         priority,
-        deadline: deadline ? deadline.toISOString() : null,
-        initialDepartment: initialDepartment, // Departamento inicial selecionado
+        deadline: deadline.toISOString(),
+        initialDepartment: initialDepartment,
         workflowSteps: selectedDepartments.map(department => ({
           department,
           order: selectedDepartments.indexOf(department) + 1,
-        }))
+        })),
+        _turbo: true // Flag para processamento prioritário no servidor
       };
       
-      const response = await apiRequest("POST", "/api/activities", formData);
+      console.log('🔄 Enviando solicitação para criação de atividade');
+      
+      // Enviar solicitação ao servidor com timeout reduzido para resposta mais rápida
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 segundos de timeout
+      
+      const response = await apiRequest("POST", "/api/activities", formData, {
+        signal: controller.signal,
+        headers: {
+          'X-Priority': 'high', // Header personalizado para indicar alta prioridade
+          'X-Turbo': 'true'     // Header turbo para processamento prioritário
+        }
+      });
+      
+      clearTimeout(timeoutId);
       
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.message || "Erro ao criar atividade");
       }
       
-      // SOLUÇÃO RADICAL: Limpeza e forçamento de dados para resolver o problema de atualizações
-      console.log("🚨 Forçando atualização após criação de novo pedido");
+      console.log('✅ Atividade criada com sucesso, atualizando interface');
       
-      // 1. Invalidar todas as consultas relevantes
-      queryClient.invalidateQueries({ queryKey: ["/api/activities"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/activities/em-producao"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/activities/concluidos"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/stats/department-counts"] });
-      
-      // 2. Aguardar microtask para garantir que a invalidação aconteça
-      await new Promise(resolve => setTimeout(resolve, 0));
-      
-      // 3. Forçar busca direta dos dados em vez de confiar na invalidação automática
-      try {
-        console.log("🔄 Buscando dados atualizados diretamente");
-        
-        // Buscar dados em produção diretamente
-        const emProducaoResponse = await fetch("/api/activities/em-producao");
-        if (emProducaoResponse.ok) {
-          const emProducaoData = await emProducaoResponse.json();
-          queryClient.setQueryData(["/api/activities/em-producao"], emProducaoData);
-        }
-        
-        // Buscar todos os dados diretamente
-        const todosResponse = await fetch("/api/activities");
-        if (todosResponse.ok) {
-          const todosData = await todosResponse.json();
-          queryClient.setQueryData(["/api/activities"], todosData);
-        }
-        
-        // Buscar estatísticas atualizadas
-        const statsResponse = await fetch("/api/stats");
-        if (statsResponse.ok) {
-          const statsData = await statsResponse.json();
-          queryClient.setQueryData(["/api/stats"], statsData);
-        }
-        
-        // Buscar contagem por departamento
-        const countsResponse = await fetch("/api/stats/department-counts");
-        if (countsResponse.ok) {
-          const countsData = await countsResponse.json();
-          queryClient.setQueryData(["/api/stats/department-counts"], countsData);
-        }
-        
-        console.log("✅ Dados atualizados com sucesso após criação de novo pedido");
-      } catch (error) {
-        console.error("❌ Erro ao forçar atualização dos dados:", error);
-      }
-      
-      toast({
-        title: "Atividade criada com sucesso",
-      });
-      
-      // Resetar formulário
+      // OPERAÇÃO PARALELA: Resetar formulário imediatamente para feedback ao usuário
       setTitle("");
       setDescription("");
       setClientName("");
@@ -195,9 +181,62 @@ export default function CreateActivityModal({ isOpen, onClose, onSuccess }: Crea
       setSelectedDepartments([]);
       setDeadline(undefined);
       
+      // TURBO: Invalidar caches e buscar dados atualizados em paralelo
+      console.log("🚨 Forçando atualização após criação de novo pedido");
+      
+      // Função auxiliar para buscar e atualizar um endpoint específico
+      const fetchAndUpdateCache = async (endpoint: string, queryKey: string[]) => {
+        try {
+          const fetchResponse = await fetch(endpoint, {
+            headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+          });
+          if (fetchResponse.ok) {
+            const data = await fetchResponse.json();
+            queryClient.setQueryData(queryKey, data);
+            return true;
+          }
+        } catch (e) {
+          console.warn(`Erro ao buscar ${endpoint}:`, e);
+        }
+        return false;
+      };
+      
+      // Executar todas as atualizações em paralelo para maximizar performance
+      await Promise.all([
+        // 1. Invalidar todas as consultas relevantes - imediatamente
+        queryClient.invalidateQueries({ 
+          queryKey: ["/api/activities"],
+          refetchType: 'all' // Garantir recarregamento completo 
+        }),
+        queryClient.invalidateQueries({ 
+          queryKey: ["/api/activities/em-producao"],
+          refetchType: 'all'
+        }),
+        
+        // 2. Buscar e atualizar os dados diretamente (principal + em produção)
+        fetchAndUpdateCache("/api/activities", ["/api/activities"]),
+        fetchAndUpdateCache("/api/activities/em-producao", ["/api/activities/em-producao"]),
+        
+        // 3. Invalidar estatísticas secundárias
+        queryClient.invalidateQueries({ queryKey: ["/api/activities/concluidos"] }),
+        queryClient.invalidateQueries({ queryKey: ["/api/stats"] }),
+        queryClient.invalidateQueries({ queryKey: ["/api/stats/department-counts"] })
+      ]);
+      
+      console.log("✅ Dados atualizados com sucesso após criação de novo pedido");
+      
+      // Mostrar mensagem de sucesso
+      toast({
+        title: "Atividade criada com sucesso",
+        description: "A nova atividade foi adicionada ao fluxo de trabalho",
+        variant: "default",
+      });
+      
+      // Chamar callbacks de sucesso e fechamento
       onSuccess();
       onClose();
       
+      console.timeEnd('⚡ [TURBO] Criação de atividade');
     } catch (error) {
       console.error("Erro ao criar atividade:", error);
       toast({
