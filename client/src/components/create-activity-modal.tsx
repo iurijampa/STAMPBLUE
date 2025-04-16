@@ -176,7 +176,7 @@ export default function CreateActivityModal({ isOpen, onClose, onSuccess }: Crea
         image: imageData,
         additionalImages: additionalImagesData,
         priority,
-        deadline: deadline && deadline instanceof Date ? deadline.toISOString() : new Date().toISOString(),
+        deadline: deadline ? (deadline instanceof Date ? deadline.toISOString() : new Date().toISOString()) : new Date().toISOString(),
         initialDepartment: initialDepartment,
         workflowSteps: selectedDepartments.map(department => ({
           department,
