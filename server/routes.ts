@@ -1398,18 +1398,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
+      // Invalidar caches relacionados a atividades para garantir que o novo pedido apareça
+      console.log('[CACHE] Invalidando caches para garantir visibilidade do novo pedido');
+      
+      // Limpar todos os caches relevantes
+      if (cache) {
+        // Invalidar cache global para todas as atividades
+        const cacheKeyPrefix = 'activities_';
+        const cacheKeys = Array.from(cache.keys())
+          .filter(key => key.startsWith(cacheKeyPrefix));
+        
+        // Invalidar caches relacionados a atividades
+        cacheKeys.forEach(key => {
+          console.log(`[CACHE] Invalidando cache: ${key}`);
+          cache.del(key);
+        });
+      }
+
+      // Limpar caches persistentes específicos
+      CACHE_TIMESTAMP_EM_PRODUCAO = 0;
+      
       // Enviar notificação websocket para o departamento inicial
       if ((global as any).wsNotifications) {
         (global as any).wsNotifications.notifyDepartment(initialDepartment, {
           type: 'new_activity',
-          activity
-        });
+          activity,
+          cache_refresh: true
+        }, true); // Alta prioridade
         
-        // Notificar também administradores
+        // Notificar também administradores com alta prioridade
         (global as any).wsNotifications.notifyDepartment('admin', {
           type: 'new_activity',
-          activity
-        });
+          activity,
+          cache_refresh: true,
+          message_priority: 'high'
+        }, true); // Alta prioridade
       }
       
       res.status(201).json(activity);
