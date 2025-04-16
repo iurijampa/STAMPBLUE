@@ -906,9 +906,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Config de cache padrão
         res.setHeader('Cache-Control', 'private, max-age=5');
         
-        // Usar cache LRU para resposta rápida inicial
+        // Usar cache para resposta rápida inicial
         const cacheKey = `activities_em_producao_admin_1_ultra`;
-        const cachedData = CACHE_LRU.get(cacheKey);
+        // Fix: Use o cache apenas se existir uma instância
+        const cachedData = global.CACHE_LRU ? global.CACHE_LRU.get(cacheKey) : null;
         
         if (cachedData) {
           console.log('[CACHE-LRU] Usando cache LRU para ' + cacheKey);
@@ -1705,9 +1706,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.status(201).json(activity);
     } catch (error) {
-      if (error instanceof Error) {
+      if (error instanceof z.ZodError) {
+        // Usar fromZodError apenas com ZodError
         const validationError = fromZodError(error);
         res.status(400).json({ message: validationError.message });
+      } else if (error instanceof Error) {
+        // Error genérico que não é uma ZodError
+        res.status(400).json({ message: error.message });
       } else {
         res.status(500).json({ message: "Erro ao criar atividade" });
       }
@@ -1731,9 +1736,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const updatedActivity = await storage.updateActivity(activityId, validatedData);
       res.json(updatedActivity);
     } catch (error) {
-      if (error instanceof Error) {
+      if (error instanceof z.ZodError) {
+        // Usar fromZodError apenas com ZodError
         const validationError = fromZodError(error);
         res.status(400).json({ message: validationError.message });
+      } else if (error instanceof Error) {
+        // Error genérico que não é uma ZodError
+        res.status(400).json({ message: error.message });
       } else {
         res.status(500).json({ message: "Erro ao atualizar atividade" });
       }
