@@ -184,7 +184,23 @@ if (typeof window !== 'undefined') {
         image: imageData,
         additionalImages: additionalImagesData,
         priority,
-        deadline: deadline ? (deadline instanceof Date ? deadline.toISOString() : new Date().toISOString()) : new Date().toISOString(),
+        deadline: (() => {
+          // Tratar o deadline com máxima segurança para evitar erros de toISOString
+          try {
+            if (deadline) {
+              // Se é uma data válida, usar toISOString
+              if (deadline instanceof Date && !isNaN(deadline.getTime())) {
+                return deadline.toISOString();
+              } 
+            }
+            // Em qualquer outro caso, usar data atual
+            return new Date().toISOString();
+          } catch (err) {
+            console.warn("Erro ao processar data de entrega:", err);
+            // Fallback seguro
+            return new Date().toISOString();
+          }
+        })(),
         initialDepartment: initialDepartment,
         workflowSteps: selectedDepartments.map(department => ({
           department,
