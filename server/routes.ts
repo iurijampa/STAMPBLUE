@@ -903,21 +903,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/activities/em-producao", isAuthenticated, async (req, res) => {
     try {
       if (req.user && req.user.role === "admin") {
-        // SOLUÇÃO DIRETA: Para resolver o problema dos novos pedidos não aparecendo, desativamos 
-        // temporariamente o cache persistente para garantir que sempre busquemos dados frescos do banco
-        // Cabeçalhos para cache no browser também reduzidos para 1 segundo apenas
-        res.setHeader('Cache-Control', 'private, max-age=1');
+        // Config de cache padrão
+        res.setHeader('Cache-Control', 'private, max-age=5');
         
-        // RESOLUÇÃO DE PROBLEMAS:
-        // Devido ao problema crítico de novos pedidos não aparecendo na lista,
-        // estamos forçando sempre a busca direta no banco de dados para garantir
-        // que dados mais recentes sejam sempre exibidos
-        console.log('[CACHE-CRÍTICO] Desativando cache persistente para em-producao para garantir dados atualizados');
+        // Usar cache LRU para resposta rápida inicial
+        const cacheKey = `activities_em_producao_admin_1_ultra`;
+        const cachedData = CACHE_LRU.get(cacheKey);
         
-        // Forçar atualização do cache antes de cada requisição
-        await atualizarCacheEmProducao(true);
+        if (cachedData) {
+          console.log('[CACHE-LRU] Usando cache LRU para ' + cacheKey);
+          return res.json(cachedData);
+        }
         
-        if (false && CACHE_PERSISTENTE_EM_PRODUCAO && (Date.now() - CACHE_TIMESTAMP_EM_PRODUCAO < CACHE_TTL_EM_PRODUCAO)) {
+        // Verificar se temos dados em cache persistente
+        if (CACHE_PERSISTENTE_EM_PRODUCAO && (Date.now() - CACHE_TIMESTAMP_EM_PRODUCAO < CACHE_TTL_EM_PRODUCAO)) {
           console.log(`[CACHE-PERSISTENTE] Usando cache pré-computado para pedidos em produção (${(Date.now() - CACHE_TIMESTAMP_EM_PRODUCAO)/1000}s)`);
           
           // Programar atualização em background se estiver próximo de expirar

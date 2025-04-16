@@ -92,15 +92,17 @@ export default function AdminDashboard() {
       .catch(err => console.error("Erro ao carregar diagnóstico:", err));
   };
   
-  // Função para atualizar dados
-  const handleRefresh = async () => {
+  // Função para atualizar dados - versão otimizada
+  const handleRefresh = () => {
     toast({
       title: "Atualizando...",
       description: "Buscando dados mais recentes",
     });
     
-    // Usar a função async atualizada
-    await invalidateAllQueries();
+    // Abordagem mais eficiente - invalidar apenas as queries principais
+    queryClient.invalidateQueries({ queryKey: ["/api/activities"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/stats/department-counts"] });
     
     toast({
       title: "Atualizado",
@@ -934,26 +936,13 @@ function ActivitiesList(showCompleted: boolean = false) {
       <CreateActivityModal 
         isOpen={createModalOpen}
         onClose={() => setCreateModalOpen(false)}
-        onSuccess={async () => {
+        onSuccess={() => {
           setCreateModalOpen(false);
           
-          // SOLUÇÃO ULTRA AGRESSIVA para o problema de novos pedidos não aparecerem
-          console.log("🚨 SOLUÇÃO ULTRA AGRESSIVA: Forçando atualização após criação de pedido");
-          
-          // Mostrar toast de carregando
-          toast({
-            title: "Atualizando...",
-            description: "Aguarde enquanto buscamos as informações mais recentes",
-          });
-          
-          // 1. Limpar todos os caches do React Query
-          await invalidateAllQueries();
-          
-          // 2. Forçar uma pausa para permitir que o servidor processe
-          await new Promise(resolve => setTimeout(resolve, 500));
-          
-          // 3. Forçar recarregamento da página inteira - SOLUÇÃO NUCLEAR
-          window.location.reload();
+          // Invalidar apenas as queries necessárias - abordagem mais leve
+          queryClient.invalidateQueries({ queryKey: ["/api/activities"] });
+          queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
+          queryClient.invalidateQueries({ queryKey: ["/api/stats/department-counts"] });
           
           toast({
             title: "Sucesso",
