@@ -815,8 +815,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const CACHE_TTL_EM_PRODUCAO = 5 * 60 * 1000; // 5 minutos
   
   // Função para atualizar cache em background
-  async function atualizarCacheEmProducao() {
-    if (CACHE_UPDATING_EM_PRODUCAO) return; // Evita atualizações concorrentes
+  async function atualizarCacheEmProducao(forceUpdate = false) {
+    if (CACHE_UPDATING_EM_PRODUCAO && !forceUpdate) return; // Evita atualizações concorrentes, a menos que seja forçado
     
     try {
       CACHE_UPDATING_EM_PRODUCAO = true;
@@ -858,13 +858,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const result = await db.execute(query);
       
+      // Detectar se houve alterações nos dados
+      const houveMudanca = !CACHE_PERSISTENTE_EM_PRODUCAO || 
+        JSON.stringify(result) !== JSON.stringify(CACHE_PERSISTENTE_EM_PRODUCAO);
+      
       // Atualizar cache persistente
       CACHE_PERSISTENTE_EM_PRODUCAO = result;
       CACHE_TIMESTAMP_EM_PRODUCAO = Date.now();
       
       console.timeEnd('[CACHE-EM-PRODUCAO] Atualizando cache persistente');
+      
+      // Notificar observadores apenas se houve mudança
+      if (houveMudanca) {
+        notifyCacheObservers('em-producao');
+        
+        // Notificar via WebSocket para atualização em tempo real
+        if (typeof (global as any).wsNotifications !== 'undefined') {
+          (global as any).wsNotifications.notifyDepartment('admin', {
+            type: 'cache_updated',
+            cache: 'em-producao',
+            timestamp: Date.now()
+          }, true); // Alta prioridade para entrega imediata
+        }
+      }
+      
+      return result;
     } catch (error) {
       console.error('[CACHE-EM-PRODUCAO] Erro ao atualizar cache:', error);
+      return null;
     } finally {
       CACHE_UPDATING_EM_PRODUCAO = false;
     }
@@ -1401,22 +1422,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Invalidar caches relacionados a atividades para garantir que o novo pedido apareça
       console.log('[CACHE] Invalidando caches para garantir visibilidade do novo pedido');
       
-      // Limpar todos os caches relevantes
-      if (cache) {
-        // Invalidar cache global para todas as atividades
-        const cacheKeyPrefix = 'activities_';
-        const cacheKeys = Array.from(cache.keys())
-          .filter(key => key.startsWith(cacheKeyPrefix));
+      try {
+        // Limpar todos os caches relevantes
+        if (cache) {
+          // Invalidar cache global para todas as atividades
+          const cacheKeyPrefix = 'activities_';
+          const cacheKeys = Array.from(cache.keys())
+            .filter(key => key.startsWith(cacheKeyPrefix));
+          
+          // Invalidar caches relacionados a atividades
+          cacheKeys.forEach(key => {
+            console.log(`[CACHE] Invalidando cache: ${key}`);
+            cache.del(key);
+          });
+        }
         
-        // Invalidar caches relacionados a atividades
-        cacheKeys.forEach(key => {
-          console.log(`[CACHE] Invalidando cache: ${key}`);
-          cache.del(key);
+        // Limpar caches persistentes específicos
+        CACHE_TIMESTAMP_EM_PRODUCAO = 0;
+        
+        // Forçar atualização imediata do cache em produção
+        console.log('[CACHE] Forçando atualização do cache em produção');
+        atualizarCacheEmProducao(true).then(result => {
+          console.log(`[CACHE] Cache em produção atualizado com ${result ? result.length : 0} itens`);
+        }).catch(err => {
+          console.error('[CACHE] Erro ao atualizar cache em produção:', err);
         });
+      } catch (cacheError) {
+        console.error('[CACHE] Erro ao invalidar caches:', cacheError);
       }
-
-      // Limpar caches persistentes específicos
-      CACHE_TIMESTAMP_EM_PRODUCAO = 0;
       
       // Enviar notificação websocket para o departamento inicial
       if ((global as any).wsNotifications) {
