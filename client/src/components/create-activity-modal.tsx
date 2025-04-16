@@ -118,7 +118,7 @@ export default function CreateActivityModal({ isOpen, onClose, onSuccess }: Crea
       }
       
       // Processar imagens adicionais em paralelo
-      const additionalImagesData = [];
+      const additionalImagesData: string[] = [];
       const additionalImagePromises = additionalImageFiles.map(file => 
         fileToBase64(file).then(data => {
           additionalImagesData.push(data);

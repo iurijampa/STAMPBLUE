@@ -33,10 +33,7 @@ export async function apiRequest(
     cache: "no-cache", // Sempre buscar dados novos
     
     // Mesclar com opções personalizadas, se fornecidas
-    ...options,
-    
-    // Garantir que os cabeçalhos mesclados tenham prioridade
-    headers,
+    ...options
   };
   
   console.time(`⚡ [API] ${method} ${url}`);
