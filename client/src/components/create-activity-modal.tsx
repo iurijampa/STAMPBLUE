@@ -84,14 +84,7 @@ export default function CreateActivityModal({ isOpen, onClose, onSuccess }: Crea
       return;
     }
 
-    if (!deadline) {
-      toast({
-        title: "Erro ao criar atividade",
-        description: "A data de entrega é obrigatória",
-        variant: "destructive",
-      });
-      return;
-    }
+    // A data de entrega não é mais obrigatória, usamos a data atual como fallback
 
     // Agora podemos prosseguir com o processamento
     setIsLoading(true);
@@ -183,7 +176,7 @@ export default function CreateActivityModal({ isOpen, onClose, onSuccess }: Crea
         image: imageData,
         additionalImages: additionalImagesData,
         priority,
-        deadline: deadline.toISOString(),
+        deadline: deadline && deadline instanceof Date ? deadline.toISOString() : new Date().toISOString(),
         initialDepartment: initialDepartment,
         workflowSteps: selectedDepartments.map(department => ({
           department,
