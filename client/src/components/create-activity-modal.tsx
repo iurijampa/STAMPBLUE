@@ -221,18 +221,25 @@ if (typeof window !== 'undefined') {
         additionalImages: additionalImagesData,
         priority,
         deadline: (() => {
+          console.log('📅 Processando data de entrega:', deadline);
           // Tratar o deadline com máxima segurança para evitar erros de toISOString
           try {
             if (deadline) {
-              // Se é uma data válida, usar toISOString
+              // Validar explicitamente se é uma data válida
               if (deadline instanceof Date && !isNaN(deadline.getTime())) {
-                return deadline.toISOString();
-              } 
+                const isoString = deadline.toISOString();
+                console.log('📅 Data válida convertida para:', isoString);
+                return isoString;
+              } else {
+                console.warn('📅 Data inválida fornecida:', deadline);
+              }
+            } else {
+              console.log('📅 Nenhuma data fornecida, usando data atual');
             }
             // Em qualquer outro caso, usar data atual
             return new Date().toISOString();
           } catch (err) {
-            console.warn("Erro ao processar data de entrega:", err);
+            console.error("📅 Erro ao processar data de entrega:", err);
             // Fallback seguro
             return new Date().toISOString();
           }
