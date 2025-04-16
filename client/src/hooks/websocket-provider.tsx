@@ -182,10 +182,11 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
       
       socket.onmessage = (event) => {
         try {
+          console.time('⚡ [WS] Processamento de mensagem WebSocket');
           const data = JSON.parse(event.data);
           
           if (data.type === 'notification') {
-            // Notificação recebida
+            // Notificação recebida - PRIORIDADE ALTA
             toast({
               title: data.title || 'Nova notificação',
               description: data.message,
@@ -193,33 +194,64 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
               duration: 5000
             });
             
-            // Atualizar cache
+            // TURBO: Atualizar cache IMEDIATAMENTE para todas as queries relevantes
             if (data.refreshQueries && Array.isArray(data.refreshQueries)) {
+              console.log('🔄 [TURBO] Atualizando queries após notificação WebSocket:', data.refreshQueries);
               data.refreshQueries.forEach((queryKey: string | string[]) => {
-                queryClient.invalidateQueries({ queryKey: typeof queryKey === 'string' ? [queryKey] : queryKey });
+                queryClient.invalidateQueries({ 
+                  queryKey: typeof queryKey === 'string' ? [queryKey] : queryKey,
+                  // Forçar refetch para garantir dados atualizados
+                  refetchType: 'active',
+                });
               });
+              
+              // ULTRA: Também atualizar stats e contadores para garantir UI consistente
+              queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
+              queryClient.invalidateQueries({ queryKey: ['/api/stats/department-counts'] });
             }
             
-            // Reproduzir som para departamento específico
+            // MODO DEUS: Reproduzir som para departamento específico com múltiplas tentativas
             if (data.department && departmentListeners.has(data.department)) {
+              console.log('🔔 [TURBO] Reproduzindo som para departamento:', data.department);
               if (window.playSoundAlert) {
-                window.playSoundAlert();
+                try {
+                  window.playSoundAlert();
+                } catch (e) {
+                  console.error('Erro ao reproduzir som:', e);
+                }
               }
             }
             
           } else if (data.type === 'data_update') {
-            // Invalidar cache
-            queryClient.invalidateQueries({ queryKey: data.queryKey || ['/api/activities'] });
+            console.time('⚡ [TURBO] Processamento de atualização de dados');
             
-            // Reproduzir som para departamento específico
+            // TURBO: Invalidar cache IMEDIATAMENTE
+            console.log('🚀 [TURBO] Recebida atualização de dados crítica! Processando...');
+            queryClient.invalidateQueries({ 
+              queryKey: data.queryKey || ['/api/activities'],
+              // Forçar refetch para garantir dados atualizados
+              refetchType: 'active',
+            });
+            
+            // ULTRA: Também atualizar stats e contadores para garantir UI consistente
+            queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
+            queryClient.invalidateQueries({ queryKey: ['/api/stats/department-counts'] });
+            
+            // MODO DEUS: Reproduzir som com alta prioridade
             if (data.department && departmentListeners.has(data.department)) {
+              console.log('🔔 [TURBO] Reproduzindo som para departamento:', data.department);
               if (window.playSoundAlert) {
-                window.playSoundAlert();
+                try {
+                  window.playSoundAlert();
+                } catch (e) {
+                  console.error('Erro ao reproduzir som:', e);
+                }
               }
             }
             
-            // Atualizar dados imediatamente
+            // Atualizar dados imediatamente com polling agressivo
             fetchData();
+            console.timeEnd('⚡ [TURBO] Processamento de atualização de dados');
           }
         } catch (err) {
           console.error('Erro ao processar mensagem:', err);

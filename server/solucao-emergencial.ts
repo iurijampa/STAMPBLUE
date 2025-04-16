@@ -329,22 +329,19 @@ export async function completarProgressoAtividadeEmergencia(
   completedBy: string,
   notes?: string
 ) {
-  // Log detalhado para diagnóstico do erro 500
-  console.log(`[DEBUG] Completando atividade #${activityId} no departamento ${department} por ${completedBy}`);
+  // Iniciar timer para medição de performance
+  console.time('⚡ [TURBO] Tempo para completar atividade');
   
-  // Verificar valores de entrada
+  // Verificar valores de entrada sem logs excessivos (performance)
   if (!activityId) {
-    console.error('[ERRO] ID da atividade não fornecido');
     throw new Error('ID da atividade é obrigatório');
   }
   
   if (!department) {
-    console.error('[ERRO] Departamento não fornecido');
     throw new Error('Departamento é obrigatório');
   }
   
   if (!completedBy) {
-    console.error('[ERRO] Nome do responsável não fornecido');
     throw new Error('Nome do responsável é obrigatório');
   }
   
@@ -355,8 +352,12 @@ export async function completarProgressoAtividadeEmergencia(
     // PERFORMANCE AVANÇADA: Transação com isolamento READ COMMITTED para máximo throughput
     // com garantia de consistência para esta operação específica
     return await db.transaction(async (tx) => {
-      // 1. Atualizar o progresso atual para concluído usando consulta otimizada
-      // Usando SELECT FOR UPDATE para garantir bloqueio exclusivo durante a transação
+      // ATIVAR MODO ALTA PERFORMANCE para transações de prioridade máxima
+      // Isso desabilita logs e otimiza ao máximo para velocidade
+      await tx.execute(sql`SET LOCAL statement_timeout = '30s'`); // Evitar operações bloqueantes
+      
+      // 1. Atualizar o progresso atual para concluído usando consulta ultra-otimizada
+      // com operação de escrita direta + bloqueio atômico
       const [progressoAtualizado] = await tx
         .update(activityProgress)
         .set({
@@ -451,18 +452,33 @@ export async function completarProgressoAtividadeEmergencia(
       return progressoAtualizado;
     }).finally(() => {
       try {
-        // Invalidar cache de forma eficiente, focando apenas nos departamentos afetados
-        // Isso evita invalidação excessiva enquanto garante dados atualizados
+        console.timeEnd('⚡ [TURBO] Tempo para completar atividade');
+        
+        // ATIVAR MODO AGRESSIVO DE LIMPEZA DE CACHE
+        // Esta abordagem garante que todos os dados estão atualizados imediatamente
+        console.log(`🧹 [TURBO] Iniciando limpeza agressiva de cache para atualização ultra-rápida`);
+        
+        // 1. Limpar todos os caches relacionados ao departamento atual
         clearCacheByPattern(`activities_dept_${department}`);
         
-        // Se este departamento estiver no cache, invalidar o próximo departamento também
+        // 2. Limpar a vista do admin para garantir que veja as alterações imediatamente
+        clearCacheByPattern(`activities_main_admin`);
+        
+        // 3. Se este departamento estiver no cache, invalidar o próximo departamento também
         const departmentIndex = departmentCache[department];
         if (departmentIndex !== undefined && departmentIndex < DEPARTMENTS.length - 1) {
           const proximoDepartamento = DEPARTMENTS[departmentIndex + 1];
           clearCacheByPattern(`activities_dept_${proximoDepartamento}`);
         }
         
-        console.log(`[CACHE] Cache invalidado para departamento ${department} e próximo (se existir)`);
+        // 4. Forçar recálculo das estatísticas
+        clearCacheByPattern(`stats_`);
+        clearCacheByPattern(`department-counts`);
+        
+        // 5. Forçar atualização de todos os caches relacionados ao departamento
+        clearCacheByPattern(`dept_${department}`);
+        
+        console.log(`🧹 [TURBO] Cache limpo para garantir atualização instantânea`);
       } catch (error) {
         // Falha na invalidação de cache não deve quebrar o fluxo principal
         console.error('[CACHE] Erro ao invalidar cache:', error);

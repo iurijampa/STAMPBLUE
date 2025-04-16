@@ -1861,15 +1861,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
             });
           }
           
-          // Notificar administradores
+          // TURBO: Notificar administradores com PRIORIDADE MÁXIMA para garantir entrega instantânea
           (global as any).wsNotifications.notifyDepartment('admin', {
             type: 'activity_progress',
             activity,
             completedBy: req.body.completedBy,
             department,
             nextDepartment: departmentIndex < DEPARTMENTS.length - 1 ? DEPARTMENTS[departmentIndex + 1] : null,
-            isCompleted: departmentIndex >= DEPARTMENTS.length - 1
-          });
+            isCompleted: departmentIndex >= DEPARTMENTS.length - 1,
+            _turbo: true // Flag para processamento prioritário
+          }, true); // TRUE = alta prioridade
         }
         
         res.json(completedProgress);
@@ -2995,13 +2996,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Função otimizada para enviar atualizações para um departamento específico
   function notifyDepartment(department: string, data: any, highPriority: boolean = false) {
+    // TURBO: Modo de alta prioridade ativado para transições críticas entre departamentos
+    if (highPriority) {
+      console.log(`🚀 [TURBO] Notificação de ALTA PRIORIDADE para departamento: ${department}`);
+    }
+    
     // Adicionar valores para diagnóstico e rastreamento de desempenho
     const messageWithTimestamp = {
       ...data,
       server_timestamp: Date.now(),
       high_priority: highPriority,
       message_id: Math.random().toString(36).substring(2, 15),
-      event_source: 'server_push'
+      event_source: 'server_push',
+      // Adicionar flag TURBO para processamento prioritário no cliente
+      _turbo: highPriority ? true : undefined
     };
     
     // Serializar a mensagem apenas uma vez para todas as conexões (economia de CPU)
