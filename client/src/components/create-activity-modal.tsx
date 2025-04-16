@@ -131,10 +131,55 @@ export default function CreateActivityModal({ isOpen, onClose, onSuccess }: Crea
         throw new Error(errorData.message || "Erro ao criar atividade");
       }
       
-      // Invalidar as consultas para atualizar as listas de atividades
+      // SOLUÇÃO RADICAL: Limpeza e forçamento de dados para resolver o problema de atualizações
+      console.log("🚨 Forçando atualização após criação de novo pedido");
+      
+      // 1. Invalidar todas as consultas relevantes
       queryClient.invalidateQueries({ queryKey: ["/api/activities"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/activities/em-producao"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/activities/concluidos"] });
       queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
       queryClient.invalidateQueries({ queryKey: ["/api/stats/department-counts"] });
+      
+      // 2. Aguardar microtask para garantir que a invalidação aconteça
+      await new Promise(resolve => setTimeout(resolve, 0));
+      
+      // 3. Forçar busca direta dos dados em vez de confiar na invalidação automática
+      try {
+        console.log("🔄 Buscando dados atualizados diretamente");
+        
+        // Buscar dados em produção diretamente
+        const emProducaoResponse = await fetch("/api/activities/em-producao");
+        if (emProducaoResponse.ok) {
+          const emProducaoData = await emProducaoResponse.json();
+          queryClient.setQueryData(["/api/activities/em-producao"], emProducaoData);
+        }
+        
+        // Buscar todos os dados diretamente
+        const todosResponse = await fetch("/api/activities");
+        if (todosResponse.ok) {
+          const todosData = await todosResponse.json();
+          queryClient.setQueryData(["/api/activities"], todosData);
+        }
+        
+        // Buscar estatísticas atualizadas
+        const statsResponse = await fetch("/api/stats");
+        if (statsResponse.ok) {
+          const statsData = await statsResponse.json();
+          queryClient.setQueryData(["/api/stats"], statsData);
+        }
+        
+        // Buscar contagem por departamento
+        const countsResponse = await fetch("/api/stats/department-counts");
+        if (countsResponse.ok) {
+          const countsData = await countsResponse.json();
+          queryClient.setQueryData(["/api/stats/department-counts"], countsData);
+        }
+        
+        console.log("✅ Dados atualizados com sucesso após criação de novo pedido");
+      } catch (error) {
+        console.error("❌ Erro ao forçar atualização dos dados:", error);
+      }
       
       toast({
         title: "Atividade criada com sucesso",

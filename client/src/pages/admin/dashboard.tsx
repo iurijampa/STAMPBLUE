@@ -48,7 +48,9 @@ export default function AdminDashboard() {
   }, [user, navigate, toast]);
 
   // Função utilitária para invalidar todas as queries importantes
-  const invalidateAllQueries = () => {
+  const invalidateAllQueries = async () => {
+    console.log("🌟 FASE 1: Iniciando invalidação de todas as queries no dashboard");
+    
     // Invalidar todas as rotas de atividades (incluindo as novas rotas otimizadas)
     queryClient.invalidateQueries({ queryKey: ["/api/activities"] });
     queryClient.invalidateQueries({ queryKey: ["/api/activities/concluidos"] });
@@ -57,7 +59,28 @@ export default function AdminDashboard() {
     // Invalidar estatísticas
     queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
     
+    // Invalidar contagem de departamentos
+    queryClient.invalidateQueries({ queryKey: ["/api/stats/department-counts"] });
+    
     // Invalidar notificações
+    
+    // SOLUÇÃO AVANÇADA: Forçar refetch imediato de todos os dados
+    console.log("🌟 FASE 2: Forçando refetch de todos os dados críticos");
+    
+    try {
+      // Aguardar um momento para garantir que a invalidação seja processada
+      await new Promise(resolve => setTimeout(resolve, 0));
+      
+      // Forçar refetch das queries principais
+      await queryClient.refetchQueries({ queryKey: ["/api/activities/em-producao"], type: "active" });
+      await queryClient.refetchQueries({ queryKey: ["/api/activities"], type: "active" });
+      await queryClient.refetchQueries({ queryKey: ["/api/stats"], type: "active" });
+      await queryClient.refetchQueries({ queryKey: ["/api/stats/department-counts"], type: "active" });
+      
+      console.log("✅ Refetch forçado concluído com sucesso");
+    } catch (error) {
+      console.error("❌ Erro ao forçar refetch:", error);
+    }
     queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
     
     // Invalidar contagem por departamentos
@@ -70,8 +93,14 @@ export default function AdminDashboard() {
   };
   
   // Função para atualizar dados
-  const handleRefresh = () => {
-    invalidateAllQueries();
+  const handleRefresh = async () => {
+    toast({
+      title: "Atualizando...",
+      description: "Buscando dados mais recentes",
+    });
+    
+    // Usar a função async atualizada
+    await invalidateAllQueries();
     
     toast({
       title: "Atualizado",
