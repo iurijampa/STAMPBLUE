@@ -3,21 +3,21 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useToast } from './use-toast';
 import { queryClient } from '@/lib/queryClient';
 
-// CONFIGURAÇÃO TURBO-OTIMIZADA - VERSÃO 2.0 COM SUPER DESEMPENHO
+// CONFIGURAÇÃO TURBO-OTIMIZADA - VERSÃO 3.0 COM DESEMPENHO EXTREMO E ALTA CONFIABILIDADE
 // Configurações de polling - otimização máxima para resposta instantânea
-const MIN_POLLING_INTERVAL = 4500; // 4.5 segundos - atualizações ultra-frequentes para excelente responsividade
-const MAX_POLLING_INTERVAL = 15000; // 15 segundos - intervalo máximo reduzido pela metade para dados sempre frescos
-const POLLING_BACKOFF_FACTOR = 1.3; // Aumenta mais suavemente o tempo entre pollings
+const MIN_POLLING_INTERVAL = 4000; // 4 segundos - atualizações ultra-frequentes para responsividade imediata
+const MAX_POLLING_INTERVAL = 12000; // 12 segundos - intervalo máximo reduzido para dados sempre atualizados
+const POLLING_BACKOFF_FACTOR = 1.2; // Crescimento mais suave do tempo entre pollings para melhor responsividade
 
-// Configurações de WebSocket - otimização para velocidade e confiabilidade
-const HEARTBEAT_INTERVAL = 50000; // 50 segundos - mais frequente para detectar problemas mais rapidamente
-const HEARTBEAT_TIMEOUT = 6000; // 6 segundos - timeout mais curto para detecção mais rápida de problemas
-const WS_CONNECT_TIMEOUT = 5000; // 5 segundos - timeout reduzido para estabelecer conexão mais rapidamente
+// Configurações de WebSocket - otimização para velocidade, confiabilidade e recuperação rápida
+const HEARTBEAT_INTERVAL = 40000; // 40 segundos - mais frequente para detectar problemas ainda mais rapidamente
+const HEARTBEAT_TIMEOUT = 5000; // 5 segundos - timeout mais curto para detecção ultra-rápida de problemas
+const WS_CONNECT_TIMEOUT = 4000; // 4 segundos - timeout reduzido para estabelecer conexão mais rapidamente
 
-// Configurações de reconexão - estratégia ultra-rápida e resiliente
-const INITIAL_RECONNECT_DELAY = 1000; // 1 segundo inicial - resposta instantânea no primeiro erro
-const MAX_RECONNECT_DELAY = 20000; // 20 segundos - limite máximo reduzido drasticamente para recuperação rápida
-const RECONNECT_BACKOFF_FACTOR = 1.4; // Fator de crescimento do atraso - balanceado
+// Configurações de reconexão - estratégia ultra-rápida, resiliente e com prioridade máxima
+const INITIAL_RECONNECT_DELAY = 800; // 0.8 segundos inicial - resposta quase instantânea no primeiro erro
+const MAX_RECONNECT_DELAY = 15000; // 15 segundos - limite máximo reduzido para recuperação ultra-rápida
+const RECONNECT_BACKOFF_FACTOR = 1.3; // Fator de crescimento do atraso - balanceado para desempenho e estabilidade
 const JITTER_MAX = 0.15; // 15% de variação aleatória para evitar reconexões simultâneas
 const MAX_RECONNECT_ATTEMPTS = 4; // 4 tentativas antes de pausa
 const RECONNECT_PAUSE = 12000; // 12 segundos de pausa após várias tentativas
@@ -354,26 +354,56 @@ export function useWebSocket() {
             });
           } 
           else if (data.type === 'new_activity') {
-            // Invalidar cache para atualizar lista de atividades
-            queryClient.invalidateQueries({ queryKey: ['/api/department/activities', user.role] });
-            queryClient.invalidateQueries({ queryKey: ['/api/activities'] });
+            console.time('⚡ [TURBO] Processamento de nova atividade');
             
-            // Tocar som usando Audio API diretamente (método extremamente simples)
+            // Determinar se é uma mensagem de alta prioridade
+            const isHighPriority = data._turbo === true || data.system_priority === 'maximum';
+            
+            console.log(`🚀 [TURBO] Nova atividade recebida${isHighPriority ? ' (PRIORIDADE MÁXIMA)' : ''}: ${data.activity?.title || 'Sem título'}`);
+            
+            // ULTRA: Invalidar cache IMEDIATAMENTE para atualizar todas as listas
+            queryClient.invalidateQueries({ 
+              queryKey: ['/api/department/activities', user.role],
+              refetchType: 'active' // Forçar recarregamento imediato
+            });
+            queryClient.invalidateQueries({ 
+              queryKey: ['/api/activities'],
+              refetchType: 'active'
+            });
+            
+            // MODO DEUS: Reproduzir som com diversas estratégias para garantir que seja ouvido
             try {
+              // Estratégia 1: Audio API direta com volume máximo para ALTA PRIORIDADE
               const audio = new Audio('/notification-sound.mp3');
-              audio.volume = 0.5;
+              audio.volume = isHighPriority ? 0.8 : 0.5; // Volume maior para alta prioridade
+              
+              // Primeira tentativa
               audio.play().catch(err => {
-                console.error('Erro ao tocar notificação:', err);
+                console.error('Erro ao tocar notificação (primeira tentativa):', err);
+                
+                // Segunda tentativa com delay
+                setTimeout(() => {
+                  try {
+                    audio.play().catch(e => console.error('Falha na segunda tentativa de som:', e));
+                  } catch (e) {
+                    console.error('Erro na segunda tentativa de reprodução:', e);
+                  }
+                }, 300);
               });
-              console.log('Som de nova atividade tocado com sucesso!');
+              
+              console.log('🔊 [TURBO] Som de nova atividade iniciado');
             } catch (error) {
-              console.error('Erro ao tocar som de nova atividade:', error);
+              console.error('❌ [TURBO] Erro ao tocar som de nova atividade:', error);
             }
             
-            // Emitir evento de nova atividade para o componente SimpleSoundPlayer (reforço)
-            setMessageData({ type: 'sound', soundType: 'new-activity' });
+            // Estratégia 2: Emitir evento para o componente SimpleSoundPlayer (reforço)
+            setMessageData({ 
+              type: 'sound', 
+              soundType: isHighPriority ? 'new-activity-urgent' : 'new-activity',
+              priority: isHighPriority ? 'high' : 'normal'
+            });
             
-            // Notificação na aba do navegador
+            // Notificação na aba do navegador com indicação visual de prioridade
             showBrowserNotification(
               'Novo Pedido Recebido', 
               `O pedido "${data.activity.title}" está disponível para seu setor.`,
@@ -388,143 +418,318 @@ export function useWebSocket() {
             });
           } 
           else if (data.type === 'activity_returned') {
-            // Invalidar cache para atualizar lista de atividades
-            queryClient.invalidateQueries({ queryKey: ['/api/department/activities', user.role] });
-            queryClient.invalidateQueries({ queryKey: ['/api/activities'] });
+            console.time('⚡ [TURBO] Processamento de atividade retornada');
             
-            // Tocar som de alerta usando Audio API diretamente (método extremamente simples)
+            // Determinar se é uma mensagem de alta prioridade
+            const isHighPriority = data._turbo === true || data.system_priority === 'maximum';
+            
+            console.log(`🚨 [TURBO] Atividade retornada${isHighPriority ? ' (PRIORIDADE MÁXIMA)' : ''}: ${data.activity?.title || 'Sem título'}`);
+            
+            // ULTRA: Invalidar cache IMEDIATAMENTE para atualizar todas as listas
+            queryClient.invalidateQueries({ 
+              queryKey: ['/api/department/activities', user.role],
+              refetchType: 'active' // Forçar recarregamento imediato
+            });
+            queryClient.invalidateQueries({ 
+              queryKey: ['/api/activities'],
+              refetchType: 'active'
+            });
+            
+            // Também atualizar estatísticas e contadores para manter UI consistente
+            queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
+            queryClient.invalidateQueries({ queryKey: ['/api/stats/department-counts'] });
+            
+            // MODO DEUS: Reproduzir som de alerta com volume alto e múltiplas tentativas
             try {
+              // Estratégia 1: Audio API direta com volume máximo
               const audio = new Audio('/alert-sound.mp3');
-              audio.volume = 0.6;
+              audio.volume = isHighPriority ? 0.8 : 0.6; // Volume maior para alta prioridade
+              
+              // Primeira tentativa
               audio.play().catch(err => {
-                console.error('Erro ao tocar alerta:', err);
+                console.error('Erro ao tocar alerta (primeira tentativa):', err);
+                
+                // Segunda tentativa com delay
+                setTimeout(() => {
+                  try {
+                    audio.play().catch(e => console.error('Falha na segunda tentativa de som:', e));
+                  } catch (e) {
+                    console.error('Erro na segunda tentativa de reprodução:', e);
+                  }
+                }, 300);
               });
-              console.log('Som de retorno tocado com sucesso!');
+              
+              console.log('🔊 [TURBO] Som de alerta de retorno iniciado');
             } catch (error) {
-              console.error('Erro ao tocar som de retorno:', error);
+              console.error('❌ [TURBO] Erro ao tocar som de alerta de retorno:', error);
             }
             
-            // Emitir evento de retorno para o componente SimpleSoundPlayer (reforço)
-            setMessageData({ type: 'sound', soundType: 'return-alert' });
+            // Estratégia 2: Emitir evento para o componente SimpleSoundPlayer (reforço)
+            setMessageData({ 
+              type: 'sound', 
+              soundType: isHighPriority ? 'return-alert-urgent' : 'return-alert',
+              priority: isHighPriority ? 'high' : 'normal'
+            });
             
-            // Notificação na aba do navegador
+            // Notificação na aba do navegador com indicação de prioridade
             showBrowserNotification(
-              'Pedido Retornado', 
+              isHighPriority ? '⚠️ Pedido Retornado' : 'Pedido Retornado', 
               `O pedido "${data.activity.title}" foi retornado por ${data.returnedBy || 'alguém'} do setor ${data.from}.`,
               `return-activity-${data.activity.id}`
             );
             
-            // Notificar usuário sobre pedido retornado
+            // Notificar usuário sobre pedido retornado com destaque visual
             toast({
-              title: 'Pedido Retornado',
+              title: isHighPriority ? '⚠️ Pedido Retornado' : 'Pedido Retornado',
               description: `O pedido "${data.activity.title}" foi retornado por ${data.returnedBy || 'alguém'} do setor ${data.from}.`,
-              variant: 'destructive',
+              variant: 'destructive', // Sempre usar vermelho para retornos
+              duration: isHighPriority ? 10000 : 6000, // Tempo maior para mensagens importantes
             });
+            
+            console.timeEnd('⚡ [TURBO] Processamento de atividade retornada');
           } 
           else if (data.type === 'activity_returned_update' || data.type === 'activity_completed') {
-            // Invalidar cache para atualizar lista de atividades
-            queryClient.invalidateQueries({ queryKey: ['/api/department/activities', user.role] });
-            queryClient.invalidateQueries({ queryKey: ['/api/activities'] });
-            queryClient.invalidateQueries({ queryKey: ['/api/activities/returned'] });
-            // Atualizar estatísticas também
+            console.time('⚡ [TURBO] Processamento de atualização de status');
+            
+            // Determinar se é uma mensagem de alta prioridade
+            const isHighPriority = data._turbo === true || data.system_priority === 'maximum';
+            
+            console.log(`🔄 [TURBO] Atualização de status${isHighPriority ? ' (PRIORIDADE MÁXIMA)' : ''}: ${data.type}`);
+            
+            // ULTRA: Invalidar cache IMEDIATAMENTE para atualizar todas as listas
+            queryClient.invalidateQueries({ 
+              queryKey: ['/api/department/activities', user.role],
+              refetchType: 'active' // Forçar recarregamento imediato
+            });
+            queryClient.invalidateQueries({ 
+              queryKey: ['/api/activities'],
+              refetchType: 'active'
+            });
+            queryClient.invalidateQueries({ 
+              queryKey: ['/api/activities/returned'],
+              refetchType: 'active'
+            });
+            
+            // Também atualizar estatísticas e contadores para manter UI consistente
+            queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
+            queryClient.invalidateQueries({ queryKey: ['/api/stats/department-counts'] });
             queryClient.invalidateQueries({ queryKey: ['/api/department/stats', user.role] });
+            
+            // Se for alta prioridade, forçar atualização de ainda mais dados
+            if (isHighPriority) {
+              // Tocar som sutil de confirmação
+              try {
+                const audio = new Audio('/success-sound.mp3');
+                audio.volume = 0.3; // Volume baixo para não incomodar
+                audio.play().catch(err => console.error('Erro ao tocar confirmação:', err));
+              } catch (error) {
+                console.error('❌ [TURBO] Erro ao tocar som de confirmação:', error);
+              }
+            }
+            
+            console.timeEnd('⚡ [TURBO] Processamento de atualização de status');
           }
           else if (data.type === 'reprint_request_update') {
-            // Invalidar consultas relacionadas às solicitações de reimpressão
-            queryClient.invalidateQueries({ queryKey: ['/api/reprint-requests'] });
-            queryClient.invalidateQueries({ queryKey: ['/api/reprint-requests/department', user.role] });
+            console.time('⚡ [TURBO] Processamento de atualização de solicitação de reimpressão');
+            
+            // Determinar se é uma mensagem de alta prioridade
+            const isHighPriority = data._turbo === true || data.system_priority === 'maximum';
+            
+            console.log(`🔄 [TURBO] Atualização de reimpressão${isHighPriority ? ' (PRIORIDADE MÁXIMA)' : ''}: ${data.status}`);
+            
+            // ULTRA: Invalidar cache IMEDIATAMENTE para atualizar todas as listas
+            queryClient.invalidateQueries({ 
+              queryKey: ['/api/reprint-requests'],
+              refetchType: 'active' // Forçar recarregamento imediato
+            });
+            queryClient.invalidateQueries({ 
+              queryKey: ['/api/reprint-requests/department', user.role],
+              refetchType: 'active'
+            });
             
             // Notificar usuário sobre atualização na solicitação
             if (data.status === 'em_andamento') {
               toast({
-                title: 'Solicitação de Reimpressão em Andamento',
+                title: isHighPriority ? '🔄 Reimpressão em Andamento' : 'Solicitação de Reimpressão em Andamento',
                 description: `A solicitação para o pedido "${data.activityTitle}" foi aceita por ${data.processedBy || 'impressão'}.`,
                 variant: 'default',
+                duration: isHighPriority ? 8000 : 5000,
               });
               
-              // Tocar som de confirmação
+              // MODO DEUS: Reproduzir som com estratégias múltiplas
               try {
+                // Estratégia 1: Audio API direta
                 const audio = new Audio('/confirm-sound.mp3');
-                audio.volume = 0.5;
+                audio.volume = isHighPriority ? 0.6 : 0.5;
+                
+                // Primeira tentativa
                 audio.play().catch(err => {
-                  console.error('Erro ao tocar som de confirmação:', err);
+                  console.error('Erro ao tocar confirmação (primeira tentativa):', err);
+                  
+                  // Segunda tentativa com delay
+                  setTimeout(() => {
+                    try {
+                      audio.play().catch(e => console.error('Falha na segunda tentativa de som:', e));
+                    } catch (e) {
+                      console.error('Erro na segunda tentativa de reprodução:', e);
+                    }
+                  }, 300);
                 });
+                
+                console.log('🔊 [TURBO] Som de confirmação iniciado');
               } catch (error) {
-                console.error('Erro ao tocar som de confirmação:', error);
+                console.error('❌ [TURBO] Erro ao tocar som de confirmação:', error);
               }
               
-              // Emitir evento de som para o componente SimpleSoundPlayer
-              setMessageData({ type: 'sound', soundType: 'confirm-sound' });
+              // Estratégia 2: Emitir evento para o componente SimpleSoundPlayer (reforço)
+              setMessageData({ 
+                type: 'sound', 
+                soundType: isHighPriority ? 'confirm-sound-urgent' : 'confirm-sound',
+                priority: isHighPriority ? 'high' : 'normal' 
+              });
             } 
             else if (data.status === 'concluido') {
               toast({
-                title: 'Solicitação de Reimpressão Concluída',
+                title: isHighPriority ? '✅ Reimpressão Concluída' : 'Solicitação de Reimpressão Concluída',
                 description: `A reimpressão para o pedido "${data.activityTitle}" foi finalizada por ${data.processedBy || 'impressão'}.`,
                 variant: 'default',
+                duration: isHighPriority ? 8000 : 5000,
               });
               
-              // Tocar som de sucesso
+              // MODO DEUS: Reproduzir som com estratégias múltiplas
               try {
+                // Estratégia 1: Audio API direta
                 const audio = new Audio('/success-sound.mp3');
-                audio.volume = 0.5;
+                audio.volume = isHighPriority ? 0.6 : 0.5;
+                
+                // Primeira tentativa
                 audio.play().catch(err => {
-                  console.error('Erro ao tocar som de sucesso:', err);
+                  console.error('Erro ao tocar sucesso (primeira tentativa):', err);
+                  
+                  // Segunda tentativa com delay
+                  setTimeout(() => {
+                    try {
+                      audio.play().catch(e => console.error('Falha na segunda tentativa de som:', e));
+                    } catch (e) {
+                      console.error('Erro na segunda tentativa de reprodução:', e);
+                    }
+                  }, 300);
                 });
+                
+                console.log('🔊 [TURBO] Som de sucesso iniciado');
               } catch (error) {
-                console.error('Erro ao tocar som de sucesso:', error);
+                console.error('❌ [TURBO] Erro ao tocar som de sucesso:', error);
               }
               
-              // Emitir evento de som para o componente SimpleSoundPlayer
-              setMessageData({ type: 'sound', soundType: 'success-sound' });
+              // Estratégia 2: Emitir evento para o componente SimpleSoundPlayer (reforço)
+              setMessageData({ 
+                type: 'sound', 
+                soundType: isHighPriority ? 'success-sound-urgent' : 'success-sound',
+                priority: isHighPriority ? 'high' : 'normal'
+              });
             }
             else if (data.status === 'cancelado') {
               toast({
-                title: 'Solicitação de Reimpressão Cancelada',
+                title: isHighPriority ? '❌ Reimpressão Cancelada' : 'Solicitação de Reimpressão Cancelada',
                 description: `A solicitação para o pedido "${data.activityTitle}" foi cancelada por ${data.processedBy || 'alguém'}.`,
                 variant: 'destructive',
+                duration: isHighPriority ? 8000 : 5000,
               });
               
-              // Tocar som de alerta
+              // MODO DEUS: Reproduzir som com estratégias múltiplas
               try {
+                // Estratégia 1: Audio API direta
                 const audio = new Audio('/alert-sound.mp3');
-                audio.volume = 0.5;
+                audio.volume = isHighPriority ? 0.7 : 0.5; // Volume maior para alta prioridade
+                
+                // Primeira tentativa
                 audio.play().catch(err => {
-                  console.error('Erro ao tocar som de alerta:', err);
+                  console.error('Erro ao tocar alerta (primeira tentativa):', err);
+                  
+                  // Segunda tentativa com delay
+                  setTimeout(() => {
+                    try {
+                      audio.play().catch(e => console.error('Falha na segunda tentativa de som:', e));
+                    } catch (e) {
+                      console.error('Erro na segunda tentativa de reprodução:', e);
+                    }
+                  }, 300);
                 });
+                
+                console.log('🔊 [TURBO] Som de alerta iniciado');
               } catch (error) {
-                console.error('Erro ao tocar som de alerta:', error);
+                console.error('❌ [TURBO] Erro ao tocar som de alerta:', error);
               }
               
-              // Emitir evento de som para o componente SimpleSoundPlayer
-              setMessageData({ type: 'sound', soundType: 'alert-sound' });
+              // Estratégia 2: Emitir evento para o componente SimpleSoundPlayer (reforço)
+              setMessageData({ 
+                type: 'sound', 
+                soundType: isHighPriority ? 'alert-sound-urgent' : 'alert-sound',
+                priority: isHighPriority ? 'high' : 'normal'
+              });
             }
+            
+            console.timeEnd('⚡ [TURBO] Processamento de atualização de solicitação de reimpressão');
           }
           else if (data.type === 'new_reprint_request') {
-            // Invalidar consultas relacionadas às solicitações de reimpressão
-            queryClient.invalidateQueries({ queryKey: ['/api/reprint-requests'] });
-            queryClient.invalidateQueries({ queryKey: ['/api/reprint-requests/department', user.role] });
+            console.time('⚡ [TURBO] Processamento de nova solicitação de reimpressão');
             
-            // Tocar som usando Audio API diretamente (método extremamente simples)
+            // Determinar se é uma mensagem de alta prioridade
+            const isHighPriority = data._turbo === true || data.system_priority === 'maximum';
+            
+            console.log(`🆕 [TURBO] Nova solicitação de reimpressão${isHighPriority ? ' (PRIORIDADE MÁXIMA)' : ''}: ${data.activityTitle || 'Sem título'}`);
+            
+            // ULTRA: Invalidar cache IMEDIATAMENTE para atualizar todas as listas
+            queryClient.invalidateQueries({ 
+              queryKey: ['/api/reprint-requests'],
+              refetchType: 'active' // Forçar recarregamento imediato
+            });
+            queryClient.invalidateQueries({ 
+              queryKey: ['/api/reprint-requests/department', user.role],
+              refetchType: 'active'
+            });
+            
+            // MODO DEUS: Reproduzir som com estratégias múltiplas
             try {
+              // Estratégia 1: Audio API direta
               const audio = new Audio('/notification-sound.mp3');
-              audio.volume = 0.5;
+              audio.volume = isHighPriority ? 0.7 : 0.5; // Volume maior para alta prioridade
+              
+              // Primeira tentativa
               audio.play().catch(err => {
-                console.error('Erro ao tocar notificação:', err);
+                console.error('Erro ao tocar notificação (primeira tentativa):', err);
+                
+                // Segunda tentativa com delay
+                setTimeout(() => {
+                  try {
+                    audio.play().catch(e => console.error('Falha na segunda tentativa de som:', e));
+                  } catch (e) {
+                    console.error('Erro na segunda tentativa de reprodução:', e);
+                  }
+                }, 300);
               });
-              console.log('Som de nova solicitação tocado com sucesso!');
+              
+              console.log('🔊 [TURBO] Som de nova solicitação iniciado');
             } catch (error) {
-              console.error('Erro ao tocar som de nova solicitação:', error);
+              console.error('❌ [TURBO] Erro ao tocar som de nova solicitação:', error);
             }
             
-            // Emitir evento de nova atividade para o componente SimpleSoundPlayer (reforço)
-            setMessageData({ type: 'sound', soundType: 'new-reprint-request' });
-            
-            // Notificar usuário sobre nova solicitação de reimpressão
-            toast({
-              title: 'Nova Solicitação de Reimpressão',
-              description: `Uma nova solicitação para reimpressão do pedido "${data.activityTitle}" foi registrada.`,
-              variant: 'default',
+            // Estratégia 2: Emitir evento para o componente SimpleSoundPlayer (reforço)
+            setMessageData({ 
+              type: 'sound', 
+              soundType: isHighPriority ? 'new-reprint-request-urgent' : 'new-reprint-request',
+              priority: isHighPriority ? 'high' : 'normal'
             });
+            
+            // Notificar usuário sobre nova solicitação de reimpressão com indicação visual de prioridade
+            toast({
+              title: isHighPriority ? '🔄 Nova Solicitação de Reimpressão' : 'Nova Solicitação de Reimpressão',
+              description: `Uma nova solicitação para reimpressão do pedido "${data.activityTitle}" foi registrada.`,
+              variant: isHighPriority ? 'destructive' : 'default',
+              duration: isHighPriority ? 10000 : 6000, // Tempo maior para prioridade alta
+            });
+            
+            console.timeEnd('⚡ [TURBO] Processamento de nova solicitação de reimpressão');
           }
           
         } catch (parseError) {

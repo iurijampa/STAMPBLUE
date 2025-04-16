@@ -1850,15 +1850,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
             activityId: activity.id
           });
           
-          // Se existe próximo departamento, notificar
+          // TURBO: Se existe próximo departamento, notificar com PRIORIDADE MÁXIMA
           if (departmentIndex < DEPARTMENTS.length - 1) {
             const nextDepartment = DEPARTMENTS[departmentIndex + 1];
             
-            // Notificar o próximo departamento
+            console.time('⚡ [TURBO] Tempo para notificar próximo departamento');
+            
+            // Notificar o próximo departamento com alta prioridade para garantir entrega instantânea
             (global as any).wsNotifications.notifyDepartment(nextDepartment, {
               type: 'new_activity',
-              activity
-            });
+              activity,
+              _turbo: true, // Flag para processamento prioritário
+              system_priority: 'maximum' // Indicador adicional de prioridade máxima
+            }, true); // TRUE = alta prioridade
+            
+            console.timeEnd('⚡ [TURBO] Tempo para notificar próximo departamento');
           }
           
           // TURBO: Notificar administradores com PRIORIDADE MÁXIMA para garantir entrega instantânea

@@ -185,13 +185,20 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
           console.time('⚡ [WS] Processamento de mensagem WebSocket');
           const data = JSON.parse(event.data);
           
+          // Verificar se a mensagem é de alta prioridade
+          const isHighPriority = data._turbo === true || data.system_priority === 'maximum';
+          
+          if (isHighPriority) {
+            console.log('🔥 [TURBO] MENSAGEM DE ALTA PRIORIDADE RECEBIDA!', data.type);
+          }
+          
           if (data.type === 'notification') {
             // Notificação recebida - PRIORIDADE ALTA
             toast({
-              title: data.title || 'Nova notificação',
+              title: isHighPriority ? `⚠️ ${data.title || 'Nova notificação'}` : data.title || 'Nova notificação',
               description: data.message,
               variant: data.variant || 'default',
-              duration: 5000
+              duration: isHighPriority ? 10000 : 5000
             });
             
             // TURBO: Atualizar cache IMEDIATAMENTE para todas as queries relevantes
@@ -208,17 +215,53 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
               // ULTRA: Também atualizar stats e contadores para garantir UI consistente
               queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
               queryClient.invalidateQueries({ queryKey: ['/api/stats/department-counts'] });
+              
+              // DEUS: Invalidar ainda mais queries para alta prioridade
+              if (isHighPriority) {
+                queryClient.invalidateQueries({ 
+                  queryKey: ['/api/activities'],
+                  refetchType: 'active',
+                });
+                queryClient.invalidateQueries({ 
+                  queryKey: ['/api/activities/returned'],
+                  refetchType: 'active',
+                });
+              }
             }
             
             // MODO DEUS: Reproduzir som para departamento específico com múltiplas tentativas
             if (data.department && departmentListeners.has(data.department)) {
-              console.log('🔔 [TURBO] Reproduzindo som para departamento:', data.department);
+              console.log(`🔔 [TURBO] Reproduzindo som para departamento: ${data.department}${isHighPriority ? ' (URGENTE)' : ''}`);
+              
+              // Estratégia 1: Usar função global
               if (window.playSoundAlert) {
                 try {
                   window.playSoundAlert();
+                  
+                  // Segunda tentativa para prioridade alta
+                  if (isHighPriority) {
+                    setTimeout(() => {
+                      try {
+                        window.playSoundAlert?.();
+                      } catch (e) {
+                        console.error('Erro na segunda tentativa de som global:', e);
+                      }
+                    }, 500);
+                  }
                 } catch (e) {
-                  console.error('Erro ao reproduzir som:', e);
+                  console.error('Erro ao reproduzir som global:', e);
                 }
+              }
+              
+              // Estratégia 2: Audio API direta como fallback
+              try {
+                const audio = new Audio(isHighPriority ? '/alert-sound.mp3' : '/notification-sound.mp3');
+                audio.volume = isHighPriority ? 0.7 : 0.5;
+                audio.play().catch(err => {
+                  console.error('Erro ao tocar som de notificação fallback:', err);
+                });
+              } catch (error) {
+                console.error('Erro ao tocar som fallback:', error);
               }
             }
             
@@ -226,7 +269,7 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
             console.time('⚡ [TURBO] Processamento de atualização de dados');
             
             // TURBO: Invalidar cache IMEDIATAMENTE
-            console.log('🚀 [TURBO] Recebida atualização de dados crítica! Processando...');
+            console.log(`🚀 [TURBO] Recebida atualização de dados ${isHighPriority ? 'CRÍTICA' : 'importante'}! Processando...`);
             queryClient.invalidateQueries({ 
               queryKey: data.queryKey || ['/api/activities'],
               // Forçar refetch para garantir dados atualizados
@@ -237,15 +280,65 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
             queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
             queryClient.invalidateQueries({ queryKey: ['/api/stats/department-counts'] });
             
+            // DEUS: Invalidar ainda mais queries para alta prioridade
+            if (isHighPriority) {
+              queryClient.invalidateQueries({ 
+                queryKey: ['/api/activities/returned'],
+                refetchType: 'active',
+              });
+              // Se prioridade máxima, atualizar TODAS as consultas
+              if (data.system_priority === 'maximum') {
+                console.log('🔥 [TURBO] PRIORIDADE MÁXIMA - ATUALIZANDO TODAS AS CONSULTAS!');
+                queryClient.invalidateQueries();
+              }
+            }
+            
             // MODO DEUS: Reproduzir som com alta prioridade
             if (data.department && departmentListeners.has(data.department)) {
-              console.log('🔔 [TURBO] Reproduzindo som para departamento:', data.department);
+              console.log(`🔔 [TURBO] Reproduzindo som para departamento: ${data.department}${isHighPriority ? ' (URGENTE)' : ''}`);
+              
+              // Estratégia 1: Usar função global
               if (window.playSoundAlert) {
                 try {
                   window.playSoundAlert();
+                  
+                  // Segunda tentativa para prioridade alta
+                  if (isHighPriority) {
+                    setTimeout(() => {
+                      try {
+                        window.playSoundAlert?.();
+                      } catch (e) {
+                        console.error('Erro na segunda tentativa de som global:', e);
+                      }
+                    }, 500);
+                  }
                 } catch (e) {
-                  console.error('Erro ao reproduzir som:', e);
+                  console.error('Erro ao reproduzir som global:', e);
                 }
+              }
+              
+              // Estratégia 2: Audio API direta como fallback
+              try {
+                const soundFile = isHighPriority ? '/alert-sound.mp3' : '/notification-sound.mp3';
+                const audio = new Audio(soundFile);
+                audio.volume = isHighPriority ? 0.7 : 0.5;
+                
+                audio.play().catch(err => {
+                  console.error('Erro ao tocar som de notificação fallback:', err);
+                  
+                  // Segunda tentativa com delay
+                  setTimeout(() => {
+                    try {
+                      const backupAudio = new Audio(soundFile);
+                      backupAudio.volume = isHighPriority ? 0.8 : 0.6; // Volume ainda maior na segunda tentativa
+                      backupAudio.play().catch(e => console.error('Erro na segunda tentativa de som:', e));
+                    } catch (e) {
+                      console.error('Erro na criação do backup de áudio:', e);
+                    }
+                  }, 300);
+                });
+              } catch (error) {
+                console.error('Erro ao tocar som fallback:', error);
               }
             }
             
