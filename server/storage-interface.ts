@@ -24,6 +24,7 @@ export interface IStorage {
   getActivitiesByDepartment(department: string): Promise<Activity[]>;
   updateActivity(id: number, activityData: InsertActivity): Promise<Activity>;
   updateActivityStatus(id: number, status: string): Promise<Activity>;
+  updateActivityImages(id: number, image: string, additionalImages: string[]): Promise<Activity>;
   deleteActivity(id: number): Promise<void>;
   getActivityStats(): Promise<{ total: number, inProgress: number, completed: number }>;
   
