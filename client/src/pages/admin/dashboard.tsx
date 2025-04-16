@@ -934,9 +934,27 @@ function ActivitiesList(showCompleted: boolean = false) {
       <CreateActivityModal 
         isOpen={createModalOpen}
         onClose={() => setCreateModalOpen(false)}
-        onSuccess={() => {
+        onSuccess={async () => {
           setCreateModalOpen(false);
-          queryClient.invalidateQueries({ queryKey: ["/api/activities"] });
+          
+          // SOLUÇÃO ULTRA AGRESSIVA para o problema de novos pedidos não aparecerem
+          console.log("🚨 SOLUÇÃO ULTRA AGRESSIVA: Forçando atualização após criação de pedido");
+          
+          // Mostrar toast de carregando
+          toast({
+            title: "Atualizando...",
+            description: "Aguarde enquanto buscamos as informações mais recentes",
+          });
+          
+          // 1. Limpar todos os caches do React Query
+          await invalidateAllQueries();
+          
+          // 2. Forçar uma pausa para permitir que o servidor processe
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          // 3. Forçar recarregamento da página inteira - SOLUÇÃO NUCLEAR
+          window.location.reload();
+          
           toast({
             title: "Sucesso",
             description: "Pedido criado com sucesso",
