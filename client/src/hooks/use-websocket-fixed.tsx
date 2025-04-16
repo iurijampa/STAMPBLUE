@@ -3,25 +3,25 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useToast } from './use-toast';
 import { queryClient } from '@/lib/queryClient';
 
-// CONFIGURAÇÃO TURBO-OTIMIZADA - VERSÃO 3.0 COM DESEMPENHO EXTREMO E ALTA CONFIABILIDADE
-// Configurações de polling - otimização máxima para resposta instantânea
-const MIN_POLLING_INTERVAL = 4000; // 4 segundos - atualizações ultra-frequentes para responsividade imediata
-const MAX_POLLING_INTERVAL = 12000; // 12 segundos - intervalo máximo reduzido para dados sempre atualizados
-const POLLING_BACKOFF_FACTOR = 1.2; // Crescimento mais suave do tempo entre pollings para melhor responsividade
+// CONFIGURAÇÃO ULTRA-OTIMIZADA PARA MÁXIMA ESTABILIDADE, CONFIABILIDADE E EFICIÊNCIA DE RECURSOS
+// Configurações de polling - equilíbrio entre atualizações e economia de recursos
+const MIN_POLLING_INTERVAL = 8000; // 8 segundos - menor número de chamadas mas mais frequente
+const MAX_POLLING_INTERVAL = 30000; // 30 segundos - máximo intervalo para garantir dados sempre atualizados
+const POLLING_BACKOFF_FACTOR = 1.5; // Aumenta gradualmente o tempo entre polling
 
-// Configurações de WebSocket - otimização para velocidade, confiabilidade e recuperação rápida
-const HEARTBEAT_INTERVAL = 40000; // 40 segundos - mais frequente para detectar problemas ainda mais rapidamente
-const HEARTBEAT_TIMEOUT = 5000; // 5 segundos - timeout mais curto para detecção ultra-rápida de problemas
-const WS_CONNECT_TIMEOUT = 4000; // 4 segundos - timeout reduzido para estabelecer conexão mais rapidamente
+// Configurações de WebSocket - otimização para máxima estabilidade
+const HEARTBEAT_INTERVAL = 90000; // 1.5 minutos - mais frequente para detectar problemas antes
+const HEARTBEAT_TIMEOUT = 9000; // 9 segundos - timeout mais tolerante para redes lentas
+const WS_CONNECT_TIMEOUT = 7000; // 7 segundos - timeout para estabelecer conexão
 
-// Configurações de reconexão - estratégia ultra-rápida, resiliente e com prioridade máxima
-const INITIAL_RECONNECT_DELAY = 800; // 0.8 segundos inicial - resposta quase instantânea no primeiro erro
-const MAX_RECONNECT_DELAY = 15000; // 15 segundos - limite máximo reduzido para recuperação ultra-rápida
-const RECONNECT_BACKOFF_FACTOR = 1.3; // Fator de crescimento do atraso - balanceado para desempenho e estabilidade
-const JITTER_MAX = 0.15; // 15% de variação aleatória para evitar reconexões simultâneas
-const MAX_RECONNECT_ATTEMPTS = 4; // 4 tentativas antes de pausa
-const RECONNECT_PAUSE = 12000; // 12 segundos de pausa após várias tentativas
-const MAX_CONSECUTIVE_ERRORS = 3; // Após apenas 3 erros, ativar polling mais agressivo
+// Configurações de reconexão - estratégia inteligente adaptativa
+const INITIAL_RECONNECT_DELAY = 1800; // 1.8 segundos inicial - resposta mais rápida no primeiro erro
+const MAX_RECONNECT_DELAY = 35000; // 35 segundos - limite máximo reduzido para reconexão mais rápida
+const RECONNECT_BACKOFF_FACTOR = 1.5; // Fator de crescimento do atraso - otimizado
+const JITTER_MAX = 0.2; // 20% de variação aleatória para evitar reconexões simultâneas
+const MAX_RECONNECT_ATTEMPTS = 3; // 3 tentativas antes de pausa mais longa
+const RECONNECT_PAUSE = 20000; // 20 segundos de pausa após várias tentativas
+const MAX_CONSECUTIVE_ERRORS = 5; // Após 5 erros consecutivos, fazer polling mais agressivo
 
 export function useWebSocket() {
   const { user } = useAuth();
@@ -55,74 +55,45 @@ export function useWebSocket() {
   // Referência para armazenar o timestamp da última atualização de dados
   const lastUpdateRef = useRef<number | null>(null);
   
-  // Função super-otimizada para atualizar dados periodicamente com recursos avançados
   const refreshDataPeriodically = useCallback(async () => {
     if (!user) return;
     
     try {
-      // Registrar quando a última atualização ocorreu e calcular o tempo desde a última atualização
+      // Registrar quando a última atualização ocorreu
       const now = Date.now();
       const lastUpdateTime = lastUpdateRef.current;
       
-      // Sistema de prevenção de atualização excessiva usando threshold adaptativo
-      const minUpdateInterval = connected ? 1000 : 800; // Threshold reduzido para 0.8s quando WebSocket está desconectado
-      
-      if (lastUpdateTime && now - lastUpdateTime < minUpdateInterval) {
+      // MODO DE EMERGÊNCIA: Reduzir drasticamente o tempo entre atualizações
+      // Agora só bloqueia se tiver passado menos de 2 segundos (antes era 10)
+      if (lastUpdateTime && now - lastUpdateTime < 2000) {
         console.log('Ignorando atualização muito frequente - última há', Math.floor((now - lastUpdateTime)/1000), 'segundos');
-        return false; // Retorna false para indicar que não houve atualização
+        return;
       }
       
       console.log(`Atualizando dados para ${user.role} via polling...`);
-      lastUpdateRef.current = now; // Atualizar timestamp antes da operação para evitar solicitações simultâneas
+      lastUpdateRef.current = now;
       
-      // Lista de queries para atualizar com prioridades diferentes
-      const queries = [];
-      
-      // Sempre buscar atividades do departamento atual com alta prioridade
-      queries.push(queryClient.invalidateQueries({ 
-        queryKey: ['/api/department/activities', user.role],
-        // Opções de invalidação otimizadas para melhor desempenho
-        refetchType: 'active', // Recarregar apenas queries ativas
-      }));
-      
-      // Buscar estatísticas do departamento
-      queries.push(queryClient.invalidateQueries({ 
-        queryKey: ['/api/department/stats', user.role],
-        refetchType: 'active',
-      }));
-      
-      // Para admin, buscar todas as atividades
-      if (user.role === 'admin') {
-        queries.push(queryClient.invalidateQueries({ 
-          queryKey: ['/api/activities'],
-          refetchType: 'active',
-        }));
-      }
-      
-      // Executar todas as atualizações em paralelo para máxima eficiência
-      await Promise.all(queries);
+      // Atualizar atividades e estatísticas do departamento via polling quando o WebSocket não funciona
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['/api/department/activities', user.role] }),
+        queryClient.invalidateQueries({ queryKey: ['/api/department/stats', user.role] }),
+        queryClient.invalidateQueries({ queryKey: ['/api/activities'] })
+      ]);
       
       // Após atualizar os dados, notificar os componentes que possam estar interessados
       // Isso simula o recebimento de uma mensagem WebSocket
-      setMessageData({ 
-        type: 'data_refreshed', 
-        timestamp: Date.now(),
-        source: 'polling'
-      });
+      setMessageData({ type: 'data_refreshed', timestamp: Date.now() });
       
-      // Verificar imediatamente se há novas atividades (sem delay para maior responsividade)
-      setMessageData({ 
-        type: 'sound', 
-        soundType: 'check_activities',
-        timestamp: Date.now()
-      });
+      // Após 500ms, verificar se houve mudanças nos dados e notificar
+      setTimeout(() => {
+        // Enviar um evento de som para garantir que o sistema verifique por novas atividades
+        setMessageData({ type: 'sound', soundType: 'check_activities' });
+      }, 500);
       
-      return true; // Retorna true para indicar sucesso
     } catch (err) {
       console.error('Erro ao atualizar dados:', err);
-      return false; // Retorna false para indicar falha
     }
-  }, [user, connected, queryClient]);
+  }, [user]);
   
   // Função para forçar atualização de dados diretamente (sem esperar pelo WebSocket)
   const updateDataFromServer = useCallback(() => {
@@ -354,56 +325,26 @@ export function useWebSocket() {
             });
           } 
           else if (data.type === 'new_activity') {
-            console.time('⚡ [TURBO] Processamento de nova atividade');
+            // Invalidar cache para atualizar lista de atividades
+            queryClient.invalidateQueries({ queryKey: ['/api/department/activities', user.role] });
+            queryClient.invalidateQueries({ queryKey: ['/api/activities'] });
             
-            // Determinar se é uma mensagem de alta prioridade
-            const isHighPriority = data._turbo === true || data.system_priority === 'maximum';
-            
-            console.log(`🚀 [TURBO] Nova atividade recebida${isHighPriority ? ' (PRIORIDADE MÁXIMA)' : ''}: ${data.activity?.title || 'Sem título'}`);
-            
-            // ULTRA: Invalidar cache IMEDIATAMENTE para atualizar todas as listas
-            queryClient.invalidateQueries({ 
-              queryKey: ['/api/department/activities', user.role],
-              refetchType: 'active' // Forçar recarregamento imediato
-            });
-            queryClient.invalidateQueries({ 
-              queryKey: ['/api/activities'],
-              refetchType: 'active'
-            });
-            
-            // MODO DEUS: Reproduzir som com diversas estratégias para garantir que seja ouvido
+            // Tocar som usando Audio API diretamente (método extremamente simples)
             try {
-              // Estratégia 1: Audio API direta com volume máximo para ALTA PRIORIDADE
               const audio = new Audio('/notification-sound.mp3');
-              audio.volume = isHighPriority ? 0.8 : 0.5; // Volume maior para alta prioridade
-              
-              // Primeira tentativa
+              audio.volume = 0.5;
               audio.play().catch(err => {
-                console.error('Erro ao tocar notificação (primeira tentativa):', err);
-                
-                // Segunda tentativa com delay
-                setTimeout(() => {
-                  try {
-                    audio.play().catch(e => console.error('Falha na segunda tentativa de som:', e));
-                  } catch (e) {
-                    console.error('Erro na segunda tentativa de reprodução:', e);
-                  }
-                }, 300);
+                console.error('Erro ao tocar notificação:', err);
               });
-              
-              console.log('🔊 [TURBO] Som de nova atividade iniciado');
+              console.log('Som de nova atividade tocado com sucesso!');
             } catch (error) {
-              console.error('❌ [TURBO] Erro ao tocar som de nova atividade:', error);
+              console.error('Erro ao tocar som de nova atividade:', error);
             }
             
-            // Estratégia 2: Emitir evento para o componente SimpleSoundPlayer (reforço)
-            setMessageData({ 
-              type: 'sound', 
-              soundType: isHighPriority ? 'new-activity-urgent' : 'new-activity',
-              priority: isHighPriority ? 'high' : 'normal'
-            });
+            // Emitir evento de nova atividade para o componente SimpleSoundPlayer (reforço)
+            setMessageData({ type: 'sound', soundType: 'new-activity' });
             
-            // Notificação na aba do navegador com indicação visual de prioridade
+            // Notificação na aba do navegador
             showBrowserNotification(
               'Novo Pedido Recebido', 
               `O pedido "${data.activity.title}" está disponível para seu setor.`,
@@ -418,318 +359,143 @@ export function useWebSocket() {
             });
           } 
           else if (data.type === 'activity_returned') {
-            console.time('⚡ [TURBO] Processamento de atividade retornada');
+            // Invalidar cache para atualizar lista de atividades
+            queryClient.invalidateQueries({ queryKey: ['/api/department/activities', user.role] });
+            queryClient.invalidateQueries({ queryKey: ['/api/activities'] });
             
-            // Determinar se é uma mensagem de alta prioridade
-            const isHighPriority = data._turbo === true || data.system_priority === 'maximum';
-            
-            console.log(`🚨 [TURBO] Atividade retornada${isHighPriority ? ' (PRIORIDADE MÁXIMA)' : ''}: ${data.activity?.title || 'Sem título'}`);
-            
-            // ULTRA: Invalidar cache IMEDIATAMENTE para atualizar todas as listas
-            queryClient.invalidateQueries({ 
-              queryKey: ['/api/department/activities', user.role],
-              refetchType: 'active' // Forçar recarregamento imediato
-            });
-            queryClient.invalidateQueries({ 
-              queryKey: ['/api/activities'],
-              refetchType: 'active'
-            });
-            
-            // Também atualizar estatísticas e contadores para manter UI consistente
-            queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
-            queryClient.invalidateQueries({ queryKey: ['/api/stats/department-counts'] });
-            
-            // MODO DEUS: Reproduzir som de alerta com volume alto e múltiplas tentativas
+            // Tocar som de alerta usando Audio API diretamente (método extremamente simples)
             try {
-              // Estratégia 1: Audio API direta com volume máximo
               const audio = new Audio('/alert-sound.mp3');
-              audio.volume = isHighPriority ? 0.8 : 0.6; // Volume maior para alta prioridade
-              
-              // Primeira tentativa
+              audio.volume = 0.6;
               audio.play().catch(err => {
-                console.error('Erro ao tocar alerta (primeira tentativa):', err);
-                
-                // Segunda tentativa com delay
-                setTimeout(() => {
-                  try {
-                    audio.play().catch(e => console.error('Falha na segunda tentativa de som:', e));
-                  } catch (e) {
-                    console.error('Erro na segunda tentativa de reprodução:', e);
-                  }
-                }, 300);
+                console.error('Erro ao tocar alerta:', err);
               });
-              
-              console.log('🔊 [TURBO] Som de alerta de retorno iniciado');
+              console.log('Som de retorno tocado com sucesso!');
             } catch (error) {
-              console.error('❌ [TURBO] Erro ao tocar som de alerta de retorno:', error);
+              console.error('Erro ao tocar som de retorno:', error);
             }
             
-            // Estratégia 2: Emitir evento para o componente SimpleSoundPlayer (reforço)
-            setMessageData({ 
-              type: 'sound', 
-              soundType: isHighPriority ? 'return-alert-urgent' : 'return-alert',
-              priority: isHighPriority ? 'high' : 'normal'
-            });
+            // Emitir evento de retorno para o componente SimpleSoundPlayer (reforço)
+            setMessageData({ type: 'sound', soundType: 'return-alert' });
             
-            // Notificação na aba do navegador com indicação de prioridade
+            // Notificação na aba do navegador
             showBrowserNotification(
-              isHighPriority ? '⚠️ Pedido Retornado' : 'Pedido Retornado', 
+              'Pedido Retornado', 
               `O pedido "${data.activity.title}" foi retornado por ${data.returnedBy || 'alguém'} do setor ${data.from}.`,
               `return-activity-${data.activity.id}`
             );
             
-            // Notificar usuário sobre pedido retornado com destaque visual
+            // Notificar usuário sobre pedido retornado
             toast({
-              title: isHighPriority ? '⚠️ Pedido Retornado' : 'Pedido Retornado',
+              title: 'Pedido Retornado',
               description: `O pedido "${data.activity.title}" foi retornado por ${data.returnedBy || 'alguém'} do setor ${data.from}.`,
-              variant: 'destructive', // Sempre usar vermelho para retornos
-              duration: isHighPriority ? 10000 : 6000, // Tempo maior para mensagens importantes
+              variant: 'destructive',
             });
-            
-            console.timeEnd('⚡ [TURBO] Processamento de atividade retornada');
           } 
           else if (data.type === 'activity_returned_update' || data.type === 'activity_completed') {
-            console.time('⚡ [TURBO] Processamento de atualização de status');
-            
-            // Determinar se é uma mensagem de alta prioridade
-            const isHighPriority = data._turbo === true || data.system_priority === 'maximum';
-            
-            console.log(`🔄 [TURBO] Atualização de status${isHighPriority ? ' (PRIORIDADE MÁXIMA)' : ''}: ${data.type}`);
-            
-            // ULTRA: Invalidar cache IMEDIATAMENTE para atualizar todas as listas
-            queryClient.invalidateQueries({ 
-              queryKey: ['/api/department/activities', user.role],
-              refetchType: 'active' // Forçar recarregamento imediato
-            });
-            queryClient.invalidateQueries({ 
-              queryKey: ['/api/activities'],
-              refetchType: 'active'
-            });
-            queryClient.invalidateQueries({ 
-              queryKey: ['/api/activities/returned'],
-              refetchType: 'active'
-            });
-            
-            // Também atualizar estatísticas e contadores para manter UI consistente
-            queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
-            queryClient.invalidateQueries({ queryKey: ['/api/stats/department-counts'] });
+            // Invalidar cache para atualizar lista de atividades
+            queryClient.invalidateQueries({ queryKey: ['/api/department/activities', user.role] });
+            queryClient.invalidateQueries({ queryKey: ['/api/activities'] });
+            queryClient.invalidateQueries({ queryKey: ['/api/activities/returned'] });
+            // Atualizar estatísticas também
             queryClient.invalidateQueries({ queryKey: ['/api/department/stats', user.role] });
-            
-            // Se for alta prioridade, forçar atualização de ainda mais dados
-            if (isHighPriority) {
-              // Tocar som sutil de confirmação
-              try {
-                const audio = new Audio('/success-sound.mp3');
-                audio.volume = 0.3; // Volume baixo para não incomodar
-                audio.play().catch(err => console.error('Erro ao tocar confirmação:', err));
-              } catch (error) {
-                console.error('❌ [TURBO] Erro ao tocar som de confirmação:', error);
-              }
-            }
-            
-            console.timeEnd('⚡ [TURBO] Processamento de atualização de status');
           }
           else if (data.type === 'reprint_request_update') {
-            console.time('⚡ [TURBO] Processamento de atualização de solicitação de reimpressão');
-            
-            // Determinar se é uma mensagem de alta prioridade
-            const isHighPriority = data._turbo === true || data.system_priority === 'maximum';
-            
-            console.log(`🔄 [TURBO] Atualização de reimpressão${isHighPriority ? ' (PRIORIDADE MÁXIMA)' : ''}: ${data.status}`);
-            
-            // ULTRA: Invalidar cache IMEDIATAMENTE para atualizar todas as listas
-            queryClient.invalidateQueries({ 
-              queryKey: ['/api/reprint-requests'],
-              refetchType: 'active' // Forçar recarregamento imediato
-            });
-            queryClient.invalidateQueries({ 
-              queryKey: ['/api/reprint-requests/department', user.role],
-              refetchType: 'active'
-            });
+            // Invalidar consultas relacionadas às solicitações de reimpressão
+            queryClient.invalidateQueries({ queryKey: ['/api/reprint-requests'] });
+            queryClient.invalidateQueries({ queryKey: ['/api/reprint-requests/department', user.role] });
             
             // Notificar usuário sobre atualização na solicitação
             if (data.status === 'em_andamento') {
               toast({
-                title: isHighPriority ? '🔄 Reimpressão em Andamento' : 'Solicitação de Reimpressão em Andamento',
+                title: 'Solicitação de Reimpressão em Andamento',
                 description: `A solicitação para o pedido "${data.activityTitle}" foi aceita por ${data.processedBy || 'impressão'}.`,
                 variant: 'default',
-                duration: isHighPriority ? 8000 : 5000,
               });
               
-              // MODO DEUS: Reproduzir som com estratégias múltiplas
+              // Tocar som de confirmação
               try {
-                // Estratégia 1: Audio API direta
                 const audio = new Audio('/confirm-sound.mp3');
-                audio.volume = isHighPriority ? 0.6 : 0.5;
-                
-                // Primeira tentativa
+                audio.volume = 0.5;
                 audio.play().catch(err => {
-                  console.error('Erro ao tocar confirmação (primeira tentativa):', err);
-                  
-                  // Segunda tentativa com delay
-                  setTimeout(() => {
-                    try {
-                      audio.play().catch(e => console.error('Falha na segunda tentativa de som:', e));
-                    } catch (e) {
-                      console.error('Erro na segunda tentativa de reprodução:', e);
-                    }
-                  }, 300);
+                  console.error('Erro ao tocar som de confirmação:', err);
                 });
-                
-                console.log('🔊 [TURBO] Som de confirmação iniciado');
               } catch (error) {
-                console.error('❌ [TURBO] Erro ao tocar som de confirmação:', error);
+                console.error('Erro ao tocar som de confirmação:', error);
               }
               
-              // Estratégia 2: Emitir evento para o componente SimpleSoundPlayer (reforço)
-              setMessageData({ 
-                type: 'sound', 
-                soundType: isHighPriority ? 'confirm-sound-urgent' : 'confirm-sound',
-                priority: isHighPriority ? 'high' : 'normal' 
-              });
+              // Emitir evento de som para o componente SimpleSoundPlayer
+              setMessageData({ type: 'sound', soundType: 'confirm-sound' });
             } 
             else if (data.status === 'concluido') {
               toast({
-                title: isHighPriority ? '✅ Reimpressão Concluída' : 'Solicitação de Reimpressão Concluída',
+                title: 'Solicitação de Reimpressão Concluída',
                 description: `A reimpressão para o pedido "${data.activityTitle}" foi finalizada por ${data.processedBy || 'impressão'}.`,
                 variant: 'default',
-                duration: isHighPriority ? 8000 : 5000,
               });
               
-              // MODO DEUS: Reproduzir som com estratégias múltiplas
+              // Tocar som de sucesso
               try {
-                // Estratégia 1: Audio API direta
                 const audio = new Audio('/success-sound.mp3');
-                audio.volume = isHighPriority ? 0.6 : 0.5;
-                
-                // Primeira tentativa
+                audio.volume = 0.5;
                 audio.play().catch(err => {
-                  console.error('Erro ao tocar sucesso (primeira tentativa):', err);
-                  
-                  // Segunda tentativa com delay
-                  setTimeout(() => {
-                    try {
-                      audio.play().catch(e => console.error('Falha na segunda tentativa de som:', e));
-                    } catch (e) {
-                      console.error('Erro na segunda tentativa de reprodução:', e);
-                    }
-                  }, 300);
+                  console.error('Erro ao tocar som de sucesso:', err);
                 });
-                
-                console.log('🔊 [TURBO] Som de sucesso iniciado');
               } catch (error) {
-                console.error('❌ [TURBO] Erro ao tocar som de sucesso:', error);
+                console.error('Erro ao tocar som de sucesso:', error);
               }
               
-              // Estratégia 2: Emitir evento para o componente SimpleSoundPlayer (reforço)
-              setMessageData({ 
-                type: 'sound', 
-                soundType: isHighPriority ? 'success-sound-urgent' : 'success-sound',
-                priority: isHighPriority ? 'high' : 'normal'
-              });
+              // Emitir evento de som para o componente SimpleSoundPlayer
+              setMessageData({ type: 'sound', soundType: 'success-sound' });
             }
             else if (data.status === 'cancelado') {
               toast({
-                title: isHighPriority ? '❌ Reimpressão Cancelada' : 'Solicitação de Reimpressão Cancelada',
+                title: 'Solicitação de Reimpressão Cancelada',
                 description: `A solicitação para o pedido "${data.activityTitle}" foi cancelada por ${data.processedBy || 'alguém'}.`,
                 variant: 'destructive',
-                duration: isHighPriority ? 8000 : 5000,
               });
               
-              // MODO DEUS: Reproduzir som com estratégias múltiplas
+              // Tocar som de alerta
               try {
-                // Estratégia 1: Audio API direta
                 const audio = new Audio('/alert-sound.mp3');
-                audio.volume = isHighPriority ? 0.7 : 0.5; // Volume maior para alta prioridade
-                
-                // Primeira tentativa
+                audio.volume = 0.5;
                 audio.play().catch(err => {
-                  console.error('Erro ao tocar alerta (primeira tentativa):', err);
-                  
-                  // Segunda tentativa com delay
-                  setTimeout(() => {
-                    try {
-                      audio.play().catch(e => console.error('Falha na segunda tentativa de som:', e));
-                    } catch (e) {
-                      console.error('Erro na segunda tentativa de reprodução:', e);
-                    }
-                  }, 300);
+                  console.error('Erro ao tocar som de alerta:', err);
                 });
-                
-                console.log('🔊 [TURBO] Som de alerta iniciado');
               } catch (error) {
-                console.error('❌ [TURBO] Erro ao tocar som de alerta:', error);
+                console.error('Erro ao tocar som de alerta:', error);
               }
               
-              // Estratégia 2: Emitir evento para o componente SimpleSoundPlayer (reforço)
-              setMessageData({ 
-                type: 'sound', 
-                soundType: isHighPriority ? 'alert-sound-urgent' : 'alert-sound',
-                priority: isHighPriority ? 'high' : 'normal'
-              });
+              // Emitir evento de som para o componente SimpleSoundPlayer
+              setMessageData({ type: 'sound', soundType: 'alert-sound' });
             }
-            
-            console.timeEnd('⚡ [TURBO] Processamento de atualização de solicitação de reimpressão');
           }
           else if (data.type === 'new_reprint_request') {
-            console.time('⚡ [TURBO] Processamento de nova solicitação de reimpressão');
+            // Invalidar consultas relacionadas às solicitações de reimpressão
+            queryClient.invalidateQueries({ queryKey: ['/api/reprint-requests'] });
+            queryClient.invalidateQueries({ queryKey: ['/api/reprint-requests/department', user.role] });
             
-            // Determinar se é uma mensagem de alta prioridade
-            const isHighPriority = data._turbo === true || data.system_priority === 'maximum';
-            
-            console.log(`🆕 [TURBO] Nova solicitação de reimpressão${isHighPriority ? ' (PRIORIDADE MÁXIMA)' : ''}: ${data.activityTitle || 'Sem título'}`);
-            
-            // ULTRA: Invalidar cache IMEDIATAMENTE para atualizar todas as listas
-            queryClient.invalidateQueries({ 
-              queryKey: ['/api/reprint-requests'],
-              refetchType: 'active' // Forçar recarregamento imediato
-            });
-            queryClient.invalidateQueries({ 
-              queryKey: ['/api/reprint-requests/department', user.role],
-              refetchType: 'active'
-            });
-            
-            // MODO DEUS: Reproduzir som com estratégias múltiplas
+            // Tocar som usando Audio API diretamente (método extremamente simples)
             try {
-              // Estratégia 1: Audio API direta
               const audio = new Audio('/notification-sound.mp3');
-              audio.volume = isHighPriority ? 0.7 : 0.5; // Volume maior para alta prioridade
-              
-              // Primeira tentativa
+              audio.volume = 0.5;
               audio.play().catch(err => {
-                console.error('Erro ao tocar notificação (primeira tentativa):', err);
-                
-                // Segunda tentativa com delay
-                setTimeout(() => {
-                  try {
-                    audio.play().catch(e => console.error('Falha na segunda tentativa de som:', e));
-                  } catch (e) {
-                    console.error('Erro na segunda tentativa de reprodução:', e);
-                  }
-                }, 300);
+                console.error('Erro ao tocar notificação:', err);
               });
-              
-              console.log('🔊 [TURBO] Som de nova solicitação iniciado');
+              console.log('Som de nova solicitação tocado com sucesso!');
             } catch (error) {
-              console.error('❌ [TURBO] Erro ao tocar som de nova solicitação:', error);
+              console.error('Erro ao tocar som de nova solicitação:', error);
             }
             
-            // Estratégia 2: Emitir evento para o componente SimpleSoundPlayer (reforço)
-            setMessageData({ 
-              type: 'sound', 
-              soundType: isHighPriority ? 'new-reprint-request-urgent' : 'new-reprint-request',
-              priority: isHighPriority ? 'high' : 'normal'
-            });
+            // Emitir evento de nova atividade para o componente SimpleSoundPlayer (reforço)
+            setMessageData({ type: 'sound', soundType: 'new-reprint-request' });
             
-            // Notificar usuário sobre nova solicitação de reimpressão com indicação visual de prioridade
+            // Notificar usuário sobre nova solicitação de reimpressão
             toast({
-              title: isHighPriority ? '🔄 Nova Solicitação de Reimpressão' : 'Nova Solicitação de Reimpressão',
+              title: 'Nova Solicitação de Reimpressão',
               description: `Uma nova solicitação para reimpressão do pedido "${data.activityTitle}" foi registrada.`,
-              variant: isHighPriority ? 'destructive' : 'default',
-              duration: isHighPriority ? 10000 : 6000, // Tempo maior para prioridade alta
+              variant: 'default',
             });
-            
-            console.timeEnd('⚡ [TURBO] Processamento de nova solicitação de reimpressão');
           }
           
         } catch (parseError) {
@@ -870,104 +636,57 @@ export function useWebSocket() {
     }
   }, [user?.role, connect]);
   
-  // Sistema de atualizações periódicas com polling adaptativo turbinado
+  // Configurar atualizações periódicas via polling como fallback
   useEffect(() => {
     if (!user) return;
     
-    // Iniciar com intervalo ultra-curto para primeira atualização instantânea
-    let currentInterval = MIN_POLLING_INTERVAL * 0.7; // Começa ainda mais rápido
+    // Iniciar com intervalo curto e ir aumentando se não houver mudanças
+    let currentInterval = MIN_POLLING_INTERVAL;
     
-    // Referência para controlar o timeout e o intervalo entre tentativas
-    const timeoutRef = { current: null as NodeJS.Timeout | null };
-    
-    // Cache para evitar atualizações desnecessárias (otimização de desempenho)
-    const dataHashRef = useRef<string | null>(null);
-    
-    // Contador de atualizações sem mudanças para ajuste dinâmico de intervalo
-    const noChangeCountRef = useRef(0);
-    
-    // Tempos de última atualização e tentativas
-    const lastSuccessRef = useRef<number>(Date.now());
-    
-    // Função super-otimizada para polling adaptativo com detecção inteligente de mudanças
+    // Função para executar polling periódico mesmo que o WebSocket esteja funcionando
+    // Isso garante que tenhamos sempre dados atualizados, mesmo em caso de falhas silenciosas
     const doPoll = async () => {
       if (!isMountedRef.current) return;
       
-      // Verificar tempo desde última atualização 
+      // Verificar quanto tempo se passou desde a última atualização
       const now = Date.now();
       const lastUpdate = lastUpdateRef.current;
       
-      // Bloquear atualizações muito frequentes - mas com threshold MUITO menor (1.6s)
-      // para garantir reação extremamente rápida quando necessário
-      if (lastUpdate && (now - lastUpdate < 1600)) {
+      if (lastUpdate && (now - lastUpdate < MIN_POLLING_INTERVAL * 0.8)) {
         console.log(`Adiando polling - última atualização há apenas ${Math.floor((now - lastUpdate)/1000)}s`);
       } else {
-        try {
-          // Tempo antes da atualização para medir performance
-          const startTime = performance.now();
-          
-          // Executar atualização
-          await refreshDataPeriodically();
-          
-          // Atualizar timestamp de última atualização bem-sucedida
-          lastSuccessRef.current = Date.now();
-          
-          // Medir tempo de resposta para ajuste dinâmico
-          const responseTime = performance.now() - startTime;
-          
-          // Ajustar dinamicamente o intervalo com base no tempo de resposta
-          // Se o servidor responder rápido, podemos fazer polling mais frequente
-          if (responseTime < 500) { // Resposta super rápida
-            noChangeCountRef.current = 0; // Reset do contador
-            currentInterval = Math.max(MIN_POLLING_INTERVAL * 0.85, 3800); // Intervalo menor, mínimo de 3.8s
-          } else if (responseTime > 2000) { // Resposta lenta
-            // Aumentar intervalo para reduzir carga no servidor
-            currentInterval = Math.min(currentInterval * 1.2, MAX_POLLING_INTERVAL);
-          }
-        } catch (err) {
-          console.error('Erro durante polling:', err);
-          // Em caso de erro, aumentar levemente o intervalo
-          currentInterval = Math.min(currentInterval * 1.1, MAX_POLLING_INTERVAL);
-        }
+        // Executar atualização
+        await refreshDataPeriodically();
       }
       
-      // Calcular próximo intervalo de forma adaptativa
-      // Se WebSocket está com problemas, polling super-agressivo
-      if (consecutiveErrorsRef.current >= MAX_CONSECUTIVE_ERRORS) {
-        // Modo ultra-agressivo: polling muito mais frequente
-        currentInterval = MIN_POLLING_INTERVAL * 0.8;
-      } else if (consecutiveErrorsRef.current > 0) {
-        // Modo agressivo: polling frequente
+      // Calcular próximo intervalo
+      // Se estamos tendo erros de WebSocket, reduzir o intervalo para polling mais frequente
+      if (consecutiveErrorsRef.current > 0) {
         currentInterval = MIN_POLLING_INTERVAL;
-      } else if (!connected) {
-        // WebSocket desconectado, mas sem erros graves: polling normal
-        currentInterval = Math.min(currentInterval, MIN_POLLING_INTERVAL * 2);
-      } else if (noChangeCountRef.current > 5) {
-        // Se não houver mudanças em 5 verificações consecutivas, aumentar intervalo
+      } else {
+        // Caso contrário, usar backoff para aumentar o intervalo gradualmente
         currentInterval = Math.min(currentInterval * POLLING_BACKOFF_FACTOR, MAX_POLLING_INTERVAL);
       }
       
-      // Garantir que o intervalo esteja dentro dos limites
-      currentInterval = Math.max(MIN_POLLING_INTERVAL * 0.7, Math.min(currentInterval, MAX_POLLING_INTERVAL));
-      
-      // Agendar próxima execução com intervalo ajustado dinamicamente
+      // Agendar próxima execução, mas apenas se o componente ainda estiver montado
       if (isMountedRef.current) {
-        console.log(`Próximo polling em ${(currentInterval/1000).toFixed(1)}s`);
         timeoutRef.current = setTimeout(doPoll, currentInterval);
       }
     };
     
-    // Iniciar polling imediatamente para primeira atualização ultra-rápida
-    timeoutRef.current = setTimeout(doPoll, 200); // Começa quase instantaneamente
+    // Referência para controlar o timeout
+    const timeoutRef = { current: null as NodeJS.Timeout | null };
+    
+    // Iniciar polling
+    timeoutRef.current = setTimeout(doPoll, currentInterval);
     
     // Limpeza ao desmontar
     return () => {
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
-        timeoutRef.current = null;
       }
     };
-  }, [user, refreshDataPeriodically, connected]);
+  }, [user, refreshDataPeriodically]);
   
   return {
     connected,

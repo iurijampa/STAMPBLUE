@@ -57,27 +57,8 @@ app.use((req, res, next) => {
   next();
 });
 
-// Importar funções de otimização
-import { atualizarCachePersistenteDepartamentos } from "./solucao-emergencial";
-
 (async () => {
   const server = await registerRoutes(app);
-  
-  // Iniciar processo de pré-cálculo para cache persistente de departamentos
-  // Executar imediatamente para preencher o cache inicial
-  atualizarCachePersistenteDepartamentos();
-  
-  // Definir interval ligeiramente mais rápido para departamentos com poucos itens
-  // e mais lento para departamentos com muitos itens
-  setInterval(() => {
-    // Buscar primeiro os departamentos que normalmente têm poucos itens
-    atualizarCachePersistenteDepartamentos(['embalagem', 'costura', 'batida', 'impressao', 'admin']);
-  }, 5 * 1000); // A cada 5 segundos
-  
-  // Atualizar departamento de gabarito (que tem muitos itens) com menos frequência
-  setInterval(() => {
-    atualizarCachePersistenteDepartamentos(['gabarito']);
-  }, 12 * 1000); // A cada 12 segundos
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;

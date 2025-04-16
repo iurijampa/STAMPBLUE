@@ -3,7 +3,6 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth } from "./auth";
 import { WebSocketServer, WebSocket } from "ws";
-import { atualizarCachePersistenteDepartamentos } from "./solucao-emergencial";
 import { 
   insertActivitySchema, 
   insertActivityProgressSchema,
@@ -20,418 +19,142 @@ import { db } from "./db";
 import { createBackup } from "./backup";
 import { and, eq, sql } from "drizzle-orm";
 
-// LRU Cache TURBO-OTIMIZADO v2.0 para performance extrema com sistema de camadas
+// LRU Cache ultra-otimizado para máxima performance e eficiência
 class LRUCache {
-  // Cache principal para todos os itens - camada L2
   private cache: Map<string, { value: any, expiry: number, lastAccess: number }>;
-  // Cache ultra-rápido (L1) para itens frequentemente acessados - acesso instantâneo
-  private hotCache: Map<string, any> = new Map();
-  // Cache de pré-busca preditiva para itens que serão necessários em breve - L3
-  private prefetchCache: Map<string, any> = new Map();
-  
-  // Configurações de tamanho otimizadas
   private maxSize: number;
-  private hotCacheMaxSize: number;
-  
-  // Contadores e métricas para otimização adaptativa
   private hits: number = 0;
   private misses: number = 0;
   private lastCleanup: number = Date.now();
-  private cleanupInterval: number = 8000; // Reduzido para 8 segundos para eficiência máxima
+  private cleanupInterval: number = 30000; // 30 segundos - mais frequente para maior eficiência
   private totalRequests: number = 0;
   private evictions: number = 0;
-  
-  // Configurações de comportamento
   private autocleanEnabled: boolean = true;
-  private backgroundRefresh: boolean = true; // Ativar atualização em segundo plano
-  private prefetchEnabled: boolean = true; // Ativar pré-busca preditiva
-  
-  // Lista de chaves prioritárias (não serão facilmente removidas)
-  private priorityKeys: Set<string> = new Set();
-  
-  // Sistema de fila para mensagens pendentes
-  private pendingMessages: Record<string, string[]> = {};
-  
-  // Armazenamento de última mensagem por tipo para entrega imediata a novas conexões
-  private lastMessageByType: Record<string, string> = {};
-  
-  // Métricas para ajuste adaptativo
-  private stats = {
-    hitRate: 0,
-    evictionRate: 0,
-    avgAccessTime: 0,
-    lastOpTime: 0,
-    hotCacheHits: 0,
-    prefetchHits: 0,
-    totalTime: 0
-  };
 
-  constructor(maxSize: number = 1500) { // Aumentado para 1500 itens para eficiência máxima
+  constructor(maxSize: number = 800) { // Aumentado para 800 itens para maior eficiência
     this.cache = new Map();
     this.maxSize = maxSize;
-    this.hotCacheMaxSize = Math.max(150, Math.floor(maxSize * 0.1)); // 10% ou no mínimo 150 itens
     
-    // Iniciar limpeza periódica automática com intervalo adaptativo
+    // Iniciar limpeza periódica automática para evitar acúmulo de entradas expiradas
     if (this.autocleanEnabled) {
-      setInterval(() => {
-        const start = performance.now();
-        this.periodicCleanup();
-        const duration = performance.now() - start;
-        
-        // Ajustar intervalo de limpeza com base no tamanho do cache e tempo de execução
-        if (duration > 50) { // Se a limpeza for lenta, aumentar o intervalo
-          this.cleanupInterval = Math.min(20000, this.cleanupInterval * 1.2);
-        } else if (this.cache.size > this.maxSize * 0.85) { // Se o cache estiver quase cheio
-          this.cleanupInterval = Math.max(7000, this.cleanupInterval * 0.85);
-        }
-      }, this.cleanupInterval);
-      
-      // Log de estatísticas a cada 2 minutos para monitoramento
-      setInterval(() => {
-        console.log(`[CACHE-STATS] Hit rate: ${(this.stats.hitRate*100).toFixed(1)}%, ` +
-                    `Hot hits: ${this.stats.hotCacheHits}, ` +
-                    `Evictions: ${this.evictions}, ` +
-                    `Avg time: ${this.stats.avgAccessTime.toFixed(2)}ms, ` +
-                    `Size: ${this.cache.size}/${this.maxSize}`);
-      }, 120000);
+      setInterval(() => this.periodicCleanup(), this.cleanupInterval);
     }
   }
 
   get(key: string): any {
-    const startTime = performance.now();
     this.totalRequests++;
     
-    // NÍVEL 1: Verificar primeiro o cache quente para acesso ultra-rápido (0.1ms)
-    if (this.hotCache.has(key)) {
-      this.hits++;
-      this.stats.hotCacheHits++;
-      
-      // Atualizar métricas
-      const opTime = performance.now() - startTime;
-      this.stats.totalTime += opTime;
-      this.stats.avgAccessTime = this.stats.totalTime / this.totalRequests;
-      this.stats.hitRate = this.hits / (this.hits + this.misses);
-      this.stats.lastOpTime = opTime;
-      
-      return this.hotCache.get(key);
-    }
-    
-    // NÍVEL 2: Verificar cache de pré-busca
-    if (this.prefetchEnabled && this.prefetchCache.has(key)) {
-      this.hits++;
-      this.stats.prefetchHits++;
-      
-      // Promover para cache quente
-      const value = this.prefetchCache.get(key);
-      this.hotCache.set(key, value);
-      this.prefetchCache.delete(key);
-      
-      // Limitar tamanho do cache quente
-      if (this.hotCache.size > this.hotCacheMaxSize * 1.1) {
-        this.trimHotCache();
-      }
-      
-      const opTime = performance.now() - startTime;
-      this.stats.totalTime += opTime;
-      this.stats.avgAccessTime = this.stats.totalTime / this.totalRequests;
-      this.stats.hitRate = this.hits / (this.hits + this.misses);
-      this.stats.lastOpTime = opTime;
-      
-      return value;
-    }
-    
-    // Limpeza condicional otimizada - apenas quando necessário
-    if ((this.totalRequests % 200 === 0 && this.cache.size > this.maxSize * 0.8) || 
-        this.cache.size > this.maxSize * 0.95) {
+    // Performance: verificar expiração apenas periodicamente ou quando o cache estiver cheio
+    if (this.totalRequests % 100 === 0 || this.cache.size > this.maxSize * 0.9) {
       this.periodicCleanup();
     }
     
-    // NÍVEL 3: Verificar o cache principal
     if (!this.cache.has(key)) {
       this.misses++;
-      
-      const opTime = performance.now() - startTime;
-      this.stats.totalTime += opTime;
-      this.stats.avgAccessTime = this.stats.totalTime / this.totalRequests;
-      this.stats.hitRate = this.hits / (this.hits + this.misses);
-      this.stats.lastOpTime = opTime;
-      
       return null;
     }
 
     const item = this.cache.get(key)!;
     
-    // Verificar expiração com verificação rápida
-    const now = Date.now();
-    if (item.expiry > 0 && item.expiry < now) {
+    // Verificar expiração apenas quando necessário
+    if (item.expiry && item.expiry < Date.now()) {
       this.cache.delete(key);
-      this.hotCache.delete(key);
-      this.prefetchCache.delete(key);
       this.misses++;
-      
-      const opTime = performance.now() - startTime;
-      this.stats.totalTime += opTime;
-      this.stats.avgAccessTime = this.stats.totalTime / this.totalRequests;
-      this.stats.hitRate = this.hits / (this.hits + this.misses);
-      this.stats.lastOpTime = opTime;
-      
       return null;
     }
 
-    // Atualizar timestamp de acesso
-    item.lastAccess = now;
+    // Atualizar o timestamp de último acesso para implementar LRU corretamente
+    item.lastAccess = Date.now();
     
-    // Promoção de itens frequentes para o cache quente - política adaptativa
-    if (this.totalRequests % 5 === 0 && this.hotCache.size < this.hotCacheMaxSize) {
-      // Adicionar ao cache quente (L1) para acesso mais rápido na próxima vez
-      this.hotCache.set(key, item.value);
-      
-      // Se estamos perto do limite, fazer manutenção
-      if (this.hotCache.size >= this.hotCacheMaxSize) {
-        this.trimHotCache();
-      }
-    }
-    
-    // Busca preditiva para keys relacionadas (apenas para certas chaves)
-    if (this.prefetchEnabled && key.includes('activities_dept_') && this.totalRequests % 10 === 0) {
-      this.prefetchRelatedKeys(key);
+    // Se o cache ficar muito grande, remover os itens menos usados
+    if (this.totalRequests % 1000 === 0 && this.cache.size > this.maxSize * 0.8) {
+      this.evictLeastRecentlyUsed();
     }
     
     this.hits++;
-    
-    const opTime = performance.now() - startTime;
-    this.stats.totalTime += opTime;
-    this.stats.avgAccessTime = this.stats.totalTime / this.totalRequests;
-    this.stats.hitRate = this.hits / (this.hits + this.misses);
-    this.stats.lastOpTime = opTime;
-    
     return item.value;
   }
 
   set(key: string, value: any, ttlMs: number = 30000): void {
-    // Verificar e ajustar espaço disponível
-    if (this.cache.size >= this.maxSize * 0.98) {
-      this.evictLeastRecentlyUsed(Math.ceil(this.maxSize * 0.08)); // Remover 8% dos itens menos usados
-    } else if (this.cache.size >= this.maxSize) {
-      this.evictLeastRecentlyUsed(Math.max(2, Math.floor(this.maxSize * 0.02))); // Remover pelo menos 2 itens
+    // Performance: verificar apenas quando o cache estiver realmente cheio
+    if (this.cache.size >= this.maxSize) {
+      this.evictLeastRecentlyUsed(Math.max(1, Math.floor(this.maxSize * 0.1)));
     }
     
     const now = Date.now();
-    const expiry = ttlMs > 0 ? now + ttlMs : 0;
-    
-    // Atualizar o cache principal
+    const expiry = ttlMs ? now + ttlMs : 0;
     this.cache.set(key, { value, expiry, lastAccess: now });
-    
-    // Estratégia de cache por camadas
-    if (ttlMs < 15000) {
-      // Para itens com TTL curto, colocar diretamente no cache quente para acesso rápido
-      if (this.hotCache.size < this.hotCacheMaxSize) {
-        this.hotCache.set(key, value);
-      }
-    } else if (ttlMs > 60000 && key.includes('stats')) {
-      // Estatísticas de longa duração vão para pré-busca
-      this.prefetchCache.set(key, value);
-    }
-    
-    // Marcar chaves importantes para proteção contra limpeza
-    if (key.includes('stats') || 
-        key.includes('config') || 
-        key.includes('_count') || 
-        key.includes('department_activities')) {
-      this.priorityKeys.add(key);
-    }
-  }
-
-  private trimHotCache(): void {
-    // Manter apenas 85% das entradas mais recentes no cache quente
-    if (this.hotCache.size > this.hotCacheMaxSize) {
-      const hotEntries = [...this.hotCache.entries()];
-      this.hotCache.clear();
-      hotEntries
-        .slice(-Math.floor(this.hotCacheMaxSize * 0.85))
-        .forEach(([k, v]) => this.hotCache.set(k, v));
-    }
   }
   
-  private prefetchRelatedKeys(key: string): void {
-    // Implementação simplificada - em produção usaria um algoritmo preditivo real
-    const dept = key.split('_').pop();
-    if (dept) {
-      // Pré-buscar estatísticas relacionadas
-      const statsKey = `stats_${dept}`;
-      if (this.cache.has(statsKey) && !this.prefetchCache.has(statsKey)) {
-        this.prefetchCache.set(statsKey, this.cache.get(statsKey)?.value);
-      }
-    }
-  }
-
+  // Remover os itens menos usados recentemente
   private evictLeastRecentlyUsed(count: number = 1): void {
-    // Algoritmo otimizado de limpeza com proteção para chaves prioritárias
     const now = Date.now();
-    let candidates = Array.from(this.cache.entries())
-      // Primeiro filtrar para excluir itens prioritários recentes
-      .filter(([key, item]) => {
-        // Nunca remover itens prioritários recentemente acessados
-        if (this.priorityKeys.has(key) && now - item.lastAccess < 60000) {
-          return false;
-        }
-        return true;
-      })
-      // Ordenar por último acesso (mais antigos primeiro)
-      .sort((a, b) => a[1].lastAccess - b[1].lastAccess)
-      // Limitar ao número de itens que precisamos remover
-      .slice(0, Math.min(count * 2, 100)); // Buscar mais candidatos do que precisamos
-    
-    // Se tivermos poucos candidatos, relaxar a proteção para itens prioritários
-    if (candidates.length < count && this.priorityKeys.size > 0) {
-      candidates = Array.from(this.cache.entries())
-        .sort((a, b) => a[1].lastAccess - b[1].lastAccess)
-        .slice(0, Math.min(count, 50));
-    }
-    
-    // Remover apenas o número necessário de itens
-    candidates.slice(0, count).forEach(([key]) => {
-      this.cache.delete(key);
-      this.hotCache.delete(key);
-      this.prefetchCache.delete(key);
+    const entries = Array.from(this.cache.entries())
+      .map(([key, item]) => ({ key, lastAccess: item.lastAccess || 0 }))
+      .sort((a, b) => a.lastAccess - b.lastAccess)
+      .slice(0, count);
+      
+    entries.forEach(entry => {
+      this.cache.delete(entry.key);
       this.evictions++;
     });
     
-    this.stats.evictionRate = this.evictions / this.totalRequests;
-    
-    if (candidates.length > 0) {
-      // Log apenas para remoções significativas
-      if (count > 10) {
-        console.log(`[CACHE] Removidos ${Math.min(count, candidates.length)} itens menos usados. ` +
-                    `Cache: ${this.cache.size}/${this.maxSize}, Hot: ${this.hotCache.size}/${this.hotCacheMaxSize}`);
-      }
+    if (entries.length > 0) {
+      console.log(`[CACHE] Removidos ${entries.length} itens menos usados recentemente. Total de evicções: ${this.evictions}`);
     }
   }
 
+  // Remover item específico
   delete(key: string): boolean {
-    // Remover de todos os níveis de cache
-    this.hotCache.delete(key);
-    this.prefetchCache.delete(key);
-    this.priorityKeys.delete(key);
     return this.cache.delete(key);
   }
 
+  // Remover todos os itens com prefixo específico - otimizado
   deleteByPrefix(prefix: string): number {
-    let count = 0;
-    
-    // Usar arrays para evitar modificação durante iteração
-    const keysToDelete: string[] = [];
-    
-    // Fase 1: Coletar todas as chaves que correspondem ao prefixo
+    // Otimização: usar um array para coletar chaves antes de excluir
+    const keysToDelete = [];
     for (const key of this.cache.keys()) {
       if (key.startsWith(prefix)) {
         keysToDelete.push(key);
       }
     }
     
-    // Fase 2: Remover de todos os caches
-    for (const key of keysToDelete) {
-      this.cache.delete(key);
-      this.hotCache.delete(key);
-      this.prefetchCache.delete(key);
-      this.priorityKeys.delete(key);
-      count++;
-    }
-    
-    // Log para operações grandes
-    if (count > 5) {
-      console.log(`[CACHE] Removidos ${count} itens com prefixo '${prefix}'`);
-    }
-    
-    return count;
+    keysToDelete.forEach(key => this.cache.delete(key));
+    return keysToDelete.length;
   }
 
+  // Limpar todo o cache
   clear(): void {
     this.cache.clear();
-    this.hotCache.clear();
-    this.prefetchCache.clear();
-    this.priorityKeys.clear();
     this.hits = 0;
     this.misses = 0;
-    this.evictions = 0;
-    this.totalRequests = 0;
-    
-    // Resetar estatísticas
-    this.stats = {
-      hitRate: 0,
-      evictionRate: 0,
-      avgAccessTime: 0,
-      lastOpTime: 0,
-      hotCacheHits: 0,
-      prefetchHits: 0,
-      totalTime: 0
-    };
   }
 
+  // Obter tamanho atual
   size(): number {
     return this.cache.size;
   }
   
+  // Limpeza periódica para remover itens expirados
   private periodicCleanup(): void {
     const now = Date.now();
-    
-    // Evitar limpezas muito frequentes (otimização de CPU)
-    if (now - this.lastCleanup < this.cleanupInterval * 0.7) {
-      return;
-    }
-    
-    this.lastCleanup = now;
-    let expiredCount = 0;
-    
-    // Arrays para processamento em batch para melhor performance
-    const expiredKeys = [];
-    
-    // Verificar itens expirados em lote (limitando o número para evitar bloqueio prolongado)
-    for (const [key, item] of this.cache.entries()) {
-      if (item.expiry > 0 && item.expiry < now) {
-        expiredKeys.push(key);
-        if (expiredKeys.length > 150) break; // Limitar o tamanho do lote
+    if (now - this.lastCleanup > this.cleanupInterval) {
+      this.lastCleanup = now;
+      
+      const keysToDelete = [];
+      for (const [key, item] of this.cache.entries()) {
+        if (item.expiry && item.expiry < now) {
+          keysToDelete.push(key);
+        }
       }
-    }
-    
-    // Remover itens expirados de todos os níveis de cache
-    for (const key of expiredKeys) {
-      this.cache.delete(key);
-      this.hotCache.delete(key);
-      this.prefetchCache.delete(key);
-      expiredCount++;
-    }
-    
-    // Se o cache ainda estiver muito grande após remover expirados, remover LRU
-    if (this.cache.size > this.maxSize * 0.9) {
-      const toRemove = Math.ceil(this.maxSize * 0.1); // Remover 10% 
-      this.evictLeastRecentlyUsed(toRemove);
-    }
-    
-    // Limpar o cache quente se crescer demais
-    if (this.hotCache.size > this.hotCacheMaxSize * 1.2) {
-      this.trimHotCache();
-    }
-    
-    // Limpar o cache de pré-busca periodicamente
-    if (this.prefetchCache.size > this.hotCacheMaxSize) {
-      // Manter apenas metade das entradas
-      const prefetchEntries = [...this.prefetchCache.entries()];
-      this.prefetchCache.clear();
-      prefetchEntries
-        .slice(-Math.floor(this.hotCacheMaxSize * 0.5))
-        .forEach(([k, v]) => this.prefetchCache.set(k, v));
-    }
-    
-    // Log apenas se removermos uma quantidade significativa
-    if (expiredCount > 10) {
-      console.log(`[CACHE] Limpeza periódica removeu ${expiredCount} itens expirados`);
+      
+      keysToDelete.forEach(key => this.cache.delete(key));
     }
   }
 }
 
 // Cache global otimizado para uso em toda a aplicação
-const cache = new LRUCache(1500); // Suporta até 1500 itens em cache (aumentado para performance máxima)
+const cache = new LRUCache(800); // Suporta até 800 itens em cache (aumentado)
 // Expor globalmente para uso em outras partes do código
 (global as any).cache = cache;
 import impressaoRouter from "./solucao-impressao";
@@ -479,8 +202,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         req.path.startsWith('/api/reimpressao-ultrabasico') ||
         req.path.startsWith('/api/reimpressao-emergencial') ||
         req.path.startsWith('/api/impressao-emergencial') ||
-        req.path.startsWith('/api/activities/history') ||
-        req.path.startsWith('/api/system/diagnostico')) {
+        req.path.startsWith('/api/activities/history')) {
       req.isAuthenticated = () => true; // Fingir que está autenticado
       console.log(`[AUTH_BYPASS] Autenticação pulada para: ${req.path}`);
       
@@ -588,632 +310,68 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Setup authentication routes
   setupAuth(app);
 
-  // OTIMIZAÇÃO CRÍTICA - Cache pré-computado persistente para pedidos concluídos
-  // Esta versão usa cache persistente em memória com TTL médio e regeneração contínua em background
-  let CACHE_PERSISTENTE_CONCLUIDOS = null;
-  let CACHE_TIMESTAMP_CONCLUIDOS = 0;
-  let CACHE_UPDATING_CONCLUIDOS = false;
-  const CACHE_TTL_CONCLUIDOS = 120 * 1000; // Reduzido para 2 minutos para dados mais frescos
-  
-  // Sistema de notificação para atualizações de cache
-  const cacheObservers = {
-    'concluidos': new Set<Function>(),
-    'em-producao': new Set<Function>(),
-    'estatisticas': new Set<Function>(),
-    'dept-counts': new Set<Function>()
-  };
-  
-  // Função para assinar notificações de atualização de cache
-  function observeCache(type: 'concluidos' | 'em-producao' | 'estatisticas' | 'dept-counts', callback: Function) {
-    cacheObservers[type].add(callback);
-    return () => cacheObservers[type].delete(callback); // Retorna função para cancelar assinatura
-  }
-  
-  // Função para notificar observadores sobre atualização de cache
-  function notifyCacheObservers(type: 'concluidos' | 'em-producao' | 'estatisticas' | 'dept-counts') {
-    cacheObservers[type].forEach(callback => {
-      try {
-        callback();
-      } catch (e) {
-        console.error(`[CACHE-OBSERVER] Erro ao notificar observador de ${type}:`, e);
-      }
-    });
-  }
-  
-  // Função para atualizar cache em background com notificação
-  async function atualizarCacheConcluidos() {
-    if (CACHE_UPDATING_CONCLUIDOS) return; // Evita atualizações concorrentes
-    
-    try {
-      CACHE_UPDATING_CONCLUIDOS = true;
-      console.time('[CACHE-CONCLUIDOS] Atualizando cache persistente');
-      
-      // Consulta SQL ultra-otimizada com índices - corrigida para nomes de coluna exatos
-      const query = sql`
-        SELECT a.*, 
-              'concluido' as "currentDepartment",
-              a.client_name as client,
-              a.description as "clientInfo"
-        FROM activities a
-        WHERE EXISTS (
-          SELECT 1 FROM activity_progress ap 
-          WHERE ap.activity_id = a.id 
-          AND ap.department = 'embalagem' 
-          AND ap.status = 'completed'
-        )
-        ORDER BY a.deadline ASC NULLS LAST
-      `;
-      
-      const result = await db.execute(query);
-      
-      // Detectar se houve alterações nos dados
-      const houveMudanca = !CACHE_PERSISTENTE_CONCLUIDOS || 
-        JSON.stringify(result) !== JSON.stringify(CACHE_PERSISTENTE_CONCLUIDOS);
-      
-      // Atualizar cache persistente
-      CACHE_PERSISTENTE_CONCLUIDOS = result;
-      CACHE_TIMESTAMP_CONCLUIDOS = Date.now();
-      
-      console.timeEnd('[CACHE-CONCLUIDOS] Atualizando cache persistente');
-      
-      // Notificar observadores apenas se houve mudança
-      if (houveMudanca) {
-        notifyCacheObservers('concluidos');
-        
-        // Notificar via WebSocket para atualização em tempo real
-        if (typeof (global as any).wsNotifications !== 'undefined') {
-          (global as any).wsNotifications.notifyDepartment('admin', {
-            type: 'cache_updated',
-            cache: 'concluidos',
-            timestamp: Date.now()
-          }, true); // Alta prioridade para entrega imediata
-        }
-      }
-    } catch (error) {
-      console.error('[CACHE-CONCLUIDOS] Erro ao atualizar cache:', error);
-    } finally {
-      CACHE_UPDATING_CONCLUIDOS = false;
-    }
-  }
-  
-  // Iniciar cache em background na inicialização do servidor
-  atualizarCacheConcluidos();
-  
-  // Programar atualização periódica mais frequente (a cada 2 minutos)
-  setInterval(() => {
-    atualizarCacheConcluidos();
-  }, CACHE_TTL_CONCLUIDOS);
-  
-  // Atualização mais rápida para itens críticos (a cada 45 segundos)
-  setInterval(() => {
-    // Verificar se o cache está ficando velho (mais de 45 segundos)
-    const agora = Date.now();
-    if (agora - CACHE_TIMESTAMP_CONCLUIDOS > 45000) {
-      atualizarCacheConcluidos();
-    }
-  }, 45000);
-  
-  // Endpoint otimizado com cache persistente para pedidos concluídos
-  app.get("/api/activities/concluidos", isAuthenticated, async (req, res) => {
-    try {
-      if (req.user && req.user.role === "admin") {
-        // Cabeçalhos para cache no browser
-        res.setHeader('Cache-Control', 'private, max-age=60');
-        
-        // Usar cache persistente pré-computado se estiver disponível e válido
-        if (CACHE_PERSISTENTE_CONCLUIDOS && (Date.now() - CACHE_TIMESTAMP_CONCLUIDOS < CACHE_TTL_CONCLUIDOS)) {
-          console.log(`[CACHE-PERSISTENTE] Usando cache pré-computado para pedidos concluídos (${(Date.now() - CACHE_TIMESTAMP_CONCLUIDOS)/1000}s)`);
-          
-          // Programar atualização em background se estiver próximo de expirar
-          if (Date.now() - CACHE_TIMESTAMP_CONCLUIDOS > CACHE_TTL_CONCLUIDOS * 0.8) {
-            setTimeout(() => atualizarCacheConcluidos(), 100);
-          }
-          
-          return res.json(CACHE_PERSISTENTE_CONCLUIDOS);
-        }
-        
-        // Cache não disponível ou expirado, buscar dados e atualizar cache
-        console.time('[PERF] Carregamento pedidos concluídos');
-        
-        try {
-          // Usar cache LRU como segunda camada de proteção
-          const cacheKey = `activities_concluidos_admin_${req.user.id}_ultra`;
-          const cachedData = cache.get(cacheKey);
-          
-          if (cachedData) {
-            console.log(`[CACHE-LRU] Usando cache LRU para ${cacheKey}`);
-            
-            // Programar atualização de cache persistente em background
-            setTimeout(() => atualizarCacheConcluidos(), 10);
-            
-            return res.json(cachedData);
-          }
-          
-          // SQL otimizada como em versões anteriores - corrigida para nomes de coluna exatos
-          const query = sql`
-            SELECT a.*, 
-                  'concluido' as "currentDepartment",
-                  a.client_name as client,
-                  a.description as "clientInfo"
-            FROM activities a
-            WHERE EXISTS (
-              SELECT 1 FROM activity_progress ap 
-              WHERE ap.activity_id = a.id 
-              AND ap.department = 'embalagem' 
-              AND ap.status = 'completed'
-            )
-            ORDER BY a.deadline ASC NULLS LAST
-          `;
-          
-          const result = await db.execute(query);
-          
-          // Atualizar ambos os caches
-          cache.set(cacheKey, result, 60000); // 1 minuto
-          CACHE_PERSISTENTE_CONCLUIDOS = result;
-          CACHE_TIMESTAMP_CONCLUIDOS = Date.now();
-          
-          console.timeEnd('[PERF] Carregamento pedidos concluídos');
-          
-          return res.json(result);
-        } catch (sqlError) {
-          console.error("[ERRO-SQL] Falha na query otimizada para concluídos:", sqlError);
-          
-          // Retornar último cache persistente mesmo se expirado
-          if (CACHE_PERSISTENTE_CONCLUIDOS) {
-            console.log('[CACHE-EMERGENCIA] Usando cache persistente expirado para concluídos');
-            return res.json(CACHE_PERSISTENTE_CONCLUIDOS);
-          }
-          
-          // Fallback completo - usar método tradicional
-          const activities = await storage.getAllActivities();
-          const withEmbalagem = [];
-          
-          for (const activity of activities) {
-            const progresses = await storage.getActivityProgress(activity.id);
-            const embalagemProgress = progresses.find(p => 
-              p.department === 'embalagem' && p.status === 'completed'
-            );
-            
-            if (embalagemProgress) {
-              withEmbalagem.push({
-                ...activity,
-                currentDepartment: 'concluido',
-                client: activity.clientName,
-                clientInfo: activity.description || null,
-                progress: progresses
-              });
-            }
-          }
-          
-          CACHE_PERSISTENTE_CONCLUIDOS = withEmbalagem;
-          CACHE_TIMESTAMP_CONCLUIDOS = Date.now();
-          
-          console.timeEnd('[PERF] Carregamento pedidos concluídos (fallback)');
-          
-          return res.json(withEmbalagem);
-        }
-      } else {
-        return res.status(403).json({ message: "Acesso negado" });
-      }
-    } catch (error) {
-      console.error("[ERROR] Erro no carregamento de concluídos:", error);
-      
-      // Em caso de erro, tenta recuperar do cache persistente
-      if (CACHE_PERSISTENTE_CONCLUIDOS) {
-        return res.json(CACHE_PERSISTENTE_CONCLUIDOS);
-      }
-      
-      res.status(500).json({ message: "Erro ao buscar pedidos concluídos" });
-    }
-  });
-  
-  // OTIMIZAÇÃO CRÍTICA - Cache pré-computado persistente para pedidos em produção
-  // Esta versão usa cache persistente em memória com TTL longo e regeneração em background
-  let CACHE_PERSISTENTE_EM_PRODUCAO = null;
-  let CACHE_TIMESTAMP_EM_PRODUCAO = 0;
-  let CACHE_UPDATING_EM_PRODUCAO = false;
-  const CACHE_TTL_EM_PRODUCAO = 5 * 60 * 1000; // 5 minutos
-  
-  // Função para atualizar cache em background
-  async function atualizarCacheEmProducao(forceUpdate = false) {
-    if (CACHE_UPDATING_EM_PRODUCAO && !forceUpdate) return; // Evita atualizações concorrentes, a menos que seja forçado
-    
-    try {
-      CACHE_UPDATING_EM_PRODUCAO = true;
-      console.time('[CACHE-EM-PRODUCAO] Atualizando cache persistente');
-      
-      // Consulta SQL ultra-otimizada - corrigida para nomes de coluna exatos
-      const query = sql`
-        WITH LatestProgress AS (
-          SELECT 
-            activity_id,
-            department,
-            status,
-            ROW_NUMBER() OVER(PARTITION BY activity_id ORDER BY 
-              CASE department 
-                WHEN 'gabarito' THEN 1 
-                WHEN 'impressao' THEN 2 
-                WHEN 'batida' THEN 3 
-                WHEN 'costura' THEN 4 
-                WHEN 'embalagem' THEN 5
-              END DESC) as rn
-          FROM activity_progress
-          WHERE status = 'pending'
-        )
-        SELECT 
-          a.*,
-          a.client_name as client,
-          a.description as "clientInfo",
-          COALESCE(lp.department, 'gabarito') as "currentDepartment"
-        FROM activities a
-        LEFT JOIN LatestProgress lp ON lp.activity_id = a.id AND lp.rn = 1
-        WHERE NOT EXISTS (
-          SELECT 1 FROM activity_progress ap 
-          WHERE ap.activity_id = a.id 
-          AND ap.department = 'embalagem' 
-          AND ap.status = 'completed'
-        )
-        ORDER BY a.deadline ASC NULLS LAST
-      `;
-      
-      const result = await db.execute(query);
-      
-      // Detectar se houve alterações nos dados
-      const houveMudanca = !CACHE_PERSISTENTE_EM_PRODUCAO || 
-        JSON.stringify(result) !== JSON.stringify(CACHE_PERSISTENTE_EM_PRODUCAO);
-      
-      // Atualizar cache persistente
-      CACHE_PERSISTENTE_EM_PRODUCAO = result;
-      CACHE_TIMESTAMP_EM_PRODUCAO = Date.now();
-      
-      console.timeEnd('[CACHE-EM-PRODUCAO] Atualizando cache persistente');
-      
-      // Notificar observadores apenas se houve mudança
-      if (houveMudanca) {
-        notifyCacheObservers('em-producao');
-        
-        // Notificar via WebSocket para atualização em tempo real
-        if (typeof (global as any).wsNotifications !== 'undefined') {
-          (global as any).wsNotifications.notifyDepartment('admin', {
-            type: 'cache_updated',
-            cache: 'em-producao',
-            timestamp: Date.now()
-          }, true); // Alta prioridade para entrega imediata
-        }
-      }
-      
-      return result;
-    } catch (error) {
-      console.error('[CACHE-EM-PRODUCAO] Erro ao atualizar cache:', error);
-      return null;
-    } finally {
-      CACHE_UPDATING_EM_PRODUCAO = false;
-    }
-  }
-  
-  // Iniciar cache em background na inicialização do servidor
-  atualizarCacheEmProducao();
-  
-  // Programar atualização periódica do cache a cada 5 minutos
-  setInterval(() => {
-    atualizarCacheEmProducao();
-  }, CACHE_TTL_EM_PRODUCAO);
-  
-  // Endpoint otimizado com cache persistente para pedidos em produção
-  app.get("/api/activities/em-producao", isAuthenticated, async (req, res) => {
-    try {
-      if (req.user && req.user.role === "admin") {
-        // Config de cache padrão
-        res.setHeader('Cache-Control', 'private, max-age=5');
-        
-        // Usar cache para resposta rápida inicial
-        const cacheKey = `activities_em_producao_admin_1_ultra`;
-        // Fix: Use o cache apenas se existir uma instância
-        const cachedData = global.CACHE_LRU ? global.CACHE_LRU.get(cacheKey) : null;
-        
-        if (cachedData) {
-          console.log('[CACHE-LRU] Usando cache LRU para ' + cacheKey);
-          return res.json(cachedData);
-        }
-        
-        // Verificar se temos dados em cache persistente
-        if (CACHE_PERSISTENTE_EM_PRODUCAO && (Date.now() - CACHE_TIMESTAMP_EM_PRODUCAO < CACHE_TTL_EM_PRODUCAO)) {
-          console.log(`[CACHE-PERSISTENTE] Usando cache pré-computado para pedidos em produção (${(Date.now() - CACHE_TIMESTAMP_EM_PRODUCAO)/1000}s)`);
-          
-          // Programar atualização em background se estiver próximo de expirar
-          if (Date.now() - CACHE_TIMESTAMP_EM_PRODUCAO > CACHE_TTL_EM_PRODUCAO * 0.8) {
-            setTimeout(() => atualizarCacheEmProducao(), 100);
-          }
-          
-          return res.json(CACHE_PERSISTENTE_EM_PRODUCAO);
-        }
-        
-        // Cache não disponível ou expirado, buscar dados e atualizar cache
-        console.time('[PERF] Carregamento pedidos em-producao');
-        
-        try {
-          // Usar cache LRU como segunda camada de proteção
-          const cacheKey = `activities_em_producao_admin_${req.user.id}_ultra`;
-          const cachedData = cache.get(cacheKey);
-          
-          if (cachedData) {
-            console.log(`[CACHE-LRU] Usando cache LRU para ${cacheKey}`);
-            
-            // Programar atualização de cache persistente em background
-            setTimeout(() => atualizarCacheEmProducao(), 10);
-            
-            return res.json(cachedData);
-          }
-          
-          // SQL otimizada corrigida para nomes de coluna exatos
-          const query = sql`
-            WITH LatestProgress AS (
-              SELECT 
-                activity_id,
-                department,
-                status,
-                ROW_NUMBER() OVER(PARTITION BY activity_id ORDER BY 
-                  CASE department 
-                    WHEN 'gabarito' THEN 1 
-                    WHEN 'impressao' THEN 2 
-                    WHEN 'batida' THEN 3 
-                    WHEN 'costura' THEN 4 
-                    WHEN 'embalagem' THEN 5
-                  END DESC) as rn
-              FROM activity_progress
-              WHERE status = 'pending'
-            )
-            SELECT 
-              a.*,
-              a.client_name as client,
-              a.description as "clientInfo",
-              COALESCE(lp.department, 'gabarito') as "currentDepartment"
-            FROM activities a
-            LEFT JOIN LatestProgress lp ON lp.activity_id = a.id AND lp.rn = 1
-            WHERE NOT EXISTS (
-              SELECT 1 FROM activity_progress ap 
-              WHERE ap.activity_id = a.id 
-              AND ap.department = 'embalagem' 
-              AND ap.status = 'completed'
-            )
-            ORDER BY a.deadline ASC NULLS LAST
-          `;
-          
-          const result = await db.execute(query);
-          
-          // Atualizar ambos os caches
-          cache.set(cacheKey, result, 60000); // 1 minuto
-          CACHE_PERSISTENTE_EM_PRODUCAO = result;
-          CACHE_TIMESTAMP_EM_PRODUCAO = Date.now();
-          
-          console.timeEnd('[PERF] Carregamento pedidos em-producao');
-          
-          return res.json(result);
-        } catch (sqlError) {
-          console.error("[ERRO-SQL] Falha na query otimizada para em-producao:", sqlError);
-          
-          // Retornar último cache persistente mesmo se expirado
-          if (CACHE_PERSISTENTE_EM_PRODUCAO) {
-            console.log('[CACHE-EMERGENCIA] Usando cache persistente expirado para em-producao');
-            return res.json(CACHE_PERSISTENTE_EM_PRODUCAO);
-          }
-          
-          // Fallback completo - usar método tradicional
-          const activities = await storage.getAllActivities();
-          const emProducao = [];
-          
-          // Processar atividades em lotes
-          const batchSize = 10;
-          for (let i = 0; i < activities.length; i += batchSize) {
-            const batch = activities.slice(i, i + batchSize);
-            
-            // Processar cada lote em paralelo
-            const processedBatch = await Promise.all(batch.map(async (activity) => {
-              const progresses = await storage.getActivityProgress(activity.id);
-              
-              // Verificar se foi concluído pela embalagem
-              const embalagemProgress = progresses.find(p => 
-                p.department === 'embalagem' && p.status === 'completed'
-              );
-              
-              // Se foi concluído, pular
-              if (embalagemProgress) return null;
-              
-              // Encontrar o departamento atual
-              const pendingProgress = progresses
-                .filter(p => p.status === 'pending')
-                .sort((a, b) => {
-                  const deptOrder = ['gabarito', 'impressao', 'batida', 'costura', 'embalagem'];
-                  return deptOrder.indexOf(a.department as any) - deptOrder.indexOf(b.department as any);
-                })[0];
-              
-              return {
-                ...activity,
-                currentDepartment: pendingProgress ? pendingProgress.department : 'gabarito',
-                client: activity.clientName,
-                clientInfo: activity.description || null,
-                progress: progresses
-              };
-            }));
-            
-            // Filtrar nulos e adicionar ao resultado
-            emProducao.push(...processedBatch.filter(Boolean));
-          }
-          
-          CACHE_PERSISTENTE_EM_PRODUCAO = emProducao;
-          CACHE_TIMESTAMP_EM_PRODUCAO = Date.now();
-          
-          console.timeEnd('[PERF] Carregamento pedidos em-producao (fallback)');
-          
-          return res.json(emProducao);
-        }
-      } else {
-        return res.status(403).json({ message: "Acesso negado" });
-      }
-    } catch (error) {
-      console.error("[ERROR] Erro no carregamento de em-producao:", error);
-      
-      // Em caso de erro, tenta recuperar do cache persistente
-      if (CACHE_PERSISTENTE_EM_PRODUCAO) {
-        return res.json(CACHE_PERSISTENTE_EM_PRODUCAO);
-      }
-      
-      res.status(500).json({ message: "Erro ao buscar pedidos em produção" });
-    }
-  });
-  
   // API routes
-  // Activities - original method (mantido para compatibilidade)
+  // Activities
   app.get("/api/activities", isAuthenticated, async (req, res) => {
     try {
       // Adiciona cabeçalhos de cache para o navegador
       res.setHeader('Cache-Control', 'private, max-age=15');
       
-      // Novo: Redirecionamento para APIs otimizadas quando o tipo é específico
-      const tipoFiltro = req.query.tipo;
-      if (req.user.role === 'admin' && tipoFiltro) {
-        if (tipoFiltro === 'concluidos') {
-          // Redirecionar para endpoint otimizado internamente
-          const response = await fetch(`http://localhost:${process.env.PORT || 5000}/api/activities/concluidos`, {
-            headers: {
-              'Cookie': req.headers.cookie || ''
-            }
-          });
-          const data = await response.json();
-          return res.json(data);
-        } else if (tipoFiltro === 'em-producao') {
-          // Redirecionar para endpoint otimizado internamente
-          const response = await fetch(`http://localhost:${process.env.PORT || 5000}/api/activities/em-producao`, {
-            headers: {
-              'Cookie': req.headers.cookie || ''
-            }
-          });
-          const data = await response.json();
-          return res.json(data);
-        }
-      }
-      
       // Cria uma chave de cache baseada no usuário
       const cacheKey = `activities_main_${req.user.role}_${req.user.id}`;
+      const cachedData = cache.get(cacheKey);
       
-      // Verificar se o header específico para invalidar o cache está presente
-      const bypassCache = req.headers['x-bypass-cache'] === 'true';
-      
-      // Modificar a chave do cache com base no tipo de filtro
-      const cacheKeyWithType = `${cacheKey}_${tipoFiltro || 'todos'}`;
-      
-      // Se tiver em cache e não estiver ignorando o cache, retorna imediatamente
-      const cachedData = !bypassCache ? cache.get(cacheKeyWithType) : null;
+      // Se tiver em cache, retorna imediatamente (grande ganho de performance)
       if (cachedData) {
-        console.log(`[CACHE] Usando dados em cache para ${cacheKeyWithType}`);
+        console.log(`[CACHE] Usando dados em cache para ${cacheKey}`);
         return res.json(cachedData);
       }
       
       if (req.user && req.user.role === "admin") {
-        console.time('[PERF] Carregamento de atividades admin');
-        
-        // Otimização - adicionar ao hot cache para acesso ultra-rápido
-        // Usar verificação de integridade de dados para garantir consistência
-        
-        // Passos de otimização:
-        // 1. Reduzir a quantidade de dados carregados inicialmente
-        // 2. Realizar processamento em lotes para evitar bloqueio da thread principal
-        // 3. Utilizar cache em múltiplas camadas para dados frequentes
-        
-        // Buscar todas as atividades com uma única consulta
+        // Otimização para o admin - cache por 15 segundos
+        // Buscar todas as atividades
         const activities = await storage.getAllActivities();
         
-        // Primeiramente, obter todos os progressos em uma única operação em lote
-        // para evitar múltiplas consultas ao banco de dados
-        const activityIds = activities.map(activity => activity.id);
-        const allProgressesMap = new Map();
+        // Para cada atividade, buscar o progresso para determinar o departamento atual
+        const activitiesWithProgress = await Promise.all(
+          activities.map(async (activity) => {
+            const progresses = await storage.getActivityProgress(activity.id);
+            
+            // Ordenar os progressos por departamento e encontrar o pendente mais recente
+            // para determinar em qual departamento a atividade está atualmente
+            const pendingProgress = progresses
+              .filter(p => p.status === 'pending')
+              .sort((a, b) => {
+                const deptOrder = ['gabarito', 'impressao', 'batida', 'costura', 'embalagem'];
+                return deptOrder.indexOf(a.department as any) - deptOrder.indexOf(b.department as any);
+              })[0];
+              
+            // Verificar se o pedido foi concluído pelo último departamento (embalagem)
+            const embalagemProgress = progresses.find(p => p.department === 'embalagem');
+            const pedidoConcluido = embalagemProgress && embalagemProgress.status === 'completed';
+            
+            // Determinar o departamento atual ou marcar como concluído se embalagem já finalizou
+            let currentDepartment = pendingProgress ? pendingProgress.department : 'gabarito';
+            
+            // Se o pedido foi concluído pela embalagem, vamos marcar como "concluido" em vez de voltar para o gabarito
+            if (!pendingProgress && pedidoConcluido) {
+              currentDepartment = 'concluido';
+            }
+            
+            return {
+              ...activity,
+              currentDepartment,
+              client: activity.clientName,  // Nome do cliente
+              clientInfo: activity.description || null, // Adiciona informações adicionais do cliente (descrição)
+              progress: progresses
+            };
+          })
+        );
         
-        // Dividir em lotes de 10 para evitar sobrecarga
-        const batchSize = 10;
-        for (let i = 0; i < activityIds.length; i += batchSize) {
-          const batch = activityIds.slice(i, i + batchSize);
-          const progressesBatch = await Promise.all(
-            batch.map(id => storage.getActivityProgress(id))
-          );
-          
-          batch.forEach((id, index) => {
-            allProgressesMap.set(id, progressesBatch[index]);
-          });
-        }
+        // Guardar em cache por 15 segundos
+        cache.set(cacheKey, activitiesWithProgress, 15000);
         
-        // Processar as atividades com seus progressos já carregados
-        const processActivity = (activity) => {
-          const progresses = allProgressesMap.get(activity.id) || [];
-          
-          // Lógica para determinar o departamento atual otimizada
-          const pendingProgress = progresses
-            .filter(p => p.status === 'pending')
-            .sort((a, b) => {
-              const deptOrder = ['gabarito', 'impressao', 'batida', 'costura', 'embalagem'];
-              return deptOrder.indexOf(a.department as any) - deptOrder.indexOf(b.department as any);
-            })[0];
-          
-          // Verificação rápida para pedidos concluídos
-          const embalagemProgress = progresses.find(p => p.department === 'embalagem');
-          const pedidoConcluido = embalagemProgress && embalagemProgress.status === 'completed';
-          
-          // Determinar departamento atual
-          let currentDepartment = pendingProgress ? pendingProgress.department : 'gabarito';
-          
-          if (!pendingProgress && pedidoConcluido) {
-            currentDepartment = 'concluido';
-          }
-          
-          return {
-            ...activity,
-            currentDepartment,
-            client: activity.clientName,
-            clientInfo: activity.description || null,
-            progress: progresses
-          };
-        };
-        
-        // Fazer o processamento em lotes
-        const activitiesWithProgress = [];
-        for (let i = 0; i < activities.length; i += batchSize) {
-          const activityBatch = activities.slice(i, i + batchSize);
-          const processedBatch = activityBatch.map(processActivity);
-          activitiesWithProgress.push(...processedBatch);
-        }
-        
-        // Filtrar com base no tipo solicitado
-        let filteredActivities = activitiesWithProgress;
-        
-        if (tipoFiltro === 'em-producao') {
-          filteredActivities = activitiesWithProgress.filter(
-            a => a.currentDepartment !== 'concluido'
-          );
-        } else if (tipoFiltro === 'concluidos') {
-          filteredActivities = activitiesWithProgress.filter(
-            a => a.currentDepartment === 'concluido'
-          );
-        }
-        
-        // Guardar em cache por tipo por 10 segundos
-        // Usar tempos de cache dinâmicos com base na frequência de acesso
-        // Itens acessados mais frequentemente têm TTL mais longo
-        const ttl = 10000; // 10 segundos
-        cache.set(cacheKeyWithType, filteredActivities, ttl);
-        
-        // Guardar todos os dados também no cache geral
-        if (tipoFiltro !== 'todos') {
-          cache.set(`${cacheKey}_todos`, activitiesWithProgress, ttl);
-        }
-        
-        // Marcar como chave prioritária para proteção contra limpeza prematura
-        if ((cache as any).priorityKeys && typeof (cache as any).priorityKeys.add === 'function') {
-          (cache as any).priorityKeys.add(cacheKeyWithType);
-        }
-        
-        // Registrar métricas de tempo para análise de performance
-        console.timeEnd('[PERF] Carregamento de atividades admin');
-        
-        return res.json(filteredActivities);
+        return res.json(activitiesWithProgress);
       } else if (req.user) {
         const department = req.user.role;
         console.log(`[DEBUG] Usuario ${req.user.username} (${department}) solicitando atividades`);
@@ -1222,13 +380,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log(`[EMERGENCIA] Usando método direto para buscar atividades do departamento ${department}`);
         const activities = await buscarAtividadesPorDepartamentoEmergencia(department);
         
-        // Guardar em cache por 10 segundos (reduzido para atualizações mais frequentes)
-        cache.set(cacheKey, activities, 10000);
-        
-        // Marcar como chave prioritária para proteção contra limpeza prematura
-        if ((cache as any).priorityKeys && typeof (cache as any).priorityKeys.add === 'function') {
-          (cache as any).priorityKeys.add(cacheKey);
-        }
+        // Guardar em cache por 15 segundos
+        cache.set(cacheKey, activities, 15000);
         
         return res.json(activities);
       } else {
@@ -1400,206 +553,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Rota para atualizar imagens reais após envio inicial com placeholders
-  app.post("/api/activities/:id/update-images", isAdmin, async (req, res) => {
-    try {
-      const activityId = parseInt(req.params.id);
-      console.log(`⚡ [TURBO-IMG] Atualizando imagens para atividade ${activityId}`);
-      
-      // Verificar se a atividade existe
-      const activity = await storage.getActivity(activityId);
-      if (!activity) {
-        return res.status(404).json({ message: "Atividade não encontrada" });
-      }
-      
-      // Extrair imagens da requisição
-      const { image, additionalImages } = req.body;
-      
-      // Preparar dados para atualização
-      const updateData = {
-        ...activity,
-        image: image || activity.image,
-        additionalImages: additionalImages || activity.additionalImages
-      };
-      
-      // Atualizar atividade com imagens reais
-      const updatedActivity = await storage.updateActivity(activityId, updateData);
-      
-      // Notificar clientes sobre atualização de imagens
-      if ((global as any).wsNotifications) {
-        (global as any).wsNotifications.notifyDepartment('admin', {
-          type: 'activity_images_updated',
-          activityId,
-          timestamp: Date.now()
-        });
-        
-        // Também notificar o departamento atual da atividade
-        const progress = await storage.getActivityProgress(activityId);
-        const pendingDepts = progress.filter(p => p.status === 'pending').map(p => p.department);
-        
-        for (const dept of pendingDepts) {
-          (global as any).wsNotifications.notifyDepartment(dept, {
-            type: 'activity_images_updated',
-            activityId,
-            timestamp: Date.now()
-          });
-        }
-      }
-      
-      res.status(200).json({ 
-        message: "Imagens atualizadas com sucesso",
-        activity: updatedActivity
-      });
-    } catch (error) {
-      console.error("[ERROR] Erro ao atualizar imagens:", error);
-      res.status(500).json({ message: "Erro ao atualizar imagens" });
-    }
-  });
-
   app.post("/api/activities", isAdmin, async (req, res) => {
     try {
-      console.time('⚡ [TURBO] Criação de atividade');
+      const validatedData = insertActivitySchema.parse({
+        ...req.body,
+        createdBy: req.user.id
+      });
       
-      // Verificar flag turbo para processamento prioritário
-      const isTurboRequest = req.body._turbo === true || 
-                             req.headers['x-turbo'] === 'true' || 
-                             req.headers['x-priority'] === 'high';
-      
-      if (isTurboRequest) {
-        console.log('⚡ [TURBO] Requisição TURBO detectada! Processamento prioritário');
-      }
-            
-      // Extrair informações da atividade antes da validação
-      const title = req.body.title || 'Sem título';
-      const initialDepartment = req.body.initialDepartment || 'gabarito';
-      
-      // OTIMIZAÇÃO MÁXIMA: Pré-processar imagens em formato eficiente antes da validação
-      let imageProcessed = false;
-      
-      // 1. Se tiver imagem, otimizar seu formato
-      if (req.body.image && typeof req.body.image === 'string' && req.body.image.length > 1000) {
-        // Determinar se imagem precisa ser otimizada (apenas base64 grandes)
-        const isLargeImage = req.body.image.length > 500000; // 500KB
-        
-        if (isLargeImage && isTurboRequest) {
-          console.log('⚡ [TURBO-IMG] Detectada imagem grande, aplicando otimização');
-          
-          // Aplicar técnica de otimização extrema guardando apenas os primeiros bytes (suficiente para criar preview)
-          // e 90% dos casos não precisamos da imagem em alta resolução imediatamente
-          req.body.image = req.body.image.substring(0, 200) + '...[OTIMIZADO]';
-          imageProcessed = true;
-        }
-      }
-      
-      // 2. Para imagens adicionais, criar placeholders temporários em modo TURBO
-      if (isTurboRequest && req.body.additionalImages && Array.isArray(req.body.additionalImages) && req.body.additionalImages.length > 0) {
-        console.log(`⚡ [TURBO-IMG] Otimizando ${req.body.additionalImages.length} imagens adicionais`);
-        
-        // Criar placeholders temporários para processar depois
-        req.body.additionalImages = req.body.additionalImages.map((_, index) => 
-          `data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==[PLACEHOLDER_${index}]`
-        );
-        imageProcessed = true;
-      }
-      
-      // DESATIVAR CACHE apenas se não for requisição TURBO (trade-off performance vs consistência)
-      if (!isTurboRequest) {
-        console.log('[CACHE] Desativando caches antes de criar nova atividade');
-        
-        // Limpar timestamps para forçar recarga completa
-        CACHE_TIMESTAMP_EM_PRODUCAO = 0;
-        CACHE_PERSISTENTE_EM_PRODUCAO = null;
-        
-        // Limpar caches LRU apenas se não for requisição TURBO
-        if (typeof cache !== 'undefined') {
-          try {
-            const prefixosImportantes = ['activities_em_producao_', 'activities_main_'];
-            
-            for (const prefixo of prefixosImportantes) {
-              console.log(`[CACHE] Invalidando caches com prefixo '${prefixo}'`);
-              Array.from(cache.keys()).forEach(key => {
-                if (key && typeof key === 'string' && key.includes(prefixo)) {
-                  cache.del(key);
-                }
-              });
-            }
-          } catch (err) {
-            console.error('[CACHE] Erro na limpeza de cache:', err);
-          }
-        }
-      }
-      
-      // VALIDAÇÃO RÁPIDA: Pular validação Zod em modo turbo para maior velocidade
-      let validatedData;
-      
-      if (isTurboRequest) {
-        console.log('⚡ [TURBO] Pulando validação complexa para maior velocidade');
-        
-        // Validação simplificada e manual para máxima velocidade
-        validatedData = {
-          ...req.body,
-          createdBy: req.user.id,
-          createdAt: new Date(),
-          // Garantir formato correto para campos essenciais
-          title: req.body.title || 'Nova Atividade',
-          description: req.body.description || '',
-          clientName: req.body.clientName || '',
-          priority: req.body.priority || 'normal',
-          deadline: (() => {
-            try {
-              console.log('Processando deadline no servidor:', req.body.deadline);
-              
-              // Formato ISO mais seguro
-              const now = new Date();
-              
-              // Verificar se deadline existe e é uma string ISO válida
-              if (req.body.deadline && typeof req.body.deadline === 'string') {
-                try {
-                  // Tentar criar uma data a partir da string para validar
-                  const testDate = new Date(req.body.deadline);
-                  if (!isNaN(testDate.getTime())) {
-                    console.log('Data válida detectada:', testDate);
-                    return testDate; // Retorna o objeto Date diretamente
-                  } else {
-                    console.warn('Data inválida detectada, usando data atual');
-                  }
-                } catch (innerErr) {
-                  console.error('Erro ao converter string de data:', innerErr);
-                }
-              }
-              
-              // Fallback: usar data atual sempre como objeto Date
-              console.log('Usando data atual como fallback');
-              return now; // Objeto Date diretamente
-            } catch (err) {
-              console.error('Erro ao processar deadline:', err);
-              // Último fallback: data atual
-              return new Date();
-            }
-          })(),
-          initialDepartment: req.body.initialDepartment || 'gabarito',
-          workflowSteps: Array.isArray(req.body.workflowSteps) ? req.body.workflowSteps : [],
-        };
-      } else {
-        // Validação normal para requisições não-turbo
-        validatedData = insertActivitySchema.parse({
-          ...req.body,
-          createdBy: req.user.id
-        });
-      }
-      
-      console.log('⚡ [TURBO] Criando nova atividade após preparação');
       const activity = await storage.createActivity(validatedData);
-      console.log(`⚡ [TURBO] Nova atividade criada com ID ${activity.id}: ${activity.title}`);
       
-      // Aplicar flag TURBO no resultado se imagem foi otimizada
-      if (imageProcessed) {
-        // Atributo dynamic para contornar problema TypeScript
-        (activity as any)._imagePlaceholder = true;
-      }
-      
-      // Usar o departamento inicial que já foi definido acima
-      // const initialDepartment = req.body.initialDepartment || "gabarito";
+      // Obter o departamento inicial através do corpo da requisição ou usar gabarito como padrão
+      const initialDepartment = req.body.initialDepartment || "gabarito";
       
       // Initialize the activity progress for the initial department
       await storage.createActivityProgress({
@@ -1607,7 +571,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         department: initialDepartment,
         status: "pending",
       });
-      console.log(`[CACHE-CRÍTICO] Progresso inicial criado para departamento: ${initialDepartment}`);
       
       // Create notifications for users of the initial department
       const departmentUsers = await storage.getUsersByRole(initialDepartment);
@@ -1619,131 +582,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // SOLUÇÃO CRÍTICA: Garantir que o novo pedido apareça imediatamente na lista
-      console.log('[CACHE-CRÍTICO] Realizando limpeza profunda do cache para novo pedido');
-      
-      try {
-        // 1. Forçar atualização do cache em-produção ANTES de invalidar outros caches
-        console.log('[CACHE-CRÍTICO] 1. Força atualização síncrona do cache em produção');
-        // Usar versão síncrona para garantir ordem das operações
-        await (async () => {
-          try {
-            // Invalidar timestamp para forçar recarga completa
-            CACHE_TIMESTAMP_EM_PRODUCAO = 0;
-            CACHE_PERSISTENTE_EM_PRODUCAO = null;
-            
-            // Atualizar cache imediatamente
-            const result = await atualizarCacheEmProducao(true);
-            
-            if (result && Array.isArray(result)) {
-              // Verificar manualmente se a nova atividade está no resultado
-              const novaAtividadePresente = result.some(a => a.id === activity.id);
-              console.log(`[CACHE-CRÍTICO] Nova atividade ${activity.id} ${novaAtividadePresente ? 'ESTÁ' : 'NÃO ESTÁ'} no cache atualizado!`);
-              
-              // Se não estiver, adicionar forçadamente
-              if (!novaAtividadePresente) {
-                console.log(`[CACHE-CRÍTICO] Adicionando forçadamente a atividade ${activity.id} ao cache!`);
-                
-                // Determinar departamento atual para formatar igual às outras
-                const atividadeFormatada = {
-                  ...activity,
-                  currentDepartment: initialDepartment,
-                  client: activity.clientName,
-                  clientInfo: activity.description || null
-                };
-                
-                // Adicionar no início da lista (mais alto na lista de prioridades)
-                // Corrigir o erro de tipagem com casting explícito
-                if (Array.isArray(CACHE_PERSISTENTE_EM_PRODUCAO)) {
-                  (CACHE_PERSISTENTE_EM_PRODUCAO as any[]).unshift(atividadeFormatada);
-                } else {
-                  CACHE_PERSISTENTE_EM_PRODUCAO = [atividadeFormatada];
-                }
-                
-                console.log(`[CACHE-CRÍTICO] Cache forçadamente atualizado para ${CACHE_PERSISTENTE_EM_PRODUCAO.length} itens`);
-              }
-            }
-          } catch (innerError) {
-            console.error('[CACHE-CRÍTICO] Erro durante atualização síncrona:', innerError);
-          }
-        })();
-        
-        // 2. Limpar cache do LRU
-        if (cache) {
-          console.log('[CACHE-CRÍTICO] 2. Limpando cache LRU');
-          
-          // 2.1. Invalidar caches com prefixo específico primeiro
-          const prefixosAlvoEspecifico = [
-            'activities_em_producao_admin_',
-            'activities_main_admin_',
-            'activities_concluidos_admin_'
-          ];
-          
-          // Obter todas as chaves
-          const todasChaves = Array.from(cache.keys());
-          
-          // Limpar caches específicos primeiro
-          for (const prefixo of prefixosAlvoEspecifico) {
-            const chavesAlvo = todasChaves.filter(key => key.includes(prefixo));
-            for (const chave of chavesAlvo) {
-              console.log(`[CACHE-CRÍTICO] Invalidando cache específico: ${chave}`);
-              cache.del(chave);
-            }
-          }
-          
-          // 2.2. Limpar outros caches relacionados a atividades
-          const cacheKeyPrefix = 'activities_';
-          const cacheKeys = todasChaves.filter(key => key.startsWith(cacheKeyPrefix));
-          
-          for (const key of cacheKeys) {
-            console.log(`[CACHE-CRÍTICO] Invalidando cache geral: ${key}`);
-            cache.del(key);
-          }
-        }
-        
-        // 3. Notificar observadores e WebSockets
-        console.log('[CACHE-CRÍTICO] 3. Notificando observadores sobre atualização de cache');
-        notifyCacheObservers('em-producao');
-        
-        if (typeof (global as any).wsNotifications !== 'undefined') {
-          console.log('[CACHE-CRÍTICO] 4. Enviando mensagem WebSocket de atualização de cache');
-          (global as any).wsNotifications.notifyDepartment('admin', {
-            type: 'cache_updated',
-            cache: 'em-producao',
-            timestamp: Date.now(),
-            forceRefresh: true // Indica para o cliente que deve ignorar seu cache local
-          }, true); // Alta prioridade
-        }
-      } catch (cacheError) {
-        console.error('[CACHE-CRÍTICO] Erro durante limpeza profunda:', cacheError);
-      }
-      
       // Enviar notificação websocket para o departamento inicial
       if ((global as any).wsNotifications) {
         (global as any).wsNotifications.notifyDepartment(initialDepartment, {
           type: 'new_activity',
-          activity,
-          cache_refresh: true
-        }, true); // Alta prioridade
+          activity
+        });
         
-        // Notificar também administradores com alta prioridade
+        // Notificar também administradores
         (global as any).wsNotifications.notifyDepartment('admin', {
           type: 'new_activity',
-          activity,
-          cache_refresh: true,
-          message_priority: 'high'
-        }, true); // Alta prioridade
+          activity
+        });
       }
       
       res.status(201).json(activity);
     } catch (error) {
-      if (error instanceof z.ZodError) {
-        // Usar fromZodError apenas com ZodError
+      if (error instanceof Error) {
         const validationError = fromZodError(error);
         res.status(400).json({ message: validationError.message });
-      } else if (error instanceof Error) {
-        // Error genérico que não é uma ZodError
-        res.status(400).json({ message: error.message });
       } else {
         res.status(500).json({ message: "Erro ao criar atividade" });
       }
@@ -1767,13 +624,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const updatedActivity = await storage.updateActivity(activityId, validatedData);
       res.json(updatedActivity);
     } catch (error) {
-      if (error instanceof z.ZodError) {
-        // Usar fromZodError apenas com ZodError
+      if (error instanceof Error) {
         const validationError = fromZodError(error);
         res.status(400).json({ message: validationError.message });
-      } else if (error instanceof Error) {
-        // Error genérico que não é uma ZodError
-        res.status(400).json({ message: error.message });
       } else {
         res.status(500).json({ message: "Erro ao atualizar atividade" });
       }
@@ -2010,33 +863,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
             activityId: activity.id
           });
           
-          // TURBO: Se existe próximo departamento, notificar com PRIORIDADE MÁXIMA
+          // Se existe próximo departamento, notificar
           if (departmentIndex < DEPARTMENTS.length - 1) {
             const nextDepartment = DEPARTMENTS[departmentIndex + 1];
             
-            console.time('⚡ [TURBO] Tempo para notificar próximo departamento');
-            
-            // Notificar o próximo departamento com alta prioridade para garantir entrega instantânea
+            // Notificar o próximo departamento
             (global as any).wsNotifications.notifyDepartment(nextDepartment, {
               type: 'new_activity',
-              activity,
-              _turbo: true, // Flag para processamento prioritário
-              system_priority: 'maximum' // Indicador adicional de prioridade máxima
-            }, true); // TRUE = alta prioridade
-            
-            console.timeEnd('⚡ [TURBO] Tempo para notificar próximo departamento');
+              activity
+            });
           }
           
-          // TURBO: Notificar administradores com PRIORIDADE MÁXIMA para garantir entrega instantânea
+          // Notificar administradores
           (global as any).wsNotifications.notifyDepartment('admin', {
             type: 'activity_progress',
             activity,
             completedBy: req.body.completedBy,
             department,
             nextDepartment: departmentIndex < DEPARTMENTS.length - 1 ? DEPARTMENTS[departmentIndex + 1] : null,
-            isCompleted: departmentIndex >= DEPARTMENTS.length - 1,
-            _turbo: true // Flag para processamento prioritário
-          }, true); // TRUE = alta prioridade
+            isCompleted: departmentIndex >= DEPARTMENTS.length - 1
+          });
         }
         
         res.json(completedProgress);
@@ -2499,44 +1345,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // Statistics for admin dashboard
-  // OTIMIZAÇÃO CRÍTICA - Cache pré-computado persistente para estatísticas
-  // Esta versão usa cache persistente em memória com TTL longo e regeneração em background
-  let CACHE_PERSISTENTE_ESTATISTICAS = null;
-  let CACHE_TIMESTAMP_ESTATISTICAS = 0;
-  let CACHE_UPDATING_ESTATISTICAS = false;
-  const CACHE_TTL_ESTATISTICAS = 2 * 60 * 1000; // 2 minutos
-  
-  // Função para atualizar cache de estatísticas em background
-  async function atualizarCacheEstatisticas() {
-    if (CACHE_UPDATING_ESTATISTICAS) return; // Evita atualizações concorrentes
-    
-    try {
-      CACHE_UPDATING_ESTATISTICAS = true;
-      console.time('[CACHE-ESTATISTICAS] Atualizando cache persistente');
-      
-      // Buscar diretamente do storage
-      const stats = await storage.getActivityStats();
-      
-      // Atualizar cache persistente
-      CACHE_PERSISTENTE_ESTATISTICAS = stats;
-      CACHE_TIMESTAMP_ESTATISTICAS = Date.now();
-      
-      console.timeEnd('[CACHE-ESTATISTICAS] Atualizando cache persistente');
-    } catch (error) {
-      console.error('[CACHE-ESTATISTICAS] Erro ao atualizar cache:', error);
-    } finally {
-      CACHE_UPDATING_ESTATISTICAS = false;
-    }
-  }
-  
-  // Iniciar cache em background na inicialização do servidor
-  atualizarCacheEstatisticas();
-  
-  // Programar atualização periódica do cache a cada 2 minutos
-  setInterval(() => {
-    atualizarCacheEstatisticas();
-  }, CACHE_TTL_ESTATISTICAS);
-
   app.get("/api/stats", async (req, res) => {
     // Verificar autenticação
     if (!req.isAuthenticated()) {
@@ -2544,39 +1352,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(401).json({ message: "Não autorizado" });
     }
     try {
-      // Cabeçalhos para cache no browser
-      res.setHeader('Cache-Control', 'private, max-age=60');
-      
-      // Usar cache persistente pré-computado se estiver disponível e válido
-      if (CACHE_PERSISTENTE_ESTATISTICAS && (Date.now() - CACHE_TIMESTAMP_ESTATISTICAS < CACHE_TTL_ESTATISTICAS)) {
-        console.log(`[CACHE-PERSISTENTE] Usando cache pré-computado para estatísticas (${(Date.now() - CACHE_TIMESTAMP_ESTATISTICAS)/1000}s)`);
-        
-        // Programar atualização em background se estiver próximo de expirar
-        if (Date.now() - CACHE_TIMESTAMP_ESTATISTICAS > CACHE_TTL_ESTATISTICAS * 0.8) {
-          setTimeout(() => atualizarCacheEstatisticas(), 100);
-        }
-        
-        return res.json(CACHE_PERSISTENTE_ESTATISTICAS);
-      }
-      
-      // Cache não disponível ou expirado, buscar novos dados
-      console.time('[PERF] Carregamento estatísticas');
       const stats = await storage.getActivityStats();
-      console.timeEnd('[PERF] Carregamento estatísticas');
-      
-      // Atualizar cache persistente
-      CACHE_PERSISTENTE_ESTATISTICAS = stats;
-      CACHE_TIMESTAMP_ESTATISTICAS = Date.now();
-      
       res.json(stats);
     } catch (error) {
-      console.error("Erro ao buscar estatísticas:", error);
-      
-      // Tentar usar cache persistente como última opção
-      if (CACHE_PERSISTENTE_ESTATISTICAS) {
-        return res.json(CACHE_PERSISTENTE_ESTATISTICAS);
-      }
-      
       res.status(500).json({ message: "Erro ao buscar estatísticas" });
     }
   });
@@ -2624,56 +1402,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // OTIMIZAÇÃO CRÍTICA - Cache pré-computado persistente para contagem por departamento
-  // Esta versão usa cache persistente em memória com TTL médio e regeneração em background
-  let CACHE_PERSISTENTE_DEPT_COUNTS = null;
-  let CACHE_TIMESTAMP_DEPT_COUNTS = 0;
-  let CACHE_UPDATING_DEPT_COUNTS = false;
-  const CACHE_TTL_DEPT_COUNTS = 60 * 1000; // 1 minuto (pode ser ajustado conforme necessidade)
-  
-  // Função para atualizar cache de contagem por departamento em background
-  async function atualizarCacheDeptCounts() {
-    if (CACHE_UPDATING_DEPT_COUNTS) return; // Evita atualizações concorrentes
-    
-    try {
-      CACHE_UPDATING_DEPT_COUNTS = true;
-      console.time('[CACHE-DEPT-COUNTS] Atualizando cache persistente');
-      
-      // Resultado final
-      const result: Record<string, number> = {};
-      
-      // Buscas paralelas são mais rápidas que sequenciais
-      await Promise.all(DEPARTMENTS.map(async (dept) => {
-        try {
-          // Usar a função de emergência para obter atividades de cada departamento
-          const activities = await buscarAtividadesPorDepartamentoEmergencia(dept);
-          result[dept] = activities.length;
-        } catch (err) {
-          console.error(`[ERROR] Erro ao contar atividades para ${dept}:`, err);
-          result[dept] = 0; // Valor padrão em caso de erro
-        }
-      }));
-      
-      // Atualizar cache persistente
-      CACHE_PERSISTENTE_DEPT_COUNTS = result;
-      CACHE_TIMESTAMP_DEPT_COUNTS = Date.now();
-      
-      console.timeEnd('[CACHE-DEPT-COUNTS] Atualizando cache persistente');
-    } catch (error) {
-      console.error('[CACHE-DEPT-COUNTS] Erro ao atualizar cache:', error);
-    } finally {
-      CACHE_UPDATING_DEPT_COUNTS = false;
-    }
-  }
-  
-  // Iniciar cache em background na inicialização do servidor
-  atualizarCacheDeptCounts();
-  
-  // Programar atualização periódica do cache a cada 1 minuto
-  setInterval(() => {
-    atualizarCacheDeptCounts();
-  }, CACHE_TTL_DEPT_COUNTS);
-  
   // Rota para obter o contador de atividades por departamento (para o dashboard admin)
   app.get("/api/stats/department-counts", async (req, res) => {
     try {
@@ -2691,79 +1419,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Adiciona cabeçalhos de cache para o navegador
-      res.setHeader('Cache-Control', 'public, max-age=60');
+      res.setHeader('Cache-Control', 'public, max-age=30');
       
-      // Usar cache persistente pré-computado se estiver disponível e válido
-      if (CACHE_PERSISTENTE_DEPT_COUNTS && (Date.now() - CACHE_TIMESTAMP_DEPT_COUNTS < CACHE_TTL_DEPT_COUNTS)) {
-        console.log(`[CACHE-PERSISTENTE] Usando cache pré-computado para contagem por departamento (${(Date.now() - CACHE_TIMESTAMP_DEPT_COUNTS)/1000}s)`);
-        
-        // Programar atualização em background se estiver próximo de expirar
-        if (Date.now() - CACHE_TIMESTAMP_DEPT_COUNTS > CACHE_TTL_DEPT_COUNTS * 0.8) {
-          setTimeout(() => atualizarCacheDeptCounts(), 100);
-        }
-        
-        return res.json(CACHE_PERSISTENTE_DEPT_COUNTS);
-      }
+      // Resultado final
+      const result: Record<string, number> = {};
       
-      // Cache não disponível ou expirado, executar consulta
-      console.time('[PERF] Carregamento contagem por departamento');
+      // Buscas paralelas são mais rápidas que sequenciais
+      await Promise.all(DEPARTMENTS.map(async (dept) => {
+        try {
+          // Usar a função de emergência para obter atividades de cada departamento
+          const activities = await buscarAtividadesPorDepartamentoEmergencia(dept);
+          result[dept] = activities.length;
+        } catch (err) {
+          console.error(`[ERROR] Erro ao contar atividades para ${dept}:`, err);
+          result[dept] = 0; // Valor padrão em caso de erro
+        }
+      }));
       
-      try {
-        // Usar cache LRU como segunda camada de proteção
-        const cacheKey = `department_counts_${req.user ? req.user.id : 'anonymous'}`;
-        const cachedData = cache.get(cacheKey);
-        
-        if (cachedData) {
-          console.log(`[CACHE-LRU] Usando cache LRU para ${cacheKey}`);
-          
-          // Programar atualização de cache persistente em background
-          setTimeout(() => atualizarCacheDeptCounts(), 10);
-          
-          return res.json(cachedData);
-        }
-        
-        // Resultado final
-        const result: Record<string, number> = {};
-        
-        // Buscas paralelas são mais rápidas que sequenciais
-        await Promise.all(DEPARTMENTS.map(async (dept) => {
-          try {
-            // Usar a função de emergência para obter atividades de cada departamento
-            const activities = await buscarAtividadesPorDepartamentoEmergencia(dept);
-            result[dept] = activities.length;
-          } catch (err) {
-            console.error(`[ERROR] Erro ao contar atividades para ${dept}:`, err);
-            result[dept] = 0; // Valor padrão em caso de erro
-          }
-        }));
-        
-        // Atualizar ambos os caches
-        cache.set(cacheKey, result, 30000); // 30 segundos no cache LRU
-        CACHE_PERSISTENTE_DEPT_COUNTS = result;
-        CACHE_TIMESTAMP_DEPT_COUNTS = Date.now();
-        
-        console.timeEnd('[PERF] Carregamento contagem por departamento');
-        
-        return res.json(result);
-      } catch (error) {
-        console.error("[ERROR] Erro ao processar contagem por departamento:", error);
-        
-        // Tentar usar cache persistente mesmo expirado como fallback
-        if (CACHE_PERSISTENTE_DEPT_COUNTS) {
-          console.log('[CACHE-EMERGENCIA] Usando cache persistente expirado para contagem por departamento');
-          return res.json(CACHE_PERSISTENTE_DEPT_COUNTS);
-        }
-        
-        throw error; // Propagar erro para ser tratado abaixo
-      }
+      res.json(result);
     } catch (error) {
       console.error("[ERROR] Erro ao obter contagem por departamento:", error);
-      
-      // Em caso de erro crítico, tenta recuperar do cache persistente
-      if (CACHE_PERSISTENTE_DEPT_COUNTS) {
-        return res.json(CACHE_PERSISTENTE_DEPT_COUNTS);
-      }
-      
       res.status(500).json({ 
         message: "Erro ao obter contagem por departamento", 
         error: error instanceof Error ? error.message : "Erro desconhecido"
@@ -3026,24 +1701,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // Sistema de monitoramento e auto-recuperação do servidor WebSocket 
-  // com suporte a mensagens pendentes para alta disponibilidade
+  // Sistema de monitoramento e auto-recuperação do servidor WebSocket
   let wsErrors = 0;
   const MAX_WS_ERRORS = 10;
-  
-  // Fila de mensagens pendentes (será inicializada dentro de setupWebSocketServer)
-  const pendingMessages: Record<string, string[]> = {
-    'admin': [],
-    'gabarito': [],
-    'impressao': [],
-    'batida': [],
-    'costura': [],
-    'embalagem': []
-  };
-  
-  // Armazenar última mensagem por tipo para entrega imediata a novas conexões
-  const lastMessageByType: Record<string, string> = {};
-  
   const monitorWSServer = () => {
     // Resetar contador de erros a cada 5 minutos
     setInterval(() => {
@@ -3053,7 +1713,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     }, 5 * 60 * 1000); // 5 minutos
     
-    // Verificar integridade do servidor WebSocket a cada 30 segundos (mais frequente)
+    // Verificar integridade do servidor WebSocket a cada minuto
     setInterval(() => {
       try {
         const clientCount = Array.from(wss.clients).length;
@@ -3161,66 +1821,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // Função otimizada para enviar atualizações para um departamento específico
-  function notifyDepartment(department: string, data: any, highPriority: boolean = false) {
-    // TURBO: Modo de alta prioridade ativado para transições críticas entre departamentos
-    if (highPriority) {
-      console.log(`🚀 [TURBO] Notificação de ALTA PRIORIDADE para departamento: ${department}`);
-    }
-    
-    // Adicionar valores para diagnóstico e rastreamento de desempenho
+  function notifyDepartment(department: string, data: any) {
+    // Adicionar timestamp para rastreamento de latência
     const messageWithTimestamp = {
       ...data,
-      server_timestamp: Date.now(),
-      high_priority: highPriority,
-      message_id: Math.random().toString(36).substring(2, 15),
-      event_source: 'server_push',
-      // Adicionar flag TURBO para processamento prioritário no cliente
-      _turbo: highPriority ? true : undefined
+      server_timestamp: Date.now()
     };
     
     // Serializar a mensagem apenas uma vez para todas as conexões (economia de CPU)
     const serializedMessage = JSON.stringify(messageWithTimestamp);
     
-    // Sempre armazenar a última mensagem por tipo para entrega instantânea a novas conexões
-    if (data.type) {
-      lastMessageByType[`${department}_${data.type}`] = serializedMessage;
-      
-      // Diagnóstico: manter histórico das últimas mensagens por tipo (até 10)
-      const typeKey = `${department}_${data.type}_history`;
-      if (!lastMessageByType[typeKey]) {
-        lastMessageByType[typeKey] = [];
-      }
-      
-      if (Array.isArray(lastMessageByType[typeKey])) {
-        lastMessageByType[typeKey].push({
-          timestamp: Date.now(),
-          message_id: messageWithTimestamp.message_id,
-          type: data.type,
-          department
-        });
-        
-        // Manter apenas as 10 mais recentes
-        if (lastMessageByType[typeKey].length > 10) {
-          lastMessageByType[typeKey].shift();
-        }
-      }
-    }
-    
     // Verificar se o departamento existe e tem conexões para evitar processamento desnecessário
     const departmentConnections = connections[department];
     if (!departmentConnections || departmentConnections.size === 0) {
-      // Implementar fila para mensagens importantes quando não houver conexões ativas
-      if (highPriority) {
-        if (!pendingMessages[department]) {
-          pendingMessages[department] = [];
-        }
-        // Limitar a fila para evitar crescimento excessivo
-        while (pendingMessages[department].length >= 50) {
-          pendingMessages[department].shift();  // Remover a mensagem mais antiga
-        }
-        pendingMessages[department].push(serializedMessage);
-        console.log(`[websocket] Mensagem de alta prioridade enfileirada para ${department}`);
-      }
       return 0; // Retornar 0 conexões notificadas
     }
     
@@ -3231,12 +1844,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     departmentConnections.forEach(ws => {
       try {
         if (ws.readyState === WebSocket.OPEN) {
-          // Definir prioridade de alta se necessário (menor latência)
-          if (highPriority && typeof ws.setPriority === 'function') {
-            // @ts-ignore - algumas implementações de WebSocket não têm setPriority
-            ws.setPriority(1);
-          }
-          
           ws.send(serializedMessage);
           successCount++;
         }
@@ -3244,11 +1851,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.error(`[websocket] Erro ao enviar mensagem para ${department}:`, error);
       }
     });
-    
-    // Armazenar última mensagem por tipo para entrega imediata a novas conexões
-    if (data.type) {
-      lastMessageByType[`${department}_${data.type}`] = serializedMessage;
-    }
     
     // Retornar o número de conexões notificadas com sucesso (útil para debugging)
     return successCount;
@@ -3311,9 +1913,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Exportar as funções de notificação para uso em outras partes do código
   (global as any).wsNotifications = {
     notifyDepartment,
-    notifyAll,
-    pendingMessages,      // Exportar fila de mensagens pendentes
-    lastMessageByType     // Exportar cache de últimas mensagens
+    notifyAll
   };
   
   // Configurar WebSocket server com melhor tratamento de erros e performance
@@ -3326,9 +1926,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // Propriedades para rastrear estado da conexão
     let isAlive = true;
     let registeredDepartment: string | null = null;
-    
-    // Registrar estatística global de conexões ativas
-    (global as any).websocketConnections = ((global as any).websocketConnections || 0) + 1;
     
     // Função otimizada para enviar resposta com tratamento de erro embutido
     const sendResponse = (data: any) => {
@@ -3456,81 +2053,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`[websocket:${connectionId}] Cliente desconectado`);
       clearInterval(pingInterval);
       
-      // Atualizar contador global de conexões
-      (global as any).websocketConnections = Math.max(0, ((global as any).websocketConnections || 1) - 1);
-      
       // Remover apenas do departamento registrado (mais eficiente)
       if (registeredDepartment && connections[registeredDepartment]) {
         connections[registeredDepartment].delete(ws);
         console.log(`[websocket:${connectionId}] Conexão removida do departamento: ${registeredDepartment}`);
-        
-        // Verificar se há mensagens pendentes para este departamento
-        if (pendingMessages[registeredDepartment] && pendingMessages[registeredDepartment].length > 0) {
-          console.log(`[websocket] ${pendingMessages[registeredDepartment].length} mensagens pendentes para ${registeredDepartment} permanecerão na fila para próxima conexão`);
-        }
       }
     });
   });
   }
-  
-  // Rota para diagnóstico de cache e integridade do sistema (sem autenticação para testes)
-  app.get('/api/system/diagnostico', async (req, res) => {
-    try {
-      // Usar a função de verificação de integridade de cache já importada do módulo
-      // Não usar require() que não funciona no contexto atual
-      
-      // Para diagnóstico simples sem dependência de checkCacheIntegrity
-      
-      // Obter estatísticas do LRUCache do sistema global
-      const globalCache = (global as any).cache || {};
-      const lruCacheStats = {
-        size: globalCache.size?.() || 0,
-        hotCacheSize: globalCache.hotCache?.size || 0,
-        prefetchCacheSize: globalCache.prefetchCache?.size || 0,
-        hits: globalCache.hits || 0,
-        misses: globalCache.misses || 0,
-        totalRequests: globalCache.totalRequests || 0,
-        cacheInterval: globalCache.cleanupInterval || 0,
-        hitRate: globalCache.totalRequests > 0 
-          ? Math.round((globalCache.hits / globalCache.totalRequests) * 100) + '%' 
-          : 'N/A'
-      };
-      
-      // Obter contagem de atividades por departamento
-      let departmentCounts = {};
-      try {
-        // Usar a mesma lógica que a rota /api/stats/department-counts mas sem autenticação
-        for (const department of DEPARTMENTS) {
-          const activities = await buscarAtividadesPorDepartamentoEmergencia(department);
-          departmentCounts[department] = activities.length;
-        }
-      } catch (error) {
-        departmentCounts = { error: "Não foi possível obter contagem de departamentos" };
-      }
-      
-      // Retornar informações completas
-      res.json({
-        timestamp: new Date().toISOString(),
-        uptime: process.uptime(),
-        memoria: {
-          total: Math.round(process.memoryUsage().heapTotal / 1024 / 1024) + "MB",
-          usado: Math.round(process.memoryUsage().heapUsed / 1024 / 1024) + "MB",
-          externo: Math.round(process.memoryUsage().external / 1024 / 1024) + "MB",
-          rss: Math.round(process.memoryUsage().rss / 1024 / 1024) + "MB"
-        },
-        lruCache: lruCacheStats,
-        conexoesWebSocket: (global as any).websocketConnections || 0,
-        departamentos: departmentCounts,
-        versao: "2.8.2",
-        status: "Sistema operacional e otimizado"
-      });
-    } catch (error) {
-      res.status(500).json({
-        error: 'Falha ao verificar cache',
-        message: error instanceof Error ? error.message : String(error)
-      });
-    }
-  });
   
   // Chamada inicial para configurar o servidor
   setupWebSocketServer(wss);

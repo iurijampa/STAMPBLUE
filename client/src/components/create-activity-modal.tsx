@@ -72,35 +72,6 @@ export default function CreateActivityModal({ isOpen, onClose, onSuccess }: Crea
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.time('⚡ [TURBO] Criação de atividade');
-    
-    // Primeiro, validar todos os dados antes de começar qualquer processamento pesado
-    if (!title.trim()) {
-      toast({
-        title: "Erro ao criar atividade",
-        description: "O título é obrigatório",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    if (!description.trim()) {
-      toast({
-        title: "Erro ao criar atividade",
-        description: "A descrição é obrigatória",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    if (!clientName.trim()) {
-      toast({
-        title: "Erro ao criar atividade",
-        description: "O nome do cliente é obrigatório",
-        variant: "destructive",
-      });
-      return;
-    }
     
     if (selectedDepartments.length === 0) {
       toast({
@@ -110,103 +81,33 @@ export default function CreateActivityModal({ isOpen, onClose, onSuccess }: Crea
       });
       return;
     }
-    
-    if (!initialDepartment) {
-      toast({
-        title: "Erro ao criar atividade",
-        description: "Selecione um departamento inicial",
-        variant: "destructive",
-      });
-      return;
-    }
 
-    // A data de entrega não é mais obrigatória, usamos a data atual como fallback
-
-    // Agora podemos prosseguir com o processamento
     setIsLoading(true);
     
     try {
-      // Anunciar ao usuário que a operação está em andamento (feedback instantâneo)
-      toast({
-        title: "Processando",
-        description: "Criando nova atividade...",
-        duration: 3000,
-      });
-      
-      // Iniciar processamento de imagens em paralelo para melhorar a performance
-      const imagePromises = [];
-      
-      // MODO ULTRA-RÁPIDO: Em vez de esperar pela conversão de todas as imagens,
-      // vamos prosseguir imediatamente e enviar os dados de imagem depois
-      // Isso permite que a interface responda instantaneamente
-      
-      // Preparar URLs de placeholder para enviar imediatamente
-      const PLACEHOLDER_IMAGE = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
-      
-      // Usar uma imagem placeholder simples em vez de tentar processar
-      // Isso evita o erro que estamos enfrentando com toISOString
-      const SIMPLE_PLACEHOLDER = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
-      
-      let imageData = SIMPLE_PLACEHOLDER;
-      let realImageData: string | null = null;
-      
-      // Não tentar processar a imagem por enquanto - usar sempre o placeholder
-      console.log("✅ Usando imagem placeholder para garantir o funcionamento");
-      
-      // Vamos armazenar o ID da atividade após a criação para poder atualizar as imagens
-      const updateImagesLater = (activityId: number) => {
-        console.log(`⚡ Atualizando imagens reais para atividade ${activityId}`);
-            
-            // Preparar dados das imagens adicionais em paralelo
-            const processAdditionalImages = async () => {
-              const realAdditionalImages = [];
-              for (let i = 0; i < additionalImageFiles.length; i++) {
-                try {
-                  const imgData = await fileToBase64(additionalImageFiles[i]);
-                  realAdditionalImages.push(imgData);
-                } catch (err) {
-                  console.error(`Erro ao processar imagem adicional ${i}:`, err);
-                }
-              }
-              return realAdditionalImages;
-            };
-            
-            // Executar processamento e envio das imagens reais
-            processAdditionalImages().then(additionalImagesProcessed => {
-              // Enviar atualização com as imagens reais
-              apiRequest("POST", `/api/activities/${activityId}/update-images`, {
-                image: realImageData,
-                additionalImages: additionalImagesProcessed
-              }).then(() => {
-                console.log("✅ Imagens reais atualizadas com sucesso!");
-              }).catch(err => {
-                console.error("Erro ao atualizar imagens reais:", err);
-              });
-            });
-          };
-          
-          // Guardar a função para ser chamada após criar a atividade
-          // Definir callback para atualização de imagens no escopo global
-if (typeof window !== 'undefined') {
-              if (!window._updateImagesCallback) {
-                // Declarar o tipo na window para resolver erros TypeScript
-                window._updateImagesCallback = updateImagesLater;
-              } else {
-                window._updateImagesCallback = updateImagesLater;
-              }
-            }
-      
-      // Gerar URLs de placeholder para imagens adicionais
-      const additionalImagesData: string[] = [];
-      
-      // Preencher com placeholders para cada imagem adicional
-      for (let i = 0; i < additionalImageFiles.length; i++) {
-        additionalImagesData.push(`${PLACEHOLDER_IMAGE}#placeholder-${i}`);
+      let imageData = null;
+      if (imageFile) {
+        imageData = await fileToBase64(imageFile);
       }
       
-      // Não precisamos mais esperar! A UI responde imediatamente
+      // Converter todas as imagens adicionais para base64
+      const additionalImagesData = [];
+      for (const file of additionalImageFiles) {
+        const base64Data = await fileToBase64(file);
+        additionalImagesData.push(base64Data);
+      }
       
-      // Preparar os dados do formulário
+      if (!deadline) {
+        toast({
+          title: "Erro ao criar atividade",
+          description: "A data de entrega é obrigatória",
+          variant: "destructive",
+        });
+        setIsLoading(false);
+        return;
+      }
+      
+      // Convertendo a data para string ISO para o backend
       const formData = {
         title,
         description,
@@ -215,62 +116,31 @@ if (typeof window !== 'undefined') {
         image: imageData,
         additionalImages: additionalImagesData,
         priority,
-        deadline: (() => {
-          console.log('📅 Processando data de entrega:', deadline);
-          // Tratar o deadline com máxima segurança para evitar erros de toISOString
-          try {
-            if (deadline) {
-              // Validar explicitamente se é uma data válida
-              if (deadline instanceof Date && !isNaN(deadline.getTime())) {
-                const isoString = deadline.toISOString();
-                console.log('📅 Data válida convertida para:', isoString);
-                return isoString;
-              } else {
-                console.warn('📅 Data inválida fornecida:', deadline);
-              }
-            } else {
-              console.log('📅 Nenhuma data fornecida, usando data atual');
-            }
-            // Em qualquer outro caso, usar data atual
-            return new Date().toISOString();
-          } catch (err) {
-            console.error("📅 Erro ao processar data de entrega:", err);
-            // Fallback seguro
-            return new Date().toISOString();
-          }
-        })(),
-        initialDepartment: initialDepartment,
+        deadline: deadline ? deadline.toISOString() : null,
+        initialDepartment: initialDepartment, // Departamento inicial selecionado
         workflowSteps: selectedDepartments.map(department => ({
           department,
           order: selectedDepartments.indexOf(department) + 1,
-        })),
-        _turbo: true // Flag para processamento prioritário no servidor
+        }))
       };
       
-      console.log('🔄 Enviando solicitação para criação de atividade');
-      
-      // Enviar solicitação ao servidor com timeout reduzido para resposta mais rápida
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 segundos de timeout
-      
-      const response = await apiRequest("POST", "/api/activities", formData, {
-        signal: controller.signal,
-        headers: {
-          'X-Priority': 'high', // Header personalizado para indicar alta prioridade
-          'X-Turbo': 'true'     // Header turbo para processamento prioritário
-        }
-      });
-      
-      clearTimeout(timeoutId);
+      const response = await apiRequest("POST", "/api/activities", formData);
       
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.message || "Erro ao criar atividade");
       }
       
-      console.log('✅ Atividade criada com sucesso, atualizando interface');
+      // Invalidar as consultas para atualizar as listas de atividades
+      queryClient.invalidateQueries({ queryKey: ["/api/activities"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stats/department-counts"] });
       
-      // OPERAÇÃO PARALELA: Resetar formulário imediatamente para feedback ao usuário
+      toast({
+        title: "Atividade criada com sucesso",
+      });
+      
+      // Resetar formulário
       setTitle("");
       setDescription("");
       setClientName("");
@@ -280,85 +150,9 @@ if (typeof window !== 'undefined') {
       setSelectedDepartments([]);
       setDeadline(undefined);
       
-      // TURBO: Invalidar caches e buscar dados atualizados em paralelo
-      console.log("🚨 Forçando atualização após criação de novo pedido");
-      
-      // Função auxiliar para buscar e atualizar um endpoint específico
-      const fetchAndUpdateCache = async (endpoint: string, queryKey: string[]) => {
-        try {
-          const fetchResponse = await fetch(endpoint, {
-            headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
-          });
-          if (fetchResponse.ok) {
-            const data = await fetchResponse.json();
-            queryClient.setQueryData(queryKey, data);
-            
-            // Se houver atividade criada, chamar o callback de atualização de imagens
-            if (endpoint === "/api/activities" && data && Array.isArray(data) && data.length > 0) {
-              try {
-                // Buscar atividade mais recente para atualizar imagens
-                const newestActivity = [...data].sort((a, b) => b.id - a.id)[0];
-                if (newestActivity && newestActivity.id) {
-                  console.log(`⚡ Executando callback de atualização de imagens para atividade ${newestActivity.id}`);
-                  
-                  // Verificação de segurança para a propriedade _updateImagesCallback
-                  if (typeof window !== 'undefined' && 
-                      window.hasOwnProperty('_updateImagesCallback') && 
-                      typeof window['_updateImagesCallback'] === 'function') {
-                    (window as any)._updateImagesCallback(newestActivity.id);
-                  } else {
-                    console.warn("Função de atualização de imagens não disponível");
-                  }
-                }
-              } catch (err) {
-                console.warn("Erro ao processar atualização de imagens:", err);
-              }
-            }
-            
-            return true;
-          }
-        } catch (e) {
-          console.warn(`Erro ao buscar ${endpoint}:`, e);
-        }
-        return false;
-      };
-      
-      // Executar todas as atualizações em paralelo para maximizar performance
-      await Promise.all([
-        // 1. Invalidar todas as consultas relevantes - imediatamente
-        queryClient.invalidateQueries({ 
-          queryKey: ["/api/activities"],
-          refetchType: 'all' // Garantir recarregamento completo 
-        }),
-        queryClient.invalidateQueries({ 
-          queryKey: ["/api/activities/em-producao"],
-          refetchType: 'all'
-        }),
-        
-        // 2. Buscar e atualizar os dados diretamente (principal + em produção)
-        fetchAndUpdateCache("/api/activities", ["/api/activities"]),
-        fetchAndUpdateCache("/api/activities/em-producao", ["/api/activities/em-producao"]),
-        
-        // 3. Invalidar estatísticas secundárias
-        queryClient.invalidateQueries({ queryKey: ["/api/activities/concluidos"] }),
-        queryClient.invalidateQueries({ queryKey: ["/api/stats"] }),
-        queryClient.invalidateQueries({ queryKey: ["/api/stats/department-counts"] })
-      ]);
-      
-      console.log("✅ Dados atualizados com sucesso após criação de novo pedido");
-      
-      // Mostrar mensagem de sucesso
-      toast({
-        title: "Atividade criada com sucesso",
-        description: "A nova atividade foi adicionada ao fluxo de trabalho",
-        variant: "default",
-      });
-      
-      // Chamar callbacks de sucesso e fechamento
       onSuccess();
       onClose();
       
-      console.timeEnd('⚡ [TURBO] Criação de atividade');
     } catch (error) {
       console.error("Erro ao criar atividade:", error);
       toast({

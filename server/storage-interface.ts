@@ -18,13 +18,12 @@ export interface IStorage {
   deleteUser(id: number): Promise<void>;
   
   // Activities
-  createActivity(activity: InsertActivity, options?: { turbo?: boolean }): Promise<Activity>;
+  createActivity(activity: InsertActivity): Promise<Activity>;
   getActivity(id: number): Promise<Activity | undefined>;
   getAllActivities(): Promise<Activity[]>;
   getActivitiesByDepartment(department: string): Promise<Activity[]>;
   updateActivity(id: number, activityData: InsertActivity): Promise<Activity>;
   updateActivityStatus(id: number, status: string): Promise<Activity>;
-  updateActivityImages(id: number, image: string, additionalImages: string[]): Promise<Activity>;
   deleteActivity(id: number): Promise<void>;
   getActivityStats(): Promise<{ total: number, inProgress: number, completed: number }>;
   

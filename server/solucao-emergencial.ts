@@ -1,56 +1,6 @@
-import { db, cachedQuery, clearCacheByPattern, CACHE_PERSISTENTE_POR_DEPT } from "./db";
+import { db, cachedQuery, clearCacheByPattern } from "./db";
 import { activities, activityProgress, DEPARTMENTS } from "@shared/schema"; 
 import { and, eq, inArray, sql } from "drizzle-orm";
-
-// TTL para cache de atividades pendentes por departamento (7 segundos)
-// Reduzido para melhorar a responsividade e manter dados mais atualizados
-const CACHE_DEPT_TTL = 7 * 1000;
-
-/**
- * Sistema de cache persistente pré-computado para atividades pendentes por departamento
- * Essa função é executada em background a cada 10 segundos para manter dados atualizados
- * com gargalos, impactando o mínimo possível o usuário final
- */
-export async function atualizarCachePersistenteDepartamentos(departmentsToUpdate?: string[]) {
-  const inicio = Date.now();
-  console.log(`[CACHE-DEPT] Atualizando cache persistente de departamentos`);
-
-  try {
-    // Lista de departamentos a atualizar
-    const depts = departmentsToUpdate && departmentsToUpdate.length > 0 
-      ? departmentsToUpdate.filter(d => DEPARTMENTS.includes(d as any))
-      : DEPARTMENTS;
-    
-    // Buscar atividades para cada departamento especificado (ou todos, se não especificado)
-    for (const dept of depts) {
-      const cacheKey = `activities_dept_${dept}`;
-      const cachedData = CACHE_PERSISTENTE_POR_DEPT.get(cacheKey);
-      
-      // Pular departamentos que já têm cache válido
-      if (cachedData && cachedData.timestamp > Date.now() - CACHE_DEPT_TTL) {
-        console.log(`[CACHE-DEPT] Já existe cache válido para ${dept} (${Math.floor((Date.now() - cachedData.timestamp)/1000)}s)`);
-        continue;
-      }
-      
-      // Buscar dados utilizando a função existente
-      // Isso garante que a lógica de ordenação seja compartilhada
-      console.log(`[CACHE-DEPT] Pré-computando dados para ${dept}`);
-      const atividades = await buscarAtividadesPorDepartamentoEmergencia(dept);
-      
-      // Salvar no cache persistente
-      CACHE_PERSISTENTE_POR_DEPT.set(cacheKey, {
-        data: atividades,
-        timestamp: Date.now()
-      });
-      
-      console.log(`[CACHE-DEPT] Cache atualizado para ${dept}: ${atividades.length} atividades`);
-    }
-    
-    console.log(`[CACHE-DEPT] Atualização completa: ${Date.now() - inicio}ms`);
-  } catch (erro) {
-    console.error(`[CACHE-DEPT] Erro ao atualizar cache persistente:`, erro);
-  }
-}
 
 // Cache de departamentos para não precisar consultar a cada chamada
 const departmentCache: Record<string, number> = {};
@@ -74,15 +24,6 @@ export async function buscarAtividadesPorDepartamentoEmergencia(department: stri
   // Criar chave de cache única para este departamento
   const cacheKey = `activities_dept_${department}`;
   
-  // Verificar primeiro no cache persistente pré-computado (10-50x mais rápido)
-  const cachedData = CACHE_PERSISTENTE_POR_DEPT.get(cacheKey);
-  if (cachedData && cachedData.timestamp > Date.now() - CACHE_DEPT_TTL) {
-    console.log(`[CACHE-PERSISTENTE-DEPT] Usando cache pré-computado para ${department} (${Math.floor((Date.now() - cachedData.timestamp)/1000)}s)`);
-    
-    // Dados já transformados e prontos para uso
-    return cachedData.data;
-  }
-  
   try {
     // PERFORMANCE: Sistema de cache multi-nível com consulta altamente otimizada
     // Isso reduz a latência total em >70% para conjuntos de dados grandes
@@ -103,6 +44,7 @@ export async function buscarAtividadesPorDepartamentoEmergencia(department: stri
           additional_images: activities.additionalImages,
           created_at: activities.createdAt,
           quantity: activities.quantity,
+          clientName: activities.clientName,
           notes: activities.notes,
           progress_id: activityProgress.id,
           status: activityProgress.status,
@@ -329,19 +271,22 @@ export async function completarProgressoAtividadeEmergencia(
   completedBy: string,
   notes?: string
 ) {
-  // Iniciar timer para medição de performance
-  console.time('⚡ [TURBO] Tempo para completar atividade');
+  // Log detalhado para diagnóstico do erro 500
+  console.log(`[DEBUG] Completando atividade #${activityId} no departamento ${department} por ${completedBy}`);
   
-  // Verificar valores de entrada sem logs excessivos (performance)
+  // Verificar valores de entrada
   if (!activityId) {
+    console.error('[ERRO] ID da atividade não fornecido');
     throw new Error('ID da atividade é obrigatório');
   }
   
   if (!department) {
+    console.error('[ERRO] Departamento não fornecido');
     throw new Error('Departamento é obrigatório');
   }
   
   if (!completedBy) {
+    console.error('[ERRO] Nome do responsável não fornecido');
     throw new Error('Nome do responsável é obrigatório');
   }
   
@@ -352,12 +297,8 @@ export async function completarProgressoAtividadeEmergencia(
     // PERFORMANCE AVANÇADA: Transação com isolamento READ COMMITTED para máximo throughput
     // com garantia de consistência para esta operação específica
     return await db.transaction(async (tx) => {
-      // ATIVAR MODO ALTA PERFORMANCE para transações de prioridade máxima
-      // Isso desabilita logs e otimiza ao máximo para velocidade
-      await tx.execute(sql`SET LOCAL statement_timeout = '30s'`); // Evitar operações bloqueantes
-      
-      // 1. Atualizar o progresso atual para concluído usando consulta ultra-otimizada
-      // com operação de escrita direta + bloqueio atômico
+      // 1. Atualizar o progresso atual para concluído usando consulta otimizada
+      // Usando SELECT FOR UPDATE para garantir bloqueio exclusivo durante a transação
       const [progressoAtualizado] = await tx
         .update(activityProgress)
         .set({
@@ -452,33 +393,18 @@ export async function completarProgressoAtividadeEmergencia(
       return progressoAtualizado;
     }).finally(() => {
       try {
-        console.timeEnd('⚡ [TURBO] Tempo para completar atividade');
-        
-        // ATIVAR MODO AGRESSIVO DE LIMPEZA DE CACHE
-        // Esta abordagem garante que todos os dados estão atualizados imediatamente
-        console.log(`🧹 [TURBO] Iniciando limpeza agressiva de cache para atualização ultra-rápida`);
-        
-        // 1. Limpar todos os caches relacionados ao departamento atual
+        // Invalidar cache de forma eficiente, focando apenas nos departamentos afetados
+        // Isso evita invalidação excessiva enquanto garante dados atualizados
         clearCacheByPattern(`activities_dept_${department}`);
         
-        // 2. Limpar a vista do admin para garantir que veja as alterações imediatamente
-        clearCacheByPattern(`activities_main_admin`);
-        
-        // 3. Se este departamento estiver no cache, invalidar o próximo departamento também
+        // Se este departamento estiver no cache, invalidar o próximo departamento também
         const departmentIndex = departmentCache[department];
         if (departmentIndex !== undefined && departmentIndex < DEPARTMENTS.length - 1) {
           const proximoDepartamento = DEPARTMENTS[departmentIndex + 1];
           clearCacheByPattern(`activities_dept_${proximoDepartamento}`);
         }
         
-        // 4. Forçar recálculo das estatísticas
-        clearCacheByPattern(`stats_`);
-        clearCacheByPattern(`department-counts`);
-        
-        // 5. Forçar atualização de todos os caches relacionados ao departamento
-        clearCacheByPattern(`dept_${department}`);
-        
-        console.log(`🧹 [TURBO] Cache limpo para garantir atualização instantânea`);
+        console.log(`[CACHE] Cache invalidado para departamento ${department} e próximo (se existir)`);
       } catch (error) {
         // Falha na invalidação de cache não deve quebrar o fluxo principal
         console.error('[CACHE] Erro ao invalidar cache:', error);

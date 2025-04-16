@@ -47,63 +47,12 @@ export default function AdminDashboard() {
     }
   }, [user, navigate, toast]);
 
-  // Função utilitária para invalidar todas as queries importantes
-  const invalidateAllQueries = async () => {
-    console.log("🌟 FASE 1: Iniciando invalidação de todas as queries no dashboard");
-    
-    // Invalidar todas as rotas de atividades (incluindo as novas rotas otimizadas)
-    queryClient.invalidateQueries({ queryKey: ["/api/activities"] });
-    queryClient.invalidateQueries({ queryKey: ["/api/activities/concluidos"] });
-    queryClient.invalidateQueries({ queryKey: ["/api/activities/em-producao"] });
-    
-    // Invalidar estatísticas
-    queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
-    
-    // Invalidar contagem de departamentos
-    queryClient.invalidateQueries({ queryKey: ["/api/stats/department-counts"] });
-    
-    // Invalidar notificações
-    
-    // SOLUÇÃO AVANÇADA: Forçar refetch imediato de todos os dados
-    console.log("🌟 FASE 2: Forçando refetch de todos os dados críticos");
-    
-    try {
-      // Aguardar um momento para garantir que a invalidação seja processada
-      await new Promise(resolve => setTimeout(resolve, 0));
-      
-      // Forçar refetch das queries principais
-      await queryClient.refetchQueries({ queryKey: ["/api/activities/em-producao"], type: "active" });
-      await queryClient.refetchQueries({ queryKey: ["/api/activities"], type: "active" });
-      await queryClient.refetchQueries({ queryKey: ["/api/stats"], type: "active" });
-      await queryClient.refetchQueries({ queryKey: ["/api/stats/department-counts"], type: "active" });
-      
-      console.log("✅ Refetch forçado concluído com sucesso");
-    } catch (error) {
-      console.error("❌ Erro ao forçar refetch:", error);
-    }
-    queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
-    
-    // Invalidar contagem por departamentos
-    queryClient.invalidateQueries({ queryKey: ["/api/stats/department-counts"] });
-    
-    // Verificar diagnóstico do sistema
-    fetch("/api/system/diagnostico")
-      .then(resp => resp.json())
-      .catch(err => console.error("Erro ao carregar diagnóstico:", err));
-  };
-  
-  // Função para atualizar dados - versão otimizada
+  // Função para atualizar dados
   const handleRefresh = () => {
-    toast({
-      title: "Atualizando...",
-      description: "Buscando dados mais recentes",
-    });
-    
-    // Abordagem mais eficiente - invalidar apenas as queries principais
     queryClient.invalidateQueries({ queryKey: ["/api/activities"] });
     queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
     queryClient.invalidateQueries({ queryKey: ["/api/stats/department-counts"] });
-    
     toast({
       title: "Atualizado",
       description: "Dados atualizados com sucesso",
@@ -575,48 +524,18 @@ function ActivitiesList(showCompleted: boolean = false) {
   const [filterStatus, setFilterStatus] = useState<string | null>(null);
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   
-  // Usar as rotas otimizadas específicas para cada tipo
-  const tipoLista = showCompleted ? 'concluidos' : 'em-producao';
-  const endpointOtimizado = showCompleted 
-    ? '/api/activities/concluidos' 
-    : '/api/activities/em-producao';
-  
-  // Log para monitoramento
-  console.time(`[PERF] Carregamento ${tipoLista}`);
-  
-  // Otimização: Usar rotas específicas e otimizadas para cada tipo de lista
+  // Otimização: Usar staleTime para reduzir as chamadas à API
   const { data: activities, isLoading } = useQuery({
-    queryKey: [endpointOtimizado],
+    queryKey: ["/api/activities"],
     queryFn: async () => {
-      try {
-        const response = await fetch(endpointOtimizado, {
-          headers: {
-            'Cache-Control': 'max-age=60', // cache mais agressivo
-            'Pragma': 'no-cache' // forçar refresh em desenvolvimento
-          }
-        });
-        
-        if (!response.ok) {
-          throw new Error(`Erro ao buscar atividades (código ${response.status})`);
-        }
-        
-        const data = await response.json();
-        console.timeEnd(`[PERF] Carregamento ${tipoLista}`);
-        return data;
-      } catch (err) {
-        console.error(`Erro carregando ${tipoLista}:`, err);
-        console.timeEnd(`[PERF] Carregamento ${tipoLista}`);
-        
-        // Fallback para endpoint antigo
-        console.log(`[FALLBACK] Usando endpoint antigo para ${tipoLista}`);
-        const fallbackResponse = await fetch(`/api/activities?tipo=${tipoLista}`);
-        return await fallbackResponse.json();
+      const response = await fetch("/api/activities");
+      if (!response.ok) {
+        throw new Error("Erro ao buscar atividades");
       }
+      return response.json();
     },
     staleTime: 30000, // 30 segundos - reduz chamadas frequentes à API
-    refetchOnWindowFocus: false, // Evita recarregar quando a janela ganha foco
-    retry: 1, // Limitar tentativas de retry para falhas
-    refetchInterval: showCompleted ? 60000 : 30000 // Concluídos podem atualizar com menos frequência
+    refetchOnWindowFocus: false // Evita recarregar quando a janela ganha foco
   });
   
   // Função para abrir modal de visualização
@@ -938,12 +857,7 @@ function ActivitiesList(showCompleted: boolean = false) {
         onClose={() => setCreateModalOpen(false)}
         onSuccess={() => {
           setCreateModalOpen(false);
-          
-          // Invalidar apenas as queries necessárias - abordagem mais leve
           queryClient.invalidateQueries({ queryKey: ["/api/activities"] });
-          queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
-          queryClient.invalidateQueries({ queryKey: ["/api/stats/department-counts"] });
-          
           toast({
             title: "Sucesso",
             description: "Pedido criado com sucesso",

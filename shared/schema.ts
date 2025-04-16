@@ -62,22 +62,7 @@ export const insertActivitySchema = createInsertSchema(activities)
     createdBy: true,
   })
   .extend({
-    deadline: z.union([
-      z.string().nullable().transform(val => {
-        if (!val) return null;
-        try {
-          const date = new Date(val);
-          if (isNaN(date.getTime())) {
-            throw new Error("Data inválida");
-          }
-          return date;
-        } catch (err) {
-          console.error("Erro ao converter deadline:", err);
-          return new Date(); // Fallback para a data atual
-        }
-      }),
-      z.date().nullable()
-    ]),
+    deadline: z.string().nullable().transform(val => val ? new Date(val) : null),
     additionalImages: z.array(z.string()).optional().default([]),
   });
 
