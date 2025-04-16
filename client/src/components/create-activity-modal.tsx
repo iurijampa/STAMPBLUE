@@ -119,7 +119,7 @@ export default function CreateActivityModal({ isOpen, onClose, onSuccess }: Crea
           console.log("✅ Imagem principal processada com sucesso, enviando em segundo plano");
           
           // Vamos armazenar o ID da atividade após a criação para poder atualizar as imagens
-          const updateImagesLater = (activityId) => {
+          const updateImagesLater = (activityId: number) => {
             console.log(`⚡ Atualizando imagens reais para atividade ${activityId}`);
             
             // Preparar dados das imagens adicionais em paralelo
@@ -151,7 +151,15 @@ export default function CreateActivityModal({ isOpen, onClose, onSuccess }: Crea
           };
           
           // Guardar a função para ser chamada após criar a atividade
-          window._updateImagesCallback = updateImagesLater;
+          // Definir callback para atualização de imagens no escopo global
+if (typeof window !== 'undefined') {
+              if (!window._updateImagesCallback) {
+                // Declarar o tipo na window para resolver erros TypeScript
+                window._updateImagesCallback = updateImagesLater;
+              } else {
+                window._updateImagesCallback = updateImagesLater;
+              }
+            }
         }).catch(err => {
           console.error("Erro ao processar imagem principal:", err);
         });
@@ -232,13 +240,21 @@ export default function CreateActivityModal({ isOpen, onClose, onSuccess }: Crea
             queryClient.setQueryData(queryKey, data);
             
             // Se houver atividade criada, chamar o callback de atualização de imagens
-            if (endpoint === "/api/activities" && data && Array.isArray(data) && data.length > 0 && window._updateImagesCallback) {
+            if (endpoint === "/api/activities" && data && Array.isArray(data) && data.length > 0) {
               try {
                 // Buscar atividade mais recente para atualizar imagens
                 const newestActivity = [...data].sort((a, b) => b.id - a.id)[0];
                 if (newestActivity && newestActivity.id) {
                   console.log(`⚡ Executando callback de atualização de imagens para atividade ${newestActivity.id}`);
-                  window._updateImagesCallback(newestActivity.id);
+                  
+                  // Verificação de segurança para a propriedade _updateImagesCallback
+                  if (typeof window !== 'undefined' && 
+                      window.hasOwnProperty('_updateImagesCallback') && 
+                      typeof window['_updateImagesCallback'] === 'function') {
+                    (window as any)._updateImagesCallback(newestActivity.id);
+                  } else {
+                    console.warn("Função de atualização de imagens não disponível");
+                  }
                 }
               } catch (err) {
                 console.warn("Erro ao processar atualização de imagens:", err);
