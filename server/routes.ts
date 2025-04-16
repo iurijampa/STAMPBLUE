@@ -1399,6 +1399,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Rota para atualizar imagens reais após envio inicial com placeholders
+  app.post("/api/activities/:id/update-images", isAdmin, async (req, res) => {
+    try {
+      const activityId = parseInt(req.params.id);
+      console.log(`⚡ [TURBO-IMG] Atualizando imagens para atividade ${activityId}`);
+      
+      // Verificar se a atividade existe
+      const activity = await storage.getActivity(activityId);
+      if (!activity) {
+        return res.status(404).json({ message: "Atividade não encontrada" });
+      }
+      
+      // Extrair imagens da requisição
+      const { image, additionalImages } = req.body;
+      
+      // Preparar dados para atualização
+      const updateData = {
+        ...activity,
+        image: image || activity.image,
+        additionalImages: additionalImages || activity.additionalImages
+      };
+      
+      // Atualizar atividade com imagens reais
+      const updatedActivity = await storage.updateActivity(activityId, updateData);
+      
+      // Notificar clientes sobre atualização de imagens
+      if ((global as any).wsNotifications) {
+        (global as any).wsNotifications.notifyDepartment('admin', {
+          type: 'activity_images_updated',
+          activityId,
+          timestamp: Date.now()
+        });
+        
+        // Também notificar o departamento atual da atividade
+        const progress = await storage.getActivityProgress(activityId);
+        const pendingDepts = progress.filter(p => p.status === 'pending').map(p => p.department);
+        
+        for (const dept of pendingDepts) {
+          (global as any).wsNotifications.notifyDepartment(dept, {
+            type: 'activity_images_updated',
+            activityId,
+            timestamp: Date.now()
+          });
+        }
+      }
+      
+      res.status(200).json({ 
+        message: "Imagens atualizadas com sucesso",
+        activity: updatedActivity
+      });
+    } catch (error) {
+      console.error("[ERROR] Erro ao atualizar imagens:", error);
+      res.status(500).json({ message: "Erro ao atualizar imagens" });
+    }
+  });
+
   app.post("/api/activities", isAdmin, async (req, res) => {
     try {
       console.time('⚡ [TURBO] Criação de atividade');
@@ -1506,11 +1562,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Aplicar flag TURBO no resultado se imagem foi otimizada
       if (imageProcessed) {
-        activity._imagePlaceholder = true;
+        // Atributo dynamic para contornar problema TypeScript
+        (activity as any)._imagePlaceholder = true;
       }
       
-      // Obter o departamento inicial através do corpo da requisição ou usar gabarito como padrão
-      const initialDepartment = req.body.initialDepartment || "gabarito";
+      // Usar o departamento inicial que já foi definido acima
+      // const initialDepartment = req.body.initialDepartment || "gabarito";
       
       // Initialize the activity progress for the initial department
       await storage.createActivityProgress({
@@ -1564,8 +1621,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 };
                 
                 // Adicionar no início da lista (mais alto na lista de prioridades)
+                // Corrigir o erro de tipagem com casting explícito
                 if (Array.isArray(CACHE_PERSISTENTE_EM_PRODUCAO)) {
-                  CACHE_PERSISTENTE_EM_PRODUCAO.unshift(atividadeFormatada);
+                  (CACHE_PERSISTENTE_EM_PRODUCAO as any[]).unshift(atividadeFormatada);
                 } else {
                   CACHE_PERSISTENTE_EM_PRODUCAO = [atividadeFormatada];
                 }

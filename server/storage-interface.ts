@@ -18,7 +18,7 @@ export interface IStorage {
   deleteUser(id: number): Promise<void>;
   
   // Activities
-  createActivity(activity: InsertActivity): Promise<Activity>;
+  createActivity(activity: InsertActivity, options?: { turbo?: boolean }): Promise<Activity>;
   getActivity(id: number): Promise<Activity | undefined>;
   getAllActivities(): Promise<Activity[]>;
   getActivitiesByDepartment(department: string): Promise<Activity[]>;

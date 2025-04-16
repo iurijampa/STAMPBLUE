@@ -107,28 +107,72 @@ export default function CreateActivityModal({ isOpen, onClose, onSuccess }: Crea
       // Iniciar processamento de imagens em paralelo para melhorar a performance
       const imagePromises = [];
       
-      // Processar imagem principal se existir
-      let imageData = null;
+      // MODO ULTRA-RÁPIDO: Em vez de esperar pela conversão de todas as imagens,
+      // vamos prosseguir imediatamente e enviar os dados de imagem depois
+      // Isso permite que a interface responda instantaneamente
+      
+      // Preparar URLs de placeholder para enviar imediatamente
+      const PLACEHOLDER_IMAGE = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+      
+      // Usar placeholder para imagem principal
+      let imageData = PLACEHOLDER_IMAGE;
+      let realImageData = null;
+      
+      // Iniciar processamento em background (não aguardar)
       if (imageFile) {
-        imagePromises.push(
-          fileToBase64(imageFile).then(data => {
-            imageData = data;
-          })
-        );
+        fileToBase64(imageFile).then(data => {
+          realImageData = data;
+          // Armazenar para envio posterior
+          console.log("✅ Imagem principal processada com sucesso, enviando em segundo plano");
+          
+          // Vamos armazenar o ID da atividade após a criação para poder atualizar as imagens
+          const updateImagesLater = (activityId) => {
+            console.log(`⚡ Atualizando imagens reais para atividade ${activityId}`);
+            
+            // Preparar dados das imagens adicionais em paralelo
+            const processAdditionalImages = async () => {
+              const realAdditionalImages = [];
+              for (let i = 0; i < additionalImageFiles.length; i++) {
+                try {
+                  const imgData = await fileToBase64(additionalImageFiles[i]);
+                  realAdditionalImages.push(imgData);
+                } catch (err) {
+                  console.error(`Erro ao processar imagem adicional ${i}:`, err);
+                }
+              }
+              return realAdditionalImages;
+            };
+            
+            // Executar processamento e envio das imagens reais
+            processAdditionalImages().then(additionalImagesProcessed => {
+              // Enviar atualização com as imagens reais
+              apiRequest("POST", `/api/activities/${activityId}/update-images`, {
+                image: realImageData,
+                additionalImages: additionalImagesProcessed
+              }).then(() => {
+                console.log("✅ Imagens reais atualizadas com sucesso!");
+              }).catch(err => {
+                console.error("Erro ao atualizar imagens reais:", err);
+              });
+            });
+          };
+          
+          // Guardar a função para ser chamada após criar a atividade
+          window._updateImagesCallback = updateImagesLater;
+        }).catch(err => {
+          console.error("Erro ao processar imagem principal:", err);
+        });
       }
       
-      // Processar imagens adicionais em paralelo
+      // Gerar URLs de placeholder para imagens adicionais
       const additionalImagesData: string[] = [];
-      const additionalImagePromises = additionalImageFiles.map(file => 
-        fileToBase64(file).then(data => {
-          additionalImagesData.push(data);
-        })
-      );
       
-      imagePromises.push(...additionalImagePromises);
+      // Preencher com placeholders para cada imagem adicional
+      for (let i = 0; i < additionalImageFiles.length; i++) {
+        additionalImagesData.push(`${PLACEHOLDER_IMAGE}#placeholder-${i}`);
+      }
       
-      // Aguardar todas as conversões de imagem terminarem
-      await Promise.all(imagePromises);
+      // Não precisamos mais esperar! A UI responde imediatamente
       
       // Preparar os dados do formulário
       const formData = {
@@ -193,6 +237,21 @@ export default function CreateActivityModal({ isOpen, onClose, onSuccess }: Crea
           if (fetchResponse.ok) {
             const data = await fetchResponse.json();
             queryClient.setQueryData(queryKey, data);
+            
+            // Se houver atividade criada, chamar o callback de atualização de imagens
+            if (endpoint === "/api/activities" && data && Array.isArray(data) && data.length > 0 && window._updateImagesCallback) {
+              try {
+                // Buscar atividade mais recente para atualizar imagens
+                const newestActivity = [...data].sort((a, b) => b.id - a.id)[0];
+                if (newestActivity && newestActivity.id) {
+                  console.log(`⚡ Executando callback de atualização de imagens para atividade ${newestActivity.id}`);
+                  window._updateImagesCallback(newestActivity.id);
+                }
+              } catch (err) {
+                console.warn("Erro ao processar atualização de imagens:", err);
+              }
+            }
+            
             return true;
           }
         } catch (e) {
