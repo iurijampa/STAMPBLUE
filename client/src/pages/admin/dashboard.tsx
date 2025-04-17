@@ -172,7 +172,7 @@ export default function AdminDashboard() {
             </div>
           </div>
           
-          {/* Pedidos em produção - Versão simplificada e direta */}
+          {/* Pedidos em produção - VERSÃO NOVA SUPER SIMPLIFICADA */}
           <div>
             <Card className="w-full">
               <CardHeader className="pb-3 pt-5">
