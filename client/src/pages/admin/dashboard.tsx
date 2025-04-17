@@ -49,10 +49,16 @@ export default function AdminDashboard() {
 
   // Função para atualizar dados
   const handleRefresh = () => {
+    // Invalidar consultas antigas
     queryClient.invalidateQueries({ queryKey: ["/api/activities"] });
     queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
     queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
     queryClient.invalidateQueries({ queryKey: ["/api/stats/department-counts"] });
+    
+    // Invalidar consultas da nova API ultra-otimizada
+    queryClient.invalidateQueries({ queryKey: ["/api/admin-dashboard/activities"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/admin-dashboard/department-stats"] });
+    
     toast({
       title: "Atualizado",
       description: "Dados atualizados com sucesso",
@@ -283,6 +289,7 @@ function StatsAndDepartmentsOverview() {
     embalagem: "Embalagem",
   };
   
+  // ULTRA OTIMIZAÇÃO: Usando a nova API especializada para o admin
   useEffect(() => {
     let isMounted = true;
     const controller = new AbortController();
@@ -301,7 +308,8 @@ function StatsAndDepartmentsOverview() {
           }
         }, 5000);
         
-        const response = await fetch("/api/stats/department-counts", {
+        // Usar a nova API otimizada para contagens de departamentos
+        const response = await fetch("/api/admin-dashboard/department-stats", {
           signal,
           headers: {
             "Cache-Control": "max-age=30"
@@ -315,6 +323,7 @@ function StatsAndDepartmentsOverview() {
         }
         
         const data = await response.json();
+        console.log("[ULTRA OTIMIZAÇÃO] Contagens de departamentos carregadas com sucesso");
         
         if (isMounted) {
           setDepartmentCounts(data);
@@ -323,8 +332,24 @@ function StatsAndDepartmentsOverview() {
       } catch (err) {
         if (isMounted && !signal.aborted) {
           console.error("Erro ao carregar contadores:", err);
-          setDeptError(err instanceof Error ? err.message : "Erro desconhecido");
-          setDeptLoading(false);
+          
+          // Em caso de falha, tentar usar a API antiga como fallback
+          try {
+            if (isMounted) {
+              console.log("[FALLBACK] Tentando API antiga para contagens de departamentos");
+              const fallbackResponse = await fetch("/api/stats/department-counts");
+              if (fallbackResponse.ok) {
+                const fallbackData = await fallbackResponse.json();
+                setDepartmentCounts(fallbackData);
+              } else {
+                setDeptError("Não foi possível carregar os contadores");
+              }
+            }
+          } catch (fallbackErr) {
+            setDeptError(err instanceof Error ? err.message : "Erro desconhecido");
+          } finally {
+            if (isMounted) setDeptLoading(false);
+          }
         }
       }
     };
@@ -527,32 +552,33 @@ function OptimizedActivitiesList({ showCompleted }: { showCompleted: boolean }):
   // Estado para paginação
   const [page, setPage] = useState(1);
   
-  // Otimização: Usar staleTime e paginação para reduzir carga
+  // ULTRA OTIMIZAÇÃO: Usando a nova API especializada para o admin
   const { data: activitiesResponse, isLoading } = useQuery({
-    queryKey: ["/api/activities", showCompleted ? 'concluido' : 'producao', page],
+    queryKey: ["/api/admin-dashboard/activities", showCompleted ? 'concluido' : 'producao', page, searchQuery],
     queryFn: async () => {
       try {
         console.log(`Buscando pedidos ${showCompleted ? 'concluídos' : 'em produção'}, página ${page}`);
-        // Construir URL com parâmetros de paginação e filtro
-        const url = new URL("/api/activities", window.location.origin);
+        // Construir URL com parâmetros de paginação e filtro usando a nova API otimizada
+        const url = new URL("/api/admin-dashboard/activities", window.location.origin);
         
         // Definir o tipo de pedidos que queremos (concluídos ou em produção)
         url.searchParams.append("status", showCompleted ? 'concluido' : 'producao');
         
         // Parâmetros de paginação
         url.searchParams.append("page", page.toString());
-        url.searchParams.append("limit", "30"); // Reduzido para 30 para performance
+        url.searchParams.append("limit", "30");
+        
+        // Adicionar termo de busca se existir
+        if (searchQuery) {
+          url.searchParams.append("search", searchQuery);
+        }
         
         // Timeout mais curto para evitar esperas muito longas
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 segundos de timeout
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 segundos de timeout
         
         const response = await fetch(url.toString(), {
-          signal: controller.signal,
-          headers: {
-            'Cache-Control': 'no-cache', // Força atualização
-            'Pragma': 'no-cache'
-          }
+          signal: controller.signal
         });
         
         clearTimeout(timeoutId);
