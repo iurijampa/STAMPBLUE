@@ -47,7 +47,7 @@ export default function AdminDashboard() {
   }
   
   return (
-    <Layout>
+    <Layout title="Painel de Administração">
       <div className="max-w-7xl mx-auto px-4 py-6">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold">Painel do Administrador</h1>
@@ -367,7 +367,7 @@ function StatsAndDepartmentsOverview() {
 
 // Componente para atividades recentes
 function RecentActivities() {
-  const { data: activities, isLoading } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ["/api/activities"],
     queryFn: async () => {
       const response = await fetch("/api/activities");
@@ -377,6 +377,9 @@ function RecentActivities() {
       return response.json();
     }
   });
+  
+  // Extrair as atividades da resposta
+  const activities = data?.items || [];
 
   return (
     <Card>
@@ -397,7 +400,7 @@ function RecentActivities() {
           </div>
         ) : (
           <div className="space-y-4">
-            {activities.slice(0, 5).map((activity: any) => (
+            {activities.slice(0, 5).map((activity: ActivityType) => (
               <div key={activity.id} className="flex items-center gap-3 pb-3 border-b">
                 <div className="w-10 h-10 rounded-md overflow-hidden border flex-shrink-0">
                   <img 
@@ -640,7 +643,7 @@ function ActivitiesList() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {activities.map((activity) => {
+                {activities.map((activity: ActivityType) => {
                   const deadlineStyle = getDeadlineStyle(activity.deadline);
                   
                   return (
