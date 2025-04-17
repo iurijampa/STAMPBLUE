@@ -557,12 +557,14 @@ function OptimizedActivitiesList({ showCompleted }: { showCompleted: boolean }):
     // Aplicar o pré-carregamento apenas para pedidos em produção
     if (!showCompleted) {
       const loadProductionActivities = async () => {
+        console.log("[ULTRA-RÁPIDO] Pré-carregando pedidos em produção...");
         try {
           // Construir URL otimizada
           const url = new URL("/api/admin-dashboard/activities", window.location.origin);
           url.searchParams.append("status", "producao");
           url.searchParams.append("page", page.toString());
           url.searchParams.append("limit", "30");
+          url.searchParams.append("_t", Date.now().toString()); // Cache busting
           
           if (searchQuery) {
             url.searchParams.append("search", searchQuery);
@@ -869,13 +871,36 @@ function OptimizedActivitiesList({ showCompleted }: { showCompleted: boolean }):
         
         {isLoading ? (
           <div className="flex justify-center py-8">
-            <div className="animate-spin h-6 w-6 border-2 border-primary border-t-transparent rounded-full"></div>
+            <div className="flex flex-col items-center">
+              <div className="animate-spin h-6 w-6 border-2 border-primary border-t-transparent rounded-full mb-2"></div>
+              <p className="text-sm text-muted-foreground">{loadingState === 'error' ? 'Tentando reconectar...' : 'Carregando...'}</p>
+            </div>
           </div>
         ) : !filteredActivities || filteredActivities.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground">
-            {searchQuery ? 
-              "Nenhum pedido encontrado com os filtros aplicados." : 
-              showCompleted ? "Nenhum pedido concluído." : "Nenhum pedido em produção."}
+          <div className="text-center py-8">
+            {loadingState === 'error' ? (
+              <div className="flex flex-col items-center">
+                <AlertCircle className="h-6 w-6 text-orange-500 mb-2" />
+                <p className="text-muted-foreground mb-2">
+                  {!showCompleted ? "Ocorreu um erro temporário ao carregar pedidos em produção." : "Ocorreu um erro ao carregar pedidos concluídos."}
+                </p>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => queryClient.invalidateQueries({ queryKey: ["/api/admin-dashboard/activities"] })}
+                  className="mt-2"
+                >
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Tentar novamente
+                </Button>
+              </div>
+            ) : (
+              <div className="text-muted-foreground">
+                {searchQuery ? 
+                  "Nenhum pedido encontrado com os filtros aplicados." : 
+                  showCompleted ? "Nenhum pedido concluído." : "Nenhum pedido em produção."}
+              </div>
+            )}
           </div>
         ) : (
           <div className="overflow-auto">
