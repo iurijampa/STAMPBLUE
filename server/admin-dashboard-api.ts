@@ -134,7 +134,12 @@ router.get('/activities', isAdmin, async (req, res) => {
             lp.department as "currentDepartment"
           FROM activities a
           LEFT JOIN LatestProgress lp ON a.id = lp.activity_id AND lp.rn = 1
-          WHERE lp.department != 'concluido' OR lp.department IS NULL
+          WHERE ((lp.department IS NOT NULL AND lp.department != 'embalagem') OR lp.department IS NULL)
+            OR (lp.department = 'embalagem' AND 
+               NOT EXISTS (SELECT 1 FROM activity_progress ap2 
+                          WHERE ap2.activity_id = a.id 
+                          AND ap2.status = 'completed' 
+                          AND ap2.department = 'embalagem'))
           ORDER BY 
             CASE WHEN a.deadline IS NULL THEN 1 ELSE 0 END,
             a.deadline ASC
