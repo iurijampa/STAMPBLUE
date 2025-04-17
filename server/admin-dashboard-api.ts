@@ -75,7 +75,7 @@ async function preloadActivitiesWithProgress() {
   }
 }
 
-// Rota otimizada para buscar atividades com paginação - extremamente eficiente
+// Rota ultra-otimizada para buscar atividades com paginação - extremamente eficiente
 router.get('/activities', isAdmin, async (req, res) => {
   try {
     const status = req.query.status as string || 'all';
@@ -83,7 +83,7 @@ router.get('/activities', isAdmin, async (req, res) => {
     const limit = parseInt(req.query.limit as string) || 30;
     const search = req.query.search as string || '';
     
-    console.log(`[OTIMIZAÇÃO] Buscando atividades para admin com status=${status}, page=${page}, limit=${limit}`);
+    console.log(`[ULTRA OTIMIZAÇÃO] Buscando atividades para admin com status=${status}, page=${page}, limit=${limit}`);
     
     // Usar cache para dados processados - chave baseada nos parâmetros da requisição
     const cacheKey = `admin_dashboard_${status}_${page}_${limit}_${search}`;
@@ -92,53 +92,101 @@ router.get('/activities', isAdmin, async (req, res) => {
     // Verificar se os dados já estão em cache
     const cachedData = cache ? cache.get(cacheKey) : null;
     if (cachedData) {
-      console.log(`[CACHE] Usando dados em cache para ${cacheKey}`);
+      console.log(`[CACHE HIT] Usando dados em cache para ${cacheKey}`);
       return res.json(cachedData);
     }
     
-    // Buscar todas as atividades com seus progressos em uma única operação
-    const activitiesWithProgress = await preloadActivitiesWithProgress();
-    
-    // Filtrar por status (se especificado)
-    let filteredActivities = activitiesWithProgress;
-    if (status === 'concluido') {
-      filteredActivities = activitiesWithProgress.filter(act => act.currentDepartment === 'concluido');
-    } else if (status === 'producao') {
-      filteredActivities = activitiesWithProgress.filter(act => act.currentDepartment !== 'concluido');
-    }
-    
-    // Filtrar por texto de busca se especificado
-    if (search) {
-      const searchLower = search.toLowerCase();
-      filteredActivities = filteredActivities.filter(act => 
-        act.title.toLowerCase().includes(searchLower) || 
-        (act.clientName && act.clientName.toLowerCase().includes(searchLower)) ||
-        (act.description && act.description.toLowerCase().includes(searchLower))
-      );
-    }
-    
-    // Ordenar por data de entrega
-    filteredActivities.sort((a, b) => {
-      if (!a.deadline && !b.deadline) return 0;
-      if (!a.deadline) return 1;  // Sem data vai para o final
-      if (!b.deadline) return -1; // Sem data vai para o final
-      return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
+    // Timeout para garantir resposta rápida
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Timeout')), 5000);
     });
     
-    // Aplicar paginação
-    const paginatedResult = {
-      items: filteredActivities.slice((page - 1) * limit, page * limit),
-      total: filteredActivities.length,
-      page,
-      totalPages: Math.ceil(filteredActivities.length / limit)
-    };
-    
-    // Salvar no cache por 15 segundos
-    if (cache) {
-      cache.set(cacheKey, paginatedResult, 15000);
+    try {
+      // Race entre busca de dados e timeout
+      const activitiesWithProgress = await Promise.race([
+        preloadActivitiesWithProgress(),
+        timeoutPromise
+      ]) as any[];
+      
+      // Filtrar por status (se especificado)
+      let filteredActivities = activitiesWithProgress;
+      if (status === 'concluido') {
+        filteredActivities = activitiesWithProgress.filter(act => act.currentDepartment === 'concluido');
+      } else if (status === 'producao') {
+        filteredActivities = activitiesWithProgress.filter(act => act.currentDepartment !== 'concluido');
+      }
+      
+      // Filtrar por texto de busca se especificado
+      if (search) {
+        const searchLower = search.toLowerCase();
+        filteredActivities = filteredActivities.filter(act => 
+          act.title.toLowerCase().includes(searchLower) || 
+          (act.clientName && act.clientName.toLowerCase().includes(searchLower)) ||
+          (act.description && act.description.toLowerCase().includes(searchLower))
+        );
+      }
+      
+      // Ordenar por data de entrega
+      filteredActivities.sort((a, b) => {
+        if (!a.deadline && !b.deadline) return 0;
+        if (!a.deadline) return 1;  // Sem data vai para o final
+        if (!b.deadline) return -1; // Sem data vai para o final
+        return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
+      });
+      
+      // Aplicar paginação
+      const paginatedResult = {
+        items: filteredActivities.slice((page - 1) * limit, page * limit),
+        total: filteredActivities.length,
+        page,
+        totalPages: Math.ceil(filteredActivities.length / limit)
+      };
+      
+      // Salvar no cache por 30 segundos (aumentado para melhor performance)
+      if (cache) {
+        cache.set(cacheKey, paginatedResult, 30000);
+      }
+      
+      return res.json(paginatedResult);
+    } catch (timeoutError) {
+      console.log('[TIMEOUT] Usando estratégia de fallback para resposta rápida');
+      
+      // FALLBACK: buscar diretamente do storage em caso de timeout
+      // Vamos buscar apenas a quantidade necessária no limite atual para resposta mais rápida
+      let activities;
+      
+      if (status === 'concluido') {
+        // Buscar apenas atividades concluídas - mais rápido
+        activities = await storage.getCompletedActivities(limit * 2); // Busca um pouco mais para ter margem
+      } else {
+        // Buscar atividades em andamento - mais rápido
+        activities = await storage.getActivitiesInProgress(limit * 2); // Busca um pouco mais para ter margem
+      }
+      
+      // Formatar resposta simplificada com campos essenciais
+      const simplifiedActivities = activities.map(activity => ({
+        ...activity,
+        currentDepartment: status === 'concluido' ? 'concluido' : (activity.currentDepartment || 'gabarito'),
+        client: activity.clientName,
+        clientInfo: activity.description || null
+      }));
+      
+      // Aplicar paginação
+      const paginatedResult = {
+        items: simplifiedActivities.slice((page - 1) * limit, page * limit),
+        total: simplifiedActivities.length,
+        page,
+        totalPages: Math.ceil(simplifiedActivities.length / limit),
+        isPartialResult: true // Indica que é um resultado parcial/fallback
+      };
+      
+      // Cache por tempo menor para resultados parciais
+      if (cache) {
+        cache.set(cacheKey, paginatedResult, 10000);
+      }
+      
+      return res.json(paginatedResult);
     }
-    
-    return res.json(paginatedResult);
   } catch (error) {
     console.error('[ADMIN DASHBOARD] Erro ao buscar atividades:', error);
     return res.status(500).json({ message: 'Erro ao buscar atividades' });
