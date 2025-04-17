@@ -952,73 +952,93 @@ export class DatabaseStorage implements IStorage {
   
   async getActivitiesInProgress(limit: number = 50): Promise<Activity[]> {
     console.log(`[DB OTIMIZADO] Buscando até ${limit} atividades em progresso no banco de dados`);
-    
-    // Buscar progresso pendente em cada departamento
-    const pendingProgresses = await db
-      .select()
-      .from(activityProgress)
-      .where(sql`${activityProgress.status} = 'pending'`)
-      .orderBy(activityProgress.activityId)
-      .limit(limit * 2); // Buscar mais para filtrar depois
-    
-    if (pendingProgresses.length === 0) return [];
-    
-    // Agrupar por ID de atividade para determinar o departamento atual de cada uma
-    const progressByActivity = new Map();
-    for (const progress of pendingProgresses) {
-      if (!progressByActivity.has(progress.activityId)) {
-        progressByActivity.set(progress.activityId, []);
+    try {
+      // OTIMIZAÇÃO: Buscar primeiro todos os IDs das atividades que têm pelo menos um progresso pendente
+      const result = await db.execute(sql`
+        SELECT DISTINCT "activityId" 
+        FROM "activity_progress" 
+        WHERE "status" = 'pending'
+        LIMIT ${limit * 2}
+      `);
+      
+      const activityIds = result.rows.map(row => Number(row.activityId));
+      
+      if (activityIds.length === 0) {
+        console.log('[DB OTIMIZADO] Nenhuma atividade em progresso encontrada');
+        return [];
       }
-      progressByActivity.get(progress.activityId).push(progress);
-    }
-    
-    // Para cada atividade, determinar o departamento atual (o primeiro pendente na ordem)
-    const activityWithDepartment = [];
-    for (const [activityId, progresses] of progressByActivity.entries()) {
-      // Ordenar progresso pelo ordem dos departamentos
-      const sortedProgresses = progresses.sort((a, b) => {
-        const deptOrder = ['gabarito', 'impressao', 'batida', 'costura', 'embalagem'];
-        return deptOrder.indexOf(a.department as any) - deptOrder.indexOf(b.department as any);
-      });
       
-      // O primeiro é o departamento atual
-      const currentDepartment = sortedProgresses[0].department;
-      activityWithDepartment.push({
-        activityId,
-        currentDepartment
-      });
+      // OTIMIZAÇÃO: Buscar todas as atividades de uma vez
+      // Evitando o loop que estava causando lentidão e buscando em lote
+      const activitiesData: Activity[] = [];
       
-      if (activityWithDepartment.length >= limit) break;
-    }
-    
-    if (activityWithDepartment.length === 0) return [];
-    
-    // Extrair IDs para buscar as atividades
-    const activityIds = activityWithDepartment.map(a => a.activityId);
-    
-    // Buscar as atividades uma a uma (evita erro de sintaxe)
-    let activitiesData = [];
-    for (const info of activityWithDepartment) {
-      const [activity] = await db
-        .select()
-        .from(activities)
-        .where(eq(activities.id, info.activityId));
+      // Como não podemos usar IN com muitos valores, vamos buscar em lotes de 10
+      const batchSize = 10;
+      for (let i = 0; i < activityIds.length; i += batchSize) {
+        const batchIds = activityIds.slice(i, i + batchSize);
         
-      if (activity) {
-        activitiesData.push(activity);
+        // Buscar cada ID individualmente e concatenar resultados
+        for (const id of batchIds) {
+          const [activity] = await db
+            .select()
+            .from(activities)
+            .where(eq(activities.id, id));
+            
+          if (activity) {
+            activitiesData.push(activity);
+          }
+          
+          if (activitiesData.length >= limit) break;
+        }
+        
+        if (activitiesData.length >= limit) break;
       }
       
-      if (activitiesData.length >= limit) break;
-    }
-    
-    // Mapear departamento atual para cada atividade
-    return activitiesData.map(activity => {
-      const deptInfo = activityWithDepartment.find(a => a.activityId === activity.id);
-      return {
+      if (activitiesData.length === 0) {
+        console.log('[DB OTIMIZADO] Nenhuma atividade em progresso encontrada depois da busca');
+        return [];
+      }
+      
+      // OTIMIZAÇÃO: Buscar o departamento atual para cada atividade de uma vez
+      const deptMap = new Map();
+      
+      // Buscar todos os progressos pendentes para estas atividades
+      const progresses = await db
+        .select()
+        .from(activityProgress)
+        .where(and(
+          inArray(activityProgress.activityId, activitiesData.map(a => a.id)),
+          eq(activityProgress.status, 'pending')
+        ));
+      
+      // Determinar departamento atual para cada atividade
+      const deptOrder = ['gabarito', 'impressao', 'batida', 'costura', 'embalagem'];
+      activitiesData.forEach(activity => {
+        const activityProgresses = progresses.filter(p => p.activityId === activity.id);
+        
+        if (activityProgresses.length === 0) {
+          deptMap.set(activity.id, 'gabarito'); // Fallback
+          return;
+        }
+        
+        // Ordenar por ordem do departamento
+        activityProgresses.sort((a, b) => 
+          deptOrder.indexOf(a.department as any) - deptOrder.indexOf(b.department as any)
+        );
+        
+        deptMap.set(activity.id, activityProgresses[0].department);
+      });
+      
+      // Retornar atividades com departamento atual
+      return activitiesData.map(activity => ({
         ...activity,
-        currentDepartment: deptInfo ? deptInfo.currentDepartment : 'gabarito'
-      };
-    });
+        currentDepartment: deptMap.get(activity.id) || 'gabarito'
+      }));
+    } catch (error) {
+      console.error('[DB ERROR] Erro ao buscar atividades em progresso:', error);
+      // Não queremos que falhas aqui interrompam a execução
+      return [];
+    }
   }
 }
 
