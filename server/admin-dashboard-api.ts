@@ -151,9 +151,9 @@ router.get('/activities', isAdmin, async (req, res) => {
         totalPages: Math.ceil(filteredActivities.length / limit)
       };
       
-      // Salvar no cache por 30 segundos (aumentado para melhor performance)
+      // Reduzindo tempo de cache para 15 segundos para atualizações mais rápidas
       if (cache) {
-        cache.set(cacheKey, paginatedResult, 30000);
+        cache.set(cacheKey, paginatedResult, 15000);
       }
       
       return res.json(paginatedResult);

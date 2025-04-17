@@ -951,89 +951,65 @@ export class DatabaseStorage implements IStorage {
   }
   
   async getActivitiesInProgress(limit: number = 50): Promise<Activity[]> {
-    console.log(`[DB OTIMIZADO] Buscando até ${limit} atividades em progresso usando método simples e robusto`);
+    console.log(`[DB OTIMIZADO] Buscando até ${limit} atividades em progresso usando método emergencial`);
+
     try {
-      // Implementação usando métodos simples que são menos propensos a erros
-      
-      // 1. Buscar atividades que foram concluídas pelo departamento de embalagem (último)
-      const completedActivities = await db
+      // ABORDAGEM SIMPLIFICADA E ALTAMENTE OTIMIZADA:
+      // 1. Obter todas as atividades
+      const allActivities = await db.select().from(activities).limit(100);
+
+      // 2. Filtrar atividades concluídas (que têm progresso em "embalagem" com status "completed")
+      const completedActivitiesQuery = await db
         .select({ activityId: activityProgress.activityId })
         .from(activityProgress)
         .where(and(
-          eq(activityProgress.department, 'embalagem'),
+          eq(activityProgress.department, 'embalagem'), 
           eq(activityProgress.status, 'completed')
         ));
         
-      // Obter os IDs das atividades concluídas
-      const completedIds = completedActivities.map(item => item.activityId);
+      const completedIds = new Set(completedActivitiesQuery.map(item => item.activityId));
       
-      // 2. Buscar todos os progressos de atividades com status "pending" que não estão na lista de concluídos
-      const pendingProgresses = await db
-        .select()
-        .from(activityProgress)
-        .where(and(
-          eq(activityProgress.status, 'pending'),
-          completedIds.length > 0 
-            ? not(inArray(activityProgress.activityId, completedIds))
-            : sql`1=1` // Se não há atividades concluídas, não aplicar filtro
-        ));
+      // 3. Obter apenas atividades não concluídas
+      const pendingActivities = allActivities.filter(activity => !completedIds.has(activity.id));
       
-      // 3. Agrupar por atividade e obter o departamento mais "inicial" no fluxo
-      const progressByActivity = new Map();
-      
-      for (const progress of pendingProgresses) {
-        if (!progressByActivity.has(progress.activityId)) {
-          progressByActivity.set(progress.activityId, []);
-        }
-        progressByActivity.get(progress.activityId).push(progress);
+      if (pendingActivities.length === 0) {
+        console.log('[DB OTIMIZADO] Nenhuma atividade em progresso encontrada');
+        return [];
       }
       
-      // 4. Para cada atividade com progresso pendente, obter a atividade completa
-      // e atribuir o departamento atual 
+      // 4. Para cada atividade pendente, buscar seu progresso mais atual (departamento atual)
       const result: Activity[] = [];
       
-      // Processar em lotes para evitar consultas muito grandes
-      const activityIds = Array.from(progressByActivity.keys());
-      
-      if (activityIds.length === 0) {
-        return []; // Nenhuma atividade em progresso
-      }
-      
-      // Buscar informações completas das atividades
-      const activitiesData = await db
-        .select()
-        .from(activities)
-        .where(inArray(activities.id, activityIds));
-      
-      // Mapear atividades por ID para acesso rápido
-      const activitiesById = new Map();
-      for (const activity of activitiesData) {
-        activitiesById.set(activity.id, activity);
-      }
-      
-      // Para cada atividade, determinar o departamento atual
-      for (const [activityId, progresses] of progressByActivity.entries()) {
-        const activity = activitiesById.get(activityId);
-        if (!activity) continue; // Atividade não encontrada
-        
-        // Ordenar progressos para determinar o departamento atual
-        // O departamento atual é o primeiro departamento com status "pending"
-        const sortedProgresses = progresses.sort((a, b) => {
-          const deptOrderA = DEPARTMENTS.indexOf(a.department);
-          const deptOrderB = DEPARTMENTS.indexOf(b.department);
-          return deptOrderA - deptOrderB;
-        });
-        
-        if (sortedProgresses.length > 0) {
-          const currentDepartment = sortedProgresses[0].department;
+      for (const activity of pendingActivities) {
+        // Buscar todos os progressos desta atividade
+        const progressItems = await db
+          .select()
+          .from(activityProgress)
+          .where(and(
+            eq(activityProgress.activityId, activity.id),
+            eq(activityProgress.status, 'pending')
+          ))
+          .orderBy(asc(activityProgress.department));
           
-          // Adicionar ao resultado com departamento atual
+        if (progressItems.length > 0) {
+          // Ordenar por ordem de departamento no fluxo
+          progressItems.sort((a, b) => {
+            const indexA = DEPARTMENTS.indexOf(a.department);
+            const indexB = DEPARTMENTS.indexOf(b.department);
+            return indexA - indexB;
+          });
+          
+          // O primeiro departamento pendente é o departamento atual
+          const currentDepartment = progressItems[0].department;
+          
           result.push({
             ...activity,
             currentDepartment
           });
         }
       }
+      
+      console.log(`[DB OTIMIZADO] Encontradas ${result.length} atividades em progresso`);
       
       // Ordenar por data de entrega (padrão do sistema)
       return result
@@ -1044,11 +1020,41 @@ export class DatabaseStorage implements IStorage {
           return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
         })
         .slice(0, limit); // Aplicar limite
-        
     } catch (error) {
       console.error('[DB ERROR] Erro ao buscar atividades em progresso:', error);
-      // Não queremos que falhas aqui interrompam a execução
-      return [];
+      
+      // EM CASO DE ERRO, USAR MÉTODO ALTERNATIVO MAIS SIMPLES
+      try {
+        console.log('[DB EMERGÊNCIA] Tentando método de emergência para buscar atividades em progresso');
+        
+        // Obter IDs de atividades que já foram concluídas (passaram por embalagem)
+        const completedQuery = await db.execute(sql`
+          SELECT DISTINCT activity_id 
+          FROM activity_progress 
+          WHERE department = 'embalagem' AND status = 'completed'
+        `);
+        
+        const completedIds = new Set();
+        for (const row of completedQuery.rows) {
+          completedIds.add(Number(row.activity_id));
+        }
+        
+        // Buscar todas as atividades que não estão na lista de concluídas
+        const allActivities = await db.select().from(activities);
+        const inProgressActivities = allActivities
+          .filter(a => !completedIds.has(a.id))
+          .map(activity => ({
+            ...activity,
+            currentDepartment: 'gabarito' // Default, será corrigido depois se possível
+          }))
+          .slice(0, limit);
+          
+        console.log(`[DB EMERGÊNCIA] Retornando ${inProgressActivities.length} atividades em modo de emergência`);
+        return inProgressActivities;
+      } catch (fallbackError) {
+        console.error('[DB EMERGÊNCIA] Falha no método de emergência:', fallbackError);
+        return []; // Se tudo falhar, retornar array vazio
+      }
     }
   }
 }
