@@ -99,61 +99,17 @@ router.get('/activities', isAdmin, async (req, res) => {
     
     // MODO ULTRA-RÁPIDO para pedidos em produção (mais críticos para o usuário)
     if (status === 'producao') {
-      console.log('[ULTRA-RÁPIDO] Iniciando modo emergencial para pedidos em produção');
+      console.log('[ULTRA-RÁPIDO] Iniciando modo otimizado para pedidos em produção');
+      
       try {
-        // Verificar se já temos o resultado em cache primeiro (resposta instantânea)
-        if (cache) {
-          const cachedResult = cache.get(cacheKey);
-          if (cachedResult) {
-            console.log(`[CACHE INSTANTÂNEO] Usando cache para pedidos em produção (${cacheKey})`);
-            return res.json(cachedResult);
-          }
-        }
-        
-        // Usar query SQL direta para máxima performance
-        console.log('[SQL-DIRECT] Executando query SQL direta para máxima performance');
-        const query = sql`
-          WITH LatestProgress AS (
-            SELECT 
-              ap.activity_id,
-              ap.department,
-              ap.completed_at,
-              ap.completed_by,
-              ROW_NUMBER() OVER (PARTITION BY ap.activity_id ORDER BY ap.id DESC) as rn
-            FROM activity_progress ap
-            WHERE ap.completed_at IS NOT NULL
-          )
-          SELECT 
-            a.id, 
-            a.title, 
-            a.client_name as "clientName",
-            a.description, 
-            a.deadline,
-            a.image,
-            a.quantity,
-            lp.department as "currentDepartment"
-          FROM activities a
-          LEFT JOIN LatestProgress lp ON a.id = lp.activity_id AND lp.rn = 1
-          WHERE ((lp.department IS NOT NULL AND lp.department != 'embalagem') OR lp.department IS NULL)
-            OR (lp.department = 'embalagem' AND 
-               NOT EXISTS (SELECT 1 FROM activity_progress ap2 
-                          WHERE ap2.activity_id = a.id 
-                          AND ap2.status = 'completed' 
-                          AND ap2.department = 'embalagem'))
-          ORDER BY 
-            CASE WHEN a.deadline IS NULL THEN 1 ELSE 0 END,
-            a.deadline ASC
-          LIMIT ${limit * 2}
-        `;
-        
-        const result = await query;
+        // Buscando diretamente da função otimizada
+        const activities = await storage.getActivitiesInProgress(limit * 2);
         
         // Formatar para resposta padrão
-        const formattedActivities = result.map((activity: any) => ({
+        const formattedActivities = activities.map(activity => ({
           ...activity,
           client: activity.clientName,
-          clientInfo: activity.description || null,
-          currentDepartment: activity.currentDepartment || 'gabarito',
+          clientInfo: activity.description || null
         }));
         
         // Paginar os resultados
@@ -164,47 +120,15 @@ router.get('/activities', isAdmin, async (req, res) => {
           totalPages: Math.ceil(formattedActivities.length / limit)
         };
         
-        // Cache mais longo para resposta rápida (30 segundos)
+        // Cache médio para resposta rápida (20 segundos)
         if (cache) {
-          cache.set(cacheKey, paginatedResult, 30000);
+          cache.set(cacheKey, paginatedResult, 20000);
         }
         
-        console.log(`[ULTRA-RÁPIDO] Retornando ${formattedActivities.length} pedidos em produção via SQL direto`);
+        console.log(`[ULTRA-RÁPIDO] Retornando ${formattedActivities.length} pedidos em produção via método otimizado`);
         return res.json(paginatedResult);
       } catch (error) {
-        console.error('[ULTRA-RÁPIDO] Erro no modo direto:', error);
-        
-        // Fallback para o método padrão
-        try {
-          // Buscando diretamente da função otimizada
-          const activities = await storage.getActivitiesInProgress(limit * 2);
-          
-          // Formatar para resposta padrão
-          const formattedActivities = activities.map(activity => ({
-            ...activity,
-            client: activity.clientName,
-            clientInfo: activity.description || null
-          }));
-          
-          // Paginar os resultados
-          const paginatedResult = {
-            items: formattedActivities,
-            total: formattedActivities.length,
-            page: 1,
-            totalPages: 1
-          };
-          
-          // Cache curto para resposta rápida
-          if (cache) {
-            cache.set(cacheKey, paginatedResult, 10000); // 10 segundos
-          }
-          
-          console.log(`[FALLBACK] Retornando ${formattedActivities.length} pedidos`);
-          return res.json(paginatedResult);
-        } catch (innerError) {
-          console.error('[ULTRA-RÁPIDO] Erro no fallback:', innerError);
-          // Continuar com método normal em caso de erro
-        }
+        console.error('[ULTRA-RÁPIDO] Erro no modo otimizado:', error);
       }
     }
     
