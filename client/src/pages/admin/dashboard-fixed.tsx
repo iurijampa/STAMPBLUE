@@ -30,7 +30,6 @@ export default function AdminDashboard() {
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  const [currentTab, setCurrentTab] = useState<'production' | 'completed'>('production');
   
   // Verificar se é admin
   if (!user || user.role !== "admin") {
@@ -559,7 +558,7 @@ function ActivitiesList() {
   };
   
   // Verificar se um prazo está próximo ou vencido e retorna a classe de cor correspondente
-  const getDeadlineStyle = (deadline: string) => {
+  const getDeadlineStyle = (deadline: string | Date | null) => {
     if (!deadline) return { color: "text-gray-500", badge: "Sem prazo" };
     
     try {
@@ -580,7 +579,7 @@ function ActivitiesList() {
   };
   
   // Formatar data para exibição
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString: string | Date | null) => {
     if (!dateString) return "Data não disponível";
     
     try {
@@ -649,10 +648,10 @@ function ActivitiesList() {
                   return (
                     <TableRow key={activity.id}>
                       <TableCell>{activity.id}</TableCell>
-                      <TableCell>{activity.client}</TableCell>
+                      <TableCell>{activity.clientName || "N/A"}</TableCell>
                       <TableCell className="font-medium">{activity.title}</TableCell>
                       <TableCell>
-                        {activity.department || activity.currentDepartment || "Não definido"}
+                        {activity.currentDepartment || "Não definido"}
                       </TableCell>
                       <TableCell className={deadlineStyle.color}>
                         {formatDate(activity.deadline)}
