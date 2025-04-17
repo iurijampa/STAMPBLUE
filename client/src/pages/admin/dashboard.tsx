@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import Layout from "@/components/Layout";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -531,20 +531,49 @@ function OptimizedActivitiesList({ showCompleted }: { showCompleted: boolean }):
   const { data: activitiesResponse, isLoading } = useQuery({
     queryKey: ["/api/activities", showCompleted ? 'concluido' : 'producao', page],
     queryFn: async () => {
-      // Construir URL com parâmetros de paginação e filtro
-      const url = new URL("/api/activities", window.location.origin);
-      url.searchParams.append("status", showCompleted ? 'concluido' : 'producao');
-      url.searchParams.append("page", page.toString());
-      url.searchParams.append("limit", "50"); // 50 itens por página
-      
-      const response = await fetch(url.toString());
-      if (!response.ok) {
-        throw new Error("Erro ao buscar atividades");
+      try {
+        console.log(`Buscando pedidos ${showCompleted ? 'concluídos' : 'em produção'}, página ${page}`);
+        // Construir URL com parâmetros de paginação e filtro
+        const url = new URL("/api/activities", window.location.origin);
+        
+        // Definir o tipo de pedidos que queremos (concluídos ou em produção)
+        url.searchParams.append("status", showCompleted ? 'concluido' : 'producao');
+        
+        // Parâmetros de paginação
+        url.searchParams.append("page", page.toString());
+        url.searchParams.append("limit", "30"); // Reduzido para 30 para performance
+        
+        // Timeout mais curto para evitar esperas muito longas
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 segundos de timeout
+        
+        const response = await fetch(url.toString(), {
+          signal: controller.signal,
+          headers: {
+            'Cache-Control': 'no-cache', // Força atualização
+            'Pragma': 'no-cache'
+          }
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+          throw new Error(`Erro ao buscar atividades: ${response.status} ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        console.log(`Recebidos ${data?.items?.length || 0} pedidos ${showCompleted ? 'concluídos' : 'em produção'}`);
+        return data;
+      } catch (error) {
+        console.error("Erro na busca de pedidos:", error);
+        throw error;
       }
-      return response.json();
     },
-    staleTime: 30000, // 30 segundos - reduz chamadas frequentes à API
-    refetchOnWindowFocus: false // Evita recarregar quando a janela ganha foco
+    staleTime: 15000, // 15 segundos - reduz chamadas frequentes à API
+    retry: 1, // Apenas uma tentativa adicional em caso de falha
+    retryDelay: 3000, // 3 segundos entre tentativas
+    refetchOnWindowFocus: false, // Evita recarregar quando a janela ganha foco
+    placeholderData: (prev) => prev // Mantém dados anteriores enquanto carrega novos
   });
   
   // Extrair dados da resposta paginada
@@ -616,7 +645,7 @@ function OptimizedActivitiesList({ showCompleted }: { showCompleted: boolean }):
     
     const searchLower = searchQuery.toLowerCase();
     
-    return activities.filter(activity => {
+    return activities.filter((activity: any) => {
       return (activity.title && activity.title.toLowerCase().includes(searchLower)) ||
              (activity.id && activity.id.toString().includes(searchQuery)) ||
              (activity.client && activity.client.toLowerCase().includes(searchLower));
@@ -906,7 +935,7 @@ function ActivitiesList(showCompleted: boolean = false) {
     },
     staleTime: 30000, // 30 segundos - reduz chamadas frequentes à API
     refetchOnWindowFocus: false, // Evita recarregar quando a janela ganha foco
-    keepPreviousData: true // Mantém dados anteriores enquanto carrega novos (UX melhor)
+    placeholderData: keepPreviousData // Mantém dados anteriores enquanto carrega novos (UX melhor)
   });
   
   // Extrair dados da resposta paginada

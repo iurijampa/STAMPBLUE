@@ -345,47 +345,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const batchSize = 10; // Processar 10 atividades por lote
         const activitiesWithProgress = [];
         
-        // Dividir o processamento em lotes
-        for (let i = 0; i < filteredActivities.length; i += batchSize) {
-          const batch = filteredActivities.slice(i, i + batchSize);
-          
-          // Processar lote em paralelo
-          const processedBatch = await Promise.all(
-            batch.map(async (activity) => {
-              const progresses = await storage.getActivityProgress(activity.id);
-              
-              // Ordenar os progressos por departamento e encontrar o pendente mais recente
-              // para determinar em qual departamento a atividade está atualmente
-              const pendingProgress = progresses
-                .filter(p => p.status === 'pending')
-                .sort((a, b) => {
-                  const deptOrder = ['gabarito', 'impressao', 'batida', 'costura', 'embalagem'];
-                  return deptOrder.indexOf(a.department as any) - deptOrder.indexOf(b.department as any);
-                })[0];
+        // Verificar se é uma solicitação para um status específico para otimizar ainda mais
+        // Armazenando resultados por tipo para melhorar desempenho nas próximas requisições
+        const statusFilter = status || '';
+        const statusCacheKey = `activities_processed_${statusFilter}_${new Date().toISOString().split('T')[0]}`;
+
+        // Tentamos usar dados processados anteriormente se existirem em cache
+        const cachedProcessedData = cache.get(statusCacheKey);
+        if (cachedProcessedData) {
+          console.log(`[OTIMIZAÇÃO AVANÇADA] Usando cache processado para status=${statusFilter}`);
+          activitiesWithProgress.push(...cachedProcessedData);
+        } else {
+          console.log(`[OTIMIZAÇÃO] Processando ${filteredActivities.length} atividades em lotes`);
+
+          // Dividir o processamento em lotes
+          for (let i = 0; i < filteredActivities.length; i += batchSize) {
+            console.log(`[OTIMIZAÇÃO] Processando lote ${Math.floor(i/batchSize)+1}/${Math.ceil(filteredActivities.length/batchSize)}`);
+            const batch = filteredActivities.slice(i, i + batchSize);
+            
+            // Processar lote em paralelo
+            const processedBatch = await Promise.all(
+              batch.map(async (activity) => {
+                const progresses = await storage.getActivityProgress(activity.id);
                 
-              // Verificar se o pedido foi concluído pelo último departamento (embalagem)
-              const embalagemProgress = progresses.find(p => p.department === 'embalagem');
-              const pedidoConcluido = embalagemProgress && embalagemProgress.status === 'completed';
-              
-              // Determinar o departamento atual ou marcar como concluído se embalagem já finalizou
-              let currentDepartment = pendingProgress ? pendingProgress.department : 'gabarito';
-              
-              // Se o pedido foi concluído pela embalagem, vamos marcar como "concluido" em vez de voltar para o gabarito
-              if (!pendingProgress && pedidoConcluido) {
-                currentDepartment = 'concluido';
-              }
-              
-              return {
-                ...activity,
-                currentDepartment,
-                client: activity.clientName,  // Nome do cliente
-                clientInfo: activity.description || null, // Adiciona informações adicionais do cliente (descrição)
-                progress: progresses
-              };
-            })
-          );
+                // Ordenar os progressos por departamento e encontrar o pendente mais recente
+                // para determinar em qual departamento a atividade está atualmente
+                const pendingProgress = progresses
+                  .filter(p => p.status === 'pending')
+                  .sort((a, b) => {
+                    const deptOrder = ['gabarito', 'impressao', 'batida', 'costura', 'embalagem'];
+                    return deptOrder.indexOf(a.department as any) - deptOrder.indexOf(b.department as any);
+                  })[0];
+                  
+                // Verificar se o pedido foi concluído pelo último departamento (embalagem)
+                const embalagemProgress = progresses.find(p => p.department === 'embalagem');
+                const pedidoConcluido = embalagemProgress && embalagemProgress.status === 'completed';
+                
+                // Determinar o departamento atual ou marcar como concluído se embalagem já finalizou
+                let currentDepartment = pendingProgress ? pendingProgress.department : 'gabarito';
+                
+                // Se o pedido foi concluído pela embalagem, vamos marcar como "concluido" em vez de voltar para o gabarito
+                if (!pendingProgress && pedidoConcluido) {
+                  currentDepartment = 'concluido';
+                }
+                
+                return {
+                  ...activity,
+                  currentDepartment,
+                  client: activity.clientName,  // Nome do cliente
+                  clientInfo: activity.description || null, // Adiciona informações adicionais do cliente (descrição)
+                  progress: progresses
+                };
+              })
+            );
+            
+            activitiesWithProgress.push(...processedBatch);
+          }
           
-          activitiesWithProgress.push(...processedBatch);
+          // Armazena dados processados no cache por 5 minutos para otimizar requisições futuras
+          cache.set(statusCacheKey, activitiesWithProgress, 300000); // 5 minutos
         }
         
         // Filtragem por status após processamento
