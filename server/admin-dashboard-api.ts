@@ -96,9 +96,120 @@ router.get('/activities', isAdmin, async (req, res) => {
       return res.json(cachedData);
     }
     
-    // Timeout para garantir resposta rápida
+    // MODO ULTRA-RÁPIDO para pedidos em produção (mais críticos para o usuário)
+    if (status === 'producao') {
+      console.log('[ULTRA-RÁPIDO] Iniciando modo emergencial para pedidos em produção');
+      try {
+        // Verificar se já temos o resultado em cache primeiro (resposta instantânea)
+        if (cache) {
+          const cachedResult = cache.get(cacheKey);
+          if (cachedResult) {
+            console.log(`[CACHE INSTANTÂNEO] Usando cache para pedidos em produção (${cacheKey})`);
+            return res.json(cachedResult);
+          }
+        }
+        
+        // Usar query SQL direta para máxima performance
+        const conn = await pool.connect();
+        try {
+          console.log('[SQL-DIRECT] Executando query SQL direta para máxima performance');
+          const query = `
+            WITH LatestProgress AS (
+              SELECT 
+                ap.activity_id,
+                ap.department,
+                ap.completed_at,
+                ap.completed_by,
+                ROW_NUMBER() OVER (PARTITION BY ap.activity_id ORDER BY ap.id DESC) as rn
+              FROM activity_progress ap
+              WHERE ap.completed_at IS NOT NULL
+            )
+            SELECT 
+              a.id, 
+              a.title, 
+              a.client_name as "clientName",
+              a.description, 
+              a.deadline,
+              a.image,
+              a.quantity,
+              lp.department as "currentDepartment"
+            FROM activities a
+            LEFT JOIN LatestProgress lp ON a.id = lp.activity_id AND lp.rn = 1
+            WHERE lp.department != 'concluido' OR lp.department IS NULL
+            ORDER BY 
+              CASE WHEN a.deadline IS NULL THEN 1 ELSE 0 END,
+              a.deadline ASC
+            LIMIT $1
+          `;
+          
+          const result = await conn.query(query, [limit * 2]);
+          
+          // Formatar para resposta padrão
+          const formattedActivities = result.rows.map(activity => ({
+            ...activity,
+            client: activity.clientName,
+            clientInfo: activity.description || null,
+            currentDepartment: activity.currentDepartment || 'gabarito',
+          }));
+          
+          // Paginar os resultados
+          const paginatedResult = {
+            items: formattedActivities.slice((page - 1) * limit, page * limit),
+            total: formattedActivities.length,
+            page,
+            totalPages: Math.ceil(formattedActivities.length / limit)
+          };
+          
+          // Cache mais longo para resposta rápida (30 segundos)
+          if (cache) {
+            cache.set(cacheKey, paginatedResult, 30000);
+          }
+          
+          console.log(`[ULTRA-RÁPIDO] Retornando ${formattedActivities.length} pedidos em produção via SQL direto`);
+          return res.json(paginatedResult);
+        } finally {
+          conn.release();
+        }
+      } catch (error) {
+        console.error('[ULTRA-RÁPIDO] Erro no modo direto:', error);
+        
+        // Fallback para o método padrão
+        try {
+          // Buscando diretamente da função otimizada
+          const activities = await storage.getActivitiesInProgress(limit * 2);
+          
+          // Formatar para resposta padrão
+          const formattedActivities = activities.map(activity => ({
+            ...activity,
+            client: activity.clientName,
+            clientInfo: activity.description || null
+          }));
+          
+          // Paginar os resultados
+          const paginatedResult = {
+            items: formattedActivities,
+            total: formattedActivities.length,
+            page: 1,
+            totalPages: 1
+          };
+          
+          // Cache curto para resposta rápida
+          if (cache) {
+            cache.set(cacheKey, paginatedResult, 10000); // 10 segundos
+          }
+          
+          console.log(`[FALLBACK] Retornando ${formattedActivities.length} pedidos`);
+          return res.json(paginatedResult);
+        } catch (innerError) {
+          console.error('[ULTRA-RÁPIDO] Erro no fallback:', innerError);
+          // Continuar com método normal em caso de erro
+        }
+      }
+    }
+
+    // Timeout para garantir resposta rápida - mais curto para pedidos em produção
     const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Timeout')), 5000);
+      setTimeout(() => reject(new Error('Timeout')), status === 'producao' ? 3000 : 5000);
     });
     
     try {

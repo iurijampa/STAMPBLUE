@@ -552,7 +552,59 @@ function OptimizedActivitiesList({ showCompleted }: { showCompleted: boolean }):
   // Estado para paginação
   const [page, setPage] = useState(1);
   
-  // ULTRA OTIMIZAÇÃO: Usando a nova API especializada para o admin
+  // Pré-carregamento direto para pedidos em produção (ULTRA RÁPIDO)
+  useEffect(() => {
+    // Aplicar o pré-carregamento apenas para pedidos em produção
+    if (!showCompleted) {
+      const loadProductionActivities = async () => {
+        try {
+          // Construir URL otimizada
+          const url = new URL("/api/admin-dashboard/activities", window.location.origin);
+          url.searchParams.append("status", "producao");
+          url.searchParams.append("page", page.toString());
+          url.searchParams.append("limit", "30");
+          
+          if (searchQuery) {
+            url.searchParams.append("search", searchQuery);
+          }
+          
+          console.log("[ULTRA-RÁPIDO] Pré-carregando pedidos em produção...");
+          
+          // Fetch com timeout curto
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 segundos apenas
+          
+          const response = await fetch(url.toString(), {
+            signal: controller.signal,
+            headers: {
+              'Cache-Control': 'no-cache',
+              'Pragma': 'no-cache'
+            }
+          });
+          
+          clearTimeout(timeoutId);
+          
+          if (response.ok) {
+            const data = await response.json();
+            // Atualizar o cache manualmente para disponibilidade imediata
+            queryClient.setQueryData(
+              ["/api/admin-dashboard/activities", "producao", page, searchQuery], 
+              data
+            );
+            console.log(`[ULTRA-RÁPIDO] Pré-carregados ${data?.items?.length || 0} pedidos em produção`);
+          }
+        } catch (error) {
+          console.error("[ULTRA-RÁPIDO] Erro no pré-carregamento:", error);
+          // Erros silenciosos para não atrapalhar o fluxo principal
+        }
+      };
+      
+      // Executar imediatamente
+      loadProductionActivities();
+    }
+  }, [showCompleted, page, searchQuery, queryClient]);
+
+  // ULTRA OTIMIZAÇÃO: Usando a nova API especializada para o admin - serve como fallback para o pré-carregamento
   const { data: activitiesResponse, isLoading } = useQuery({
     queryKey: ["/api/admin-dashboard/activities", showCompleted ? 'concluido' : 'producao', page, searchQuery],
     queryFn: async () => {
@@ -575,7 +627,7 @@ function OptimizedActivitiesList({ showCompleted }: { showCompleted: boolean }):
         
         // Timeout mais curto para evitar esperas muito longas
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 segundos de timeout
+        const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 segundos de timeout (reduzido)
         
         const response = await fetch(url.toString(), {
           signal: controller.signal
@@ -595,10 +647,11 @@ function OptimizedActivitiesList({ showCompleted }: { showCompleted: boolean }):
         throw error;
       }
     },
-    staleTime: 15000, // 15 segundos - reduz chamadas frequentes à API
+    staleTime: 10000, // 10 segundos - reduz chamadas frequentes à API
     retry: 1, // Apenas uma tentativa adicional em caso de falha
-    retryDelay: 3000, // 3 segundos entre tentativas
-    refetchOnWindowFocus: false, // Evita recarregar quando a janela ganha foco
+    retryDelay: 2000, // 2 segundos entre tentativas (reduzido)
+    refetchOnWindowFocus: showCompleted ? false : true, // Recarregar quando a janela ganha foco (apenas para pedidos em produção)
+    refetchInterval: showCompleted ? false : 30000, // Recarrega a cada 30 segundos (apenas para pedidos em produção)
     placeholderData: (prev) => prev // Mantém dados anteriores enquanto carrega novos
   });
   
@@ -943,25 +996,35 @@ function ActivitiesList(showCompleted: boolean = false) {
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState<'concluido' | 'producao' | null>(null);
   
-  // Otimização: Usar staleTime e paginação para reduzir carga
-  const { data: activitiesResponse, isLoading } = useQuery({
-    queryKey: ["/api/activities", status, page],
+  // Otimização: Usar staleTime mais curto e endpoint especializado para carregamento mais rápido
+  const { data: activitiesResponse, isLoading, isError } = useQuery({
+    queryKey: ["/api/admin-dashboard/activities", showCompleted ? 'concluido' : 'producao', page],
     queryFn: async () => {
-      // Construir URL com parâmetros de paginação e filtro
-      const url = new URL("/api/activities", window.location.origin);
-      if (status) url.searchParams.append("status", status);
-      url.searchParams.append("page", page.toString());
-      url.searchParams.append("limit", "50"); // 50 itens por página
-      
-      const response = await fetch(url.toString());
-      if (!response.ok) {
-        throw new Error("Erro ao buscar atividades");
+      try {
+        // Construir URL com parâmetros de paginação e filtro
+        const url = new URL("/api/admin-dashboard/activities", window.location.origin);
+        url.searchParams.append("status", showCompleted ? 'concluido' : 'producao');
+        url.searchParams.append("page", page.toString());
+        url.searchParams.append("limit", "50"); // 50 itens por página
+        
+        console.log(`Buscando pedidos ${showCompleted ? 'concluídos' : 'em produção'}, página ${page}`);
+        
+        const response = await fetch(url.toString());
+        if (!response.ok) {
+          throw new Error("Erro ao buscar atividades");
+        }
+        const data = await response.json();
+        console.log(`Recebidos ${data.items.length} pedidos ${showCompleted ? 'concluídos' : 'em produção'}`);
+        return data;
+      } catch (error) {
+        console.error("Erro na busca de pedidos:", error);
+        throw error;
       }
-      return response.json();
     },
-    staleTime: 30000, // 30 segundos - reduz chamadas frequentes à API
-    refetchOnWindowFocus: false, // Evita recarregar quando a janela ganha foco
-    placeholderData: keepPreviousData // Mantém dados anteriores enquanto carrega novos (UX melhor)
+    staleTime: 15000, // 15 segundos - permite atualizações mais frequentes
+    refetchOnWindowFocus: true, // Recarrega quando a janela ganha foco para manter dados atuais
+    placeholderData: keepPreviousData, // Mantém dados anteriores enquanto carrega novos (UX melhor)
+    refetchInterval: showCompleted ? false : 30000, // Para pedidos em produção, recarrega a cada 30 segundos
   });
   
   // Extrair dados da resposta paginada
