@@ -928,12 +928,20 @@ export class DatabaseStorage implements IStorage {
     // Extrair IDs das atividades
     const activityIds = embalagemProgresses.map(p => p.activityId);
     
-    // Buscar as atividades correspondentes
-    const completedActivities = await db
-      .select()
-      .from(activities)
-      .where(sql`${activities.id} IN (${activityIds.join(',')})`)
-      .limit(limit);
+    // Buscar as atividades correspondentes uma a uma (evita erro de sintaxe)
+    let completedActivities = [];
+    for (const id of activityIds) {
+      const [activity] = await db
+        .select()
+        .from(activities)
+        .where(eq(activities.id, id));
+        
+      if (activity) {
+        completedActivities.push(activity);
+      }
+      
+      if (completedActivities.length >= limit) break;
+    }
     
     // Adicionar o campo currentDepartment = 'concluido' para compatibilidade
     return completedActivities.map(activity => ({
@@ -988,12 +996,20 @@ export class DatabaseStorage implements IStorage {
     // Extrair IDs para buscar as atividades
     const activityIds = activityWithDepartment.map(a => a.activityId);
     
-    // Buscar as atividades
-    const activitiesData = await db
-      .select()
-      .from(activities)
-      .where(sql`${activities.id} IN (${activityIds.join(',')})`)
-      .limit(limit);
+    // Buscar as atividades uma a uma (evita erro de sintaxe)
+    let activitiesData = [];
+    for (const info of activityWithDepartment) {
+      const [activity] = await db
+        .select()
+        .from(activities)
+        .where(eq(activities.id, info.activityId));
+        
+      if (activity) {
+        activitiesData.push(activity);
+      }
+      
+      if (activitiesData.length >= limit) break;
+    }
     
     // Mapear departamento atual para cada atividade
     return activitiesData.map(activity => {
