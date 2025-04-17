@@ -172,9 +172,43 @@ export default function AdminDashboard() {
             </div>
           </div>
           
-          {/* Pedidos em produção - Versão de carregamento imediato */}
+          {/* Pedidos em produção - Versão simplificada e direta */}
           <div>
-            <ProductionActivitiesDirect />
+            <Card className="w-full">
+              <CardHeader className="pb-3 pt-5">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <CardTitle className="text-xl flex items-center">
+                      <Layers className="h-5 w-5 mr-2 text-primary" />
+                      Pedidos em Produção
+                    </CardTitle>
+                    <CardDescription>
+                      Lista de pedidos atualmente em produção
+                    </CardDescription>
+                  </div>
+                  <Button 
+                    onClick={() => {
+                      queryClient.invalidateQueries({ queryKey: ["/api/admin-dashboard/activities"]});
+                      toast({
+                        title: "Atualizando dados",
+                        description: "Dados dos pedidos em produção estão sendo atualizados.",
+                        variant: "default",
+                      });
+                    }}
+                    variant="outline" 
+                    size="sm" 
+                    className="h-8 px-2"
+                  >
+                    <RefreshCw className="h-3.5 w-3.5 mr-1" />
+                    Atualizar
+                  </Button>
+                </div>
+              </CardHeader>
+              
+              <CardContent>
+                <OptimizedActivitiesList showCompleted={false} />
+              </CardContent>
+            </Card>
           </div>
         </div>
         
@@ -606,14 +640,29 @@ function OptimizedActivitiesList({ showCompleted }: { showCompleted: boolean }):
     }
   }, [showCompleted, page, searchQuery, queryClient]);
 
-  // ULTRA OTIMIZAÇÃO: Usando a nova API especializada para o admin - serve como fallback para o pré-carregamento
+  // ULTRA OTIMIZAÇÃO APRIMORADA: Usando a nova API especializada para o admin
+  // com foco em velocidade, estabilidade e resiliência
   // Referência para manter o estado antigo enquanto carrega
   const activitiesCache = useRef<any>(null);
+  const cacheKey = !showCompleted ? 'production_activities_cache' : 'completed_activities_cache';
 
   // Armazenar localmente os dados para acesso imediato durante recargas
   useEffect(() => {
-    // Carregar dados iniciais do localStorage se disponíveis (apenas para pedidos em produção)
-    if (!showCompleted && !activitiesCache.current) {
+    // Carregar dados iniciais do localStorage se disponíveis
+    try {
+      if (!activitiesCache.current) {
+        const storedData = localStorage.getItem(cacheKey);
+        if (storedData) {
+          const parsedData = JSON.parse(storedData);
+          activitiesCache.current = parsedData;
+          console.log(`[CACHE-ULTRA] Carregados ${parsedData?.items?.length || 0} pedidos do cache local`);
+        }
+      }
+    } catch (err) {
+      console.error('[CACHE-ULTRA] Erro ao carregar cache:', err);
+    }
+    
+    if (!showCompleted) {
       try {
         const cachedData = localStorage.getItem('activities_production_cache');
         if (cachedData) {
@@ -1598,347 +1647,3 @@ function NotificationsList() {
   );
 }
 
-// Componente totalmente novo para exibição direta e imediata dos pedidos em produção
-function ProductionActivitiesDirect() {
-  const [, navigate] = useLocation();
-  const { toast } = useToast();
-  const [activities, setActivities] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [selectedActivity, setSelectedActivity] = useState<any | null>(null);
-  const [viewModalOpen, setViewModalOpen] = useState(false);
-  const [editModalOpen, setEditModalOpen] = useState(false);
-  const [createModalOpen, setCreateModalOpen] = useState(false);
-  
-  // Departamentos na ordem correta do fluxo de produção
-  const DEPARTMENTS = ["gabarito", "impressao", "batida", "costura", "embalagem"];
-  
-  // Função para recuperar dados do localStorage como fallback
-  const getStoredActivities = useCallback(() => {
-    try {
-      const storedData = localStorage.getItem('production_activities_cache');
-      if (storedData) {
-        return JSON.parse(storedData);
-      }
-    } catch (err) {
-      console.error('Erro ao recuperar cache:', err);
-    }
-    return null;
-  }, []);
-  
-  // Carregar dados imediatamente
-  useEffect(() => {
-    let isMounted = true;
-    let retryCount = 0;
-    const maxRetries = 3;
-    
-    const storedActivities = getStoredActivities();
-    if (storedActivities && storedActivities.length > 0 && isMounted) {
-      // Exibir dados em cache imediatamente enquanto carrega os novos
-      setActivities(storedActivities);
-      setIsLoading(false);
-    }
-    
-    const fetchActivities = async () => {
-      try {
-        const url = new URL('/api/admin-dashboard/activities', window.location.origin);
-        url.searchParams.append('status', 'producao');
-        url.searchParams.append('page', '1');
-        url.searchParams.append('limit', '30');
-        url.searchParams.append('_t', Date.now().toString());
-        
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 8000);
-        
-        const response = await fetch(url.toString(), {
-          signal: controller.signal,
-          headers: {
-            'Cache-Control': 'no-cache',
-            'Pragma': 'no-cache'
-          }
-        });
-        
-        clearTimeout(timeoutId);
-        
-        if (!response.ok) {
-          throw new Error(`Erro ${response.status}: ${response.statusText}`);
-        }
-        
-        const data = await response.json();
-        
-        if (isMounted) {
-          setActivities(data.items || []);
-          setIsLoading(false);
-          setError(null);
-          
-          // Salvar no localStorage para uso futuro
-          try {
-            localStorage.setItem('production_activities_cache', JSON.stringify(data.items || []));
-          } catch (err) {
-            console.error('Erro ao salvar cache:', err);
-          }
-        }
-      } catch (err) {
-        console.error('Erro na busca de pedidos:', err);
-        
-        if (isMounted) {
-          retryCount++;
-          
-          if (retryCount <= maxRetries) {
-            // Exibir alerta de tentativa de reconexão
-            toast({
-              title: `Tentando reconectar (${retryCount}/${maxRetries})`,
-              description: "Aguarde enquanto tentamos recuperar os dados novamente.",
-              variant: "default",
-              duration: 3000
-            });
-            
-            // Tentar novamente após um pequeno delay
-            setTimeout(fetchActivities, 2000);
-          } else {
-            setError('Não foi possível carregar os pedidos após múltiplas tentativas.');
-            setIsLoading(false);
-          }
-        }
-      }
-    };
-    
-    fetchActivities();
-    
-    // Configurar polling regular (a cada 15 segundos)
-    const intervalId = setInterval(() => {
-      if (isMounted) fetchActivities();
-    }, 15000);
-    
-    return () => {
-      isMounted = false;
-      clearInterval(intervalId);
-    };
-  }, [getStoredActivities, toast]);
-  
-  // Manipuladores de ação
-  const handleView = (activity: any) => {
-    setSelectedActivity(activity);
-    setViewModalOpen(true);
-  };
-  
-  const handleEdit = (activity: any) => {
-    setSelectedActivity(activity);
-    setEditModalOpen(true);
-  };
-  
-  // Função para determinar o status visual da data de entrega
-  const getDeadlineStatus = (deadline: string) => {
-    if (!deadline) return "normal";
-    
-    const today = new Date();
-    const deadlineDate = new Date(deadline);
-    const diffDays = Math.ceil((deadlineDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-    
-    if (diffDays < 0) return "vencido";
-    if (diffDays <= 3) return "proximo";
-    return "normal";
-  };
-  
-  // Classes para a visualização dos status de deadline
-  const deadlineClasses = {
-    normal: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
-    proximo: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
-    vencido: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"
-  };
-  
-  return (
-    <Card className="w-full">
-      <CardHeader className="pb-3 pt-5">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <CardTitle className="text-xl flex items-center">
-              <Layers className="h-5 w-5 mr-2 text-primary" />
-              Pedidos em Produção
-            </CardTitle>
-            <CardDescription>
-              Total de {activities.length} pedidos ativos no sistema
-            </CardDescription>
-          </div>
-
-          <div className="flex items-center gap-2 self-end sm:self-auto">
-            <Button 
-              onClick={() => fetchActivities()} 
-              variant="outline" 
-              size="sm" 
-              className="h-8 px-2"
-            >
-              <RefreshCw className="h-3.5 w-3.5 mr-1" />
-              Atualizar
-            </Button>
-            
-            <Button 
-              onClick={() => setCreateModalOpen(true)}
-              size="sm"
-              className="h-8"
-            >
-              <PlusCircle className="h-3.5 w-3.5 mr-1" />
-              Novo Pedido
-            </Button>
-          </div>
-        </div>
-      </CardHeader>
-      
-      <CardContent>
-        {isLoading && !activities.length ? (
-          <div className="py-24 flex flex-col items-center justify-center">
-            <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full mb-4"></div>
-            <p className="text-muted-foreground">Carregando pedidos em produção...</p>
-          </div>
-        ) : error && !activities.length ? (
-          <div className="py-24 flex flex-col items-center justify-center">
-            <AlertCircle className="h-12 w-12 text-orange-500 mb-4" />
-            <p className="text-muted-foreground text-center">{error}</p>
-            <Button onClick={() => fetchActivities()} variant="outline" className="mt-4">
-              Tentar novamente
-            </Button>
-          </div>
-        ) : activities.length === 0 ? (
-          <div className="py-24 flex flex-col items-center justify-center">
-            <div className="bg-gray-100 dark:bg-gray-800 rounded-full p-4 mb-4">
-              <Layers className="h-12 w-12 text-muted-foreground" />
-            </div>
-            <p className="text-xl font-semibold mb-2">Nenhum pedido em produção</p>
-            <p className="text-muted-foreground text-center max-w-md mb-6">
-              Não há pedidos em produção no momento. Clique no botão abaixo para criar um novo pedido.
-            </p>
-            <Button onClick={() => setCreateModalOpen(true)}>
-              <PlusCircle className="h-4 w-4 mr-1" />
-              Criar Novo Pedido
-            </Button>
-          </div>
-        ) : (
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[80px]">ID</TableHead>
-                  <TableHead>Cliente</TableHead>
-                  <TableHead className="hidden md:table-cell">Departamento</TableHead>
-                  <TableHead className="hidden lg:table-cell">Progresso</TableHead>
-                  <TableHead>Data de Entrega</TableHead>
-                  <TableHead className="text-right">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {activities.map((activity) => {
-                  const deadlineStatus = getDeadlineStatus(activity.deadline);
-                  
-                  // Determinar o departamento atual
-                  let currentDepartment = "Não iniciado";
-                  let progress = 0;
-                  
-                  if (activity.progress && activity.progress.length > 0) {
-                    const sortedProgress = [...activity.progress].sort((a, b) => 
-                      new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-                    );
-                    
-                    const lastProgress = sortedProgress[0];
-                    currentDepartment = lastProgress.department;
-                    
-                    // Calcular progresso com base na posição do dept atual
-                    const departmentIndex = DEPARTMENTS.indexOf(lastProgress.department);
-                    if (departmentIndex >= 0) {
-                      progress = Math.round(((departmentIndex + 1) / DEPARTMENTS.length) * 100);
-                    }
-                  }
-                  
-                  return (
-                    <TableRow key={activity.id}>
-                      <TableCell className="font-medium">{activity.id}</TableCell>
-                      <TableCell>
-                        <div className="font-medium truncate max-w-[200px]">
-                          {activity.client}
-                        </div>
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell">
-                        <Badge variant="outline" className="capitalize">
-                          {currentDepartment || "Não iniciado"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell">
-                        <div className="flex items-center gap-2">
-                          <div className="h-2 w-full bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                            <div 
-                              className="h-full bg-primary" 
-                              style={{ width: `${progress}%` }}
-                            />
-                          </div>
-                          <span className="text-xs font-medium">{progress}%</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {activity.deadline ? (
-                          <Badge className={deadlineClasses[deadlineStatus as keyof typeof deadlineClasses]}>
-                            {format(new Date(activity.deadline), "dd/MM/yyyy", { locale: ptBR })}
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline">Sem prazo</Badge>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-1">
-                          <Button 
-                            onClick={() => handleView(activity)} 
-                            size="icon" 
-                            variant="ghost"
-                          >
-                            <Eye className="h-4 w-4" />
-                            <span className="sr-only">Ver detalhes</span>
-                          </Button>
-                          <Button 
-                            onClick={() => handleEdit(activity)} 
-                            size="icon" 
-                            variant="ghost"
-                          >
-                            <Edit className="h-4 w-4" />
-                            <span className="sr-only">Editar</span>
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
-        )}
-      </CardContent>
-      
-      {/* Modais */}
-      {selectedActivity && (
-        <>
-          <ViewActivity 
-            open={viewModalOpen} 
-            onOpenChange={setViewModalOpen}
-            activity={selectedActivity}
-          />
-          
-          <EditActivity 
-            open={editModalOpen} 
-            onOpenChange={setEditModalOpen}
-            activity={selectedActivity}
-            onSuccess={() => {
-              fetchActivities();
-              setEditModalOpen(false);
-            }}
-          />
-        </>
-      )}
-      
-      <CreateActivity 
-        open={createModalOpen}
-        onOpenChange={setCreateModalOpen}
-        onSuccess={() => {
-          fetchActivities();
-          setCreateModalOpen(false);
-        }}
-      />
-    </Card>
-  );
-}
