@@ -1,189 +1,180 @@
-import { Request, Response, Router } from "express";
-import { storage } from "./storage";
+import express from 'express';
+import { storage } from './storage';
+import { DEPARTMENTS } from '@shared/schema';
 
-// Cache dedicado apenas para dados do dashboard admin
-let cachedActivities = {
-  producao: [] as any[],
-  concluido: [] as any[],
-  all: [] as any[]
-};
+const router = express.Router();
 
-let lastUpdate = 0;
-const UPDATE_INTERVAL = 30000; // 30 segundos
+// Middleware to check if user is authenticated and is an admin
+function isAdmin(req: express.Request, res: express.Response, next: express.NextFunction) {
+  if (req.isAuthenticated && req.isAuthenticated() && req.user && req.user.role === "admin") {
+    return next();
+  }
+  return res.status(403).json({ message: "Acesso negado" });
+}
 
-// Obter atividades com seus progressos de forma otimizada
+// Esta função pré-carrega TODAS as atividades com seus progressos em uma única chamada
+// Isso reduz drasticamente o número de consultas ao banco de dados
 async function preloadActivitiesWithProgress() {
-  console.log("[ULTRA OTIMIZAÇÃO] Iniciando carregamento de dados para admin");
-  const startTime = Date.now();
+  console.log('[ADMIN DASHBOARD] Pré-carregando todas as atividades com seus progressos');
+  
   try {
-    // 1. Obter todas as atividades de uma vez só
-    const allActivities = await storage.getAllActivities();
-    console.log(`[ULTRA OTIMIZAÇÃO] Obtidas ${allActivities.length} atividades`);
+    // Buscar todas as atividades
+    const activities = await storage.getAllActivities();
     
-    // 2. Obter TODOS os progressos de TODAS as atividades com uma única consulta
-    // Isso é muito mais eficiente que fazer N consultas separadas
+    // Buscar TODOS os progressos de uma vez só (ultra otimização)
+    // Esta é a chave da otimização: buscar todos os progressos de uma vez
     const allProgressData = await storage.getAllActivitiesProgress();
-    console.log(`[ULTRA OTIMIZAÇÃO] Obtidos dados de progresso para todas as atividades`);
     
-    // 3. Processar tudo de uma vez
-    const processedActivities = allActivities.map(activity => {
-      // Encontrar os progressos desta atividade
-      const progresses = allProgressData.filter(p => p.activityId === activity.id);
+    // Agrupar progressos por ID de atividade para acesso rápido
+    const progressesByActivityId = new Map();
+    for (const progress of allProgressData) {
+      if (!progressesByActivityId.has(progress.activityId)) {
+        progressesByActivityId.set(progress.activityId, []);
+      }
+      progressesByActivityId.get(progress.activityId).push(progress);
+    }
+    
+    // Processar todas as atividades com seus progressos
+    const activitiesWithProgress = activities.map(activity => {
+      // Obter progressos desta atividade do mapa
+      const progresses = progressesByActivityId.get(activity.id) || [];
       
-      // Determinar o departamento atual
+      // Ordenar os progressos por departamento
       const pendingProgress = progresses
         .filter(p => p.status === 'pending')
         .sort((a, b) => {
           const deptOrder = ['gabarito', 'impressao', 'batida', 'costura', 'embalagem'];
           return deptOrder.indexOf(a.department as any) - deptOrder.indexOf(b.department as any);
         })[0];
-      
-      // Verificar se foi concluído pela embalagem
+        
+      // Verificar se o pedido foi concluído pelo último departamento (embalagem)
       const embalagemProgress = progresses.find(p => p.department === 'embalagem');
       const pedidoConcluido = embalagemProgress && embalagemProgress.status === 'completed';
       
-      // Determinar o departamento atual
+      // Determinar o departamento atual ou marcar como concluído se embalagem já finalizou
       let currentDepartment = pendingProgress ? pendingProgress.department : 'gabarito';
       
-      // Se foi concluído pela embalagem, marcar como concluído
+      // Se o pedido foi concluído pela embalagem, vamos marcar como "concluido" 
       if (!pendingProgress && pedidoConcluido) {
-        currentDepartment = 'concluido';
+        currentDepartment = 'concluido' as any;
       }
       
       return {
         ...activity,
         currentDepartment,
-        client: activity.clientName || 'Cliente',
-        clientInfo: activity.description || null,
+        client: activity.clientName,  // Nome do cliente
+        clientInfo: activity.description || null, // Adiciona informações adicionais do cliente (descrição)
         progress: progresses
       };
     });
     
-    // 4. Separar por status e ordenar
-    const concluidos = processedActivities.filter(a => a.currentDepartment === 'concluido');
-    const emProducao = processedActivities.filter(a => a.currentDepartment !== 'concluido');
-    
-    // 5. Função para ordenar por data de entrega
-    const sortByDeadline = (a: any, b: any) => {
-      if (!a.deadline && !b.deadline) return 0;
-      if (!a.deadline) return 1;
-      if (!b.deadline) return -1;
-      return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
-    };
-    
-    // 6. Atualizar o cache
-    cachedActivities = {
-      producao: emProducao.sort(sortByDeadline),
-      concluido: concluidos.sort(sortByDeadline),
-      all: processedActivities.sort(sortByDeadline)
-    };
-    
-    // 7. Atualizar o timestamp de última atualização
-    lastUpdate = Date.now();
-    
-    const endTime = Date.now();
-    console.log(`[ULTRA OTIMIZAÇÃO] Dados carregados com sucesso em ${(endTime - startTime)/1000}s`);
-    console.log(`[ULTRA OTIMIZAÇÃO] Total: ${processedActivities.length} atividades (${concluidos.length} concluídas, ${emProducao.length} em produção)`);
-    
-    return true;
+    return activitiesWithProgress;
   } catch (error) {
-    console.error("[ULTRA OTIMIZAÇÃO] Erro ao carregar dados:", error);
-    return false;
+    console.error('[ADMIN DASHBOARD] Erro ao pré-carregar atividades:', error);
+    throw error;
   }
 }
 
-// Iniciar o precarregamento imediatamente
-preloadActivitiesWithProgress();
-
-// Criar um intervalo para atualizar os dados periodicamente
-setInterval(preloadActivitiesWithProgress, UPDATE_INTERVAL);
-
-// Middleware para verificar se o usuário é admin
-function isAdmin(req: Request, res: Response, next: Function) {
-  if (req.isAuthenticated && req.isAuthenticated() && req.user && req.user.role === "admin") {
-    return next();
-  }
-  return res.status(403).json({ message: "Acesso negado. Apenas administradores podem acessar esta rota." });
-}
-
-// Router para as rotas otimizadas do admin
-const adminDashboardRouter = Router();
-
-// Rota para obter todas as atividades (otimizada)
-adminDashboardRouter.get('/activities', isAdmin, async (req, res) => {
-  // Verificar se os dados estão desatualizados (mais de 30 segundos)
-  if (Date.now() - lastUpdate > UPDATE_INTERVAL) {
-    // Se estiverem desatualizados, recarregar
-    console.log("[ULTRA OTIMIZAÇÃO] Dados desatualizados, recarregando...");
-    await preloadActivitiesWithProgress();
-  }
-  
+// Rota otimizada para buscar atividades com paginação - extremamente eficiente
+router.get('/activities', isAdmin, async (req, res) => {
   try {
-    // Parâmetros da requisição
+    const status = req.query.status as string || 'all';
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 30;
-    const status = req.query.status as string || 'producao';
+    const search = req.query.search as string || '';
     
-    // Selecionar os dados conforme o status solicitado
-    const activities = status === 'all' 
-      ? cachedActivities.all 
-      : (status === 'concluido' ? cachedActivities.concluido : cachedActivities.producao);
+    console.log(`[OTIMIZAÇÃO] Buscando atividades para admin com status=${status}, page=${page}, limit=${limit}`);
+    
+    // Usar cache para dados processados - chave baseada nos parâmetros da requisição
+    const cacheKey = `admin_dashboard_${status}_${page}_${limit}_${search}`;
+    const cache = (global as any).cache;
+    
+    // Verificar se os dados já estão em cache
+    const cachedData = cache ? cache.get(cacheKey) : null;
+    if (cachedData) {
+      console.log(`[CACHE] Usando dados em cache para ${cacheKey}`);
+      return res.json(cachedData);
+    }
+    
+    // Buscar todas as atividades com seus progressos em uma única operação
+    const activitiesWithProgress = await preloadActivitiesWithProgress();
+    
+    // Filtrar por status (se especificado)
+    let filteredActivities = activitiesWithProgress;
+    if (status === 'concluido') {
+      filteredActivities = activitiesWithProgress.filter(act => act.currentDepartment === 'concluido');
+    } else if (status === 'producao') {
+      filteredActivities = activitiesWithProgress.filter(act => act.currentDepartment !== 'concluido');
+    }
+    
+    // Filtrar por texto de busca se especificado
+    if (search) {
+      const searchLower = search.toLowerCase();
+      filteredActivities = filteredActivities.filter(act => 
+        act.title.toLowerCase().includes(searchLower) || 
+        (act.clientName && act.clientName.toLowerCase().includes(searchLower)) ||
+        (act.description && act.description.toLowerCase().includes(searchLower))
+      );
+    }
+    
+    // Ordenar por data de entrega
+    filteredActivities.sort((a, b) => {
+      if (!a.deadline && !b.deadline) return 0;
+      if (!a.deadline) return 1;  // Sem data vai para o final
+      if (!b.deadline) return -1; // Sem data vai para o final
+      return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
+    });
     
     // Aplicar paginação
-    const startIndex = (page - 1) * limit;
-    const endIndex = page * limit;
-    const paginatedItems = activities.slice(startIndex, endIndex);
-    
-    // Montar resposta
-    const response = {
-      items: paginatedItems,
-      total: activities.length,
-      page: page,
-      totalPages: Math.ceil(activities.length / limit)
+    const paginatedResult = {
+      items: filteredActivities.slice((page - 1) * limit, page * limit),
+      total: filteredActivities.length,
+      page,
+      totalPages: Math.ceil(filteredActivities.length / limit)
     };
     
-    console.log(`[ULTRA OTIMIZAÇÃO] Retornando ${paginatedItems.length} atividades (status=${status}, page=${page}/${Math.ceil(activities.length / limit)})`);
+    // Salvar no cache por 15 segundos
+    if (cache) {
+      cache.set(cacheKey, paginatedResult, 15000);
+    }
     
-    return res.json(response);
+    return res.json(paginatedResult);
   } catch (error) {
-    console.error("[ULTRA OTIMIZAÇÃO] Erro ao processar requisição:", error);
-    return res.status(500).json({ 
-      message: "Erro ao processar requisição", 
-      error: error.message 
-    });
+    console.error('[ADMIN DASHBOARD] Erro ao buscar atividades:', error);
+    return res.status(500).json({ message: 'Erro ao buscar atividades' });
   }
 });
 
-// Rota para forçar recarga dos dados
-adminDashboardRouter.post('/activities/reload', isAdmin, async (req, res) => {
-  console.log("[ULTRA OTIMIZAÇÃO] Recarga forçada solicitada");
-  const success = await preloadActivitiesWithProgress();
-  
-  if (success) {
-    return res.json({
-      message: "Dados recarregados com sucesso",
-      timestamp: lastUpdate,
-      counts: {
-        producao: cachedActivities.producao.length,
-        concluido: cachedActivities.concluido.length,
-        total: cachedActivities.all.length
+// Rota para obter estatísticas dos departamentos (contagem de pedidos por departamento)
+router.get('/department-stats', isAdmin, async (req, res) => {
+  try {
+    // Obter todas as atividades com progresso de uma vez só
+    const activitiesWithProgress = await preloadActivitiesWithProgress();
+    
+    // Inicializar contador por departamento
+    const departmentCounts = {};
+    DEPARTMENTS.forEach(dept => {
+      departmentCounts[dept] = 0;
+    });
+    
+    // Contar atividades por departamento atual
+    activitiesWithProgress.forEach(activity => {
+      if (activity.currentDepartment && activity.currentDepartment !== 'concluido') {
+        departmentCounts[activity.currentDepartment] = 
+          (departmentCounts[activity.currentDepartment] || 0) + 1;
       }
     });
-  } else {
-    return res.status(500).json({ message: "Erro ao recarregar dados" });
+    
+    // Adicionar contador para concluídos
+    departmentCounts['concluido'] = activitiesWithProgress.filter(
+      a => a.currentDepartment === 'concluido'
+    ).length;
+    
+    return res.json(departmentCounts);
+  } catch (error) {
+    console.error('[ADMIN DASHBOARD] Erro ao obter estatísticas dos departamentos:', error);
+    return res.status(500).json({ message: 'Erro ao obter estatísticas dos departamentos' });
   }
 });
 
-// Rota para obter contagens rápidas (dashboard)
-adminDashboardRouter.get('/activities/counts', isAdmin, (req, res) => {
-  const counts = {
-    total: cachedActivities.all.length,
-    producao: cachedActivities.producao.length,
-    concluido: cachedActivities.concluido.length,
-    lastUpdate: lastUpdate
-  };
-  
-  return res.json(counts);
-});
-
-export default adminDashboardRouter;
+export default router;

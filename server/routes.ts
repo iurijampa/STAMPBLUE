@@ -18,6 +18,7 @@ import path from 'path';
 import { db } from "./db";
 import { createBackup } from "./backup";
 import { and, eq, sql } from "drizzle-orm";
+import adminDashboardRouter from './admin-dashboard-api';
 
 // LRU Cache ultra-otimizado para máxima performance e eficiência
 class LRUCache {
@@ -309,6 +310,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Setup authentication routes
   setupAuth(app);
+  
+  // Usar API especial ultra-otimizada para o dashboard do admin
+  console.log('[ULTRA OTIMIZAÇÂO] Registrando router especializado para o dashboard admin');
+  app.use('/api/admin-dashboard', adminDashboardRouter);
 
   // API routes
   // Activities
