@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import { useLocation } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -605,11 +605,19 @@ function OptimizedActivitiesList({ showCompleted }: { showCompleted: boolean }):
   }, [showCompleted, page, searchQuery, queryClient]);
 
   // ULTRA OTIMIZAÇÃO: Usando a nova API especializada para o admin - serve como fallback para o pré-carregamento
+  // Referência para manter o estado antigo enquanto carrega
+  const activitiesCache = useRef<any>(null);
+
+  // Monitorar o status do carregamento (para mostrar feedback visual)
+  const [loadingState, setLoadingState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  
   const { data: activitiesResponse, isLoading } = useQuery({
     queryKey: ["/api/admin-dashboard/activities", showCompleted ? 'concluido' : 'producao', page, searchQuery],
     queryFn: async () => {
       try {
+        setLoadingState('loading');
         console.log(`Buscando pedidos ${showCompleted ? 'concluídos' : 'em produção'}, página ${page}`);
+        
         // Construir URL com parâmetros de paginação e filtro usando a nova API otimizada
         const url = new URL("/api/admin-dashboard/activities", window.location.origin);
         
@@ -627,11 +635,26 @@ function OptimizedActivitiesList({ showCompleted }: { showCompleted: boolean }):
         
         // Timeout mais curto para evitar esperas muito longas
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 segundos de timeout (reduzido)
         
-        const response = await fetch(url.toString(), {
+        // Reduzir ainda mais o timeout para pedidos em produção
+        const timeoutMs = showCompleted ? 8000 : 5000; // 5s para produção, 8s para concluídos
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+        
+        // Para pedidos em produção, usar cache-busting para garantir dados frescos
+        const fetchOptions: RequestInit = {
           signal: controller.signal
-        });
+        };
+        
+        if (!showCompleted) {
+          // Adicionar timestamp para evitar cache do navegador e garantir dados frescos
+          url.searchParams.append("_t", Date.now().toString());
+          fetchOptions.headers = {
+            'Cache-Control': 'no-cache, no-store',
+            'Pragma': 'no-cache'
+          };
+        }
+        
+        const response = await fetch(url.toString(), fetchOptions);
         
         clearTimeout(timeoutId);
         
@@ -641,17 +664,30 @@ function OptimizedActivitiesList({ showCompleted }: { showCompleted: boolean }):
         
         const data = await response.json();
         console.log(`Recebidos ${data?.items?.length || 0} pedidos ${showCompleted ? 'concluídos' : 'em produção'}`);
+        
+        // Guardar no cache local para ter um fallback sempre disponível
+        activitiesCache.current = data;
+        setLoadingState('success');
+        
         return data;
       } catch (error) {
         console.error("Erro na busca de pedidos:", error);
+        setLoadingState('error');
+        
+        // Em caso de erro, usar o cache local como fallback (não dispara erro)
+        if (activitiesCache.current) {
+          console.log("Usando cache local como fallback devido a erro");
+          return activitiesCache.current;
+        }
+        
         throw error;
       }
     },
-    staleTime: 10000, // 10 segundos - reduz chamadas frequentes à API
+    staleTime: showCompleted ? 30000 : 10000, // Tempo mais curto para pedidos em produção (10s vs 30s)
     retry: 1, // Apenas uma tentativa adicional em caso de falha
-    retryDelay: 2000, // 2 segundos entre tentativas (reduzido)
-    refetchOnWindowFocus: showCompleted ? false : true, // Recarregar quando a janela ganha foco (apenas para pedidos em produção)
-    refetchInterval: showCompleted ? false : 30000, // Recarrega a cada 30 segundos (apenas para pedidos em produção)
+    retryDelay: 1500, // 1.5 segundos entre tentativas (reduzido)
+    refetchOnWindowFocus: !showCompleted, // Recarregar quando a janela ganha foco (apenas para pedidos em produção)
+    refetchInterval: showCompleted ? false : 20000, // Recarrega a cada 20 segundos (apenas para pedidos em produção)
     placeholderData: (prev) => prev // Mantém dados anteriores enquanto carrega novos
   });
   

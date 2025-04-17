@@ -1,6 +1,7 @@
 import express from 'express';
 import { storage } from './storage';
 import { DEPARTMENTS } from '@shared/schema';
+import { sql } from './db';
 
 const router = express.Router();
 
@@ -41,14 +42,14 @@ async function preloadActivitiesWithProgress() {
       
       // Ordenar os progressos por departamento
       const pendingProgress = progresses
-        .filter(p => p.status === 'pending')
-        .sort((a, b) => {
+        .filter((p: any) => p.status === 'pending')
+        .sort((a: any, b: any) => {
           const deptOrder = ['gabarito', 'impressao', 'batida', 'costura', 'embalagem'];
           return deptOrder.indexOf(a.department as any) - deptOrder.indexOf(b.department as any);
         })[0];
         
       // Verificar se o pedido foi concluído pelo último departamento (embalagem)
-      const embalagemProgress = progresses.find(p => p.department === 'embalagem');
+      const embalagemProgress = progresses.find((p: any) => p.department === 'embalagem');
       const pedidoConcluido = embalagemProgress && embalagemProgress.status === 'completed';
       
       // Determinar o departamento atual ou marcar como concluído se embalagem já finalizou
@@ -110,66 +111,61 @@ router.get('/activities', isAdmin, async (req, res) => {
         }
         
         // Usar query SQL direta para máxima performance
-        const conn = await pool.connect();
-        try {
-          console.log('[SQL-DIRECT] Executando query SQL direta para máxima performance');
-          const query = `
-            WITH LatestProgress AS (
-              SELECT 
-                ap.activity_id,
-                ap.department,
-                ap.completed_at,
-                ap.completed_by,
-                ROW_NUMBER() OVER (PARTITION BY ap.activity_id ORDER BY ap.id DESC) as rn
-              FROM activity_progress ap
-              WHERE ap.completed_at IS NOT NULL
-            )
+        console.log('[SQL-DIRECT] Executando query SQL direta para máxima performance');
+        const query = sql`
+          WITH LatestProgress AS (
             SELECT 
-              a.id, 
-              a.title, 
-              a.client_name as "clientName",
-              a.description, 
-              a.deadline,
-              a.image,
-              a.quantity,
-              lp.department as "currentDepartment"
-            FROM activities a
-            LEFT JOIN LatestProgress lp ON a.id = lp.activity_id AND lp.rn = 1
-            WHERE lp.department != 'concluido' OR lp.department IS NULL
-            ORDER BY 
-              CASE WHEN a.deadline IS NULL THEN 1 ELSE 0 END,
-              a.deadline ASC
-            LIMIT $1
-          `;
-          
-          const result = await conn.query(query, [limit * 2]);
-          
-          // Formatar para resposta padrão
-          const formattedActivities = result.rows.map(activity => ({
-            ...activity,
-            client: activity.clientName,
-            clientInfo: activity.description || null,
-            currentDepartment: activity.currentDepartment || 'gabarito',
-          }));
-          
-          // Paginar os resultados
-          const paginatedResult = {
-            items: formattedActivities.slice((page - 1) * limit, page * limit),
-            total: formattedActivities.length,
-            page,
-            totalPages: Math.ceil(formattedActivities.length / limit)
-          };
-          
-          // Cache mais longo para resposta rápida (30 segundos)
-          if (cache) {
-            cache.set(cacheKey, paginatedResult, 30000);
-          }
-          
-          console.log(`[ULTRA-RÁPIDO] Retornando ${formattedActivities.length} pedidos em produção via SQL direto`);
-          return res.json(paginatedResult);
-        } finally {
-          conn.release();
+              ap.activity_id,
+              ap.department,
+              ap.completed_at,
+              ap.completed_by,
+              ROW_NUMBER() OVER (PARTITION BY ap.activity_id ORDER BY ap.id DESC) as rn
+            FROM activity_progress ap
+            WHERE ap.completed_at IS NOT NULL
+          )
+          SELECT 
+            a.id, 
+            a.title, 
+            a.client_name as "clientName",
+            a.description, 
+            a.deadline,
+            a.image,
+            a.quantity,
+            lp.department as "currentDepartment"
+          FROM activities a
+          LEFT JOIN LatestProgress lp ON a.id = lp.activity_id AND lp.rn = 1
+          WHERE lp.department != 'concluido' OR lp.department IS NULL
+          ORDER BY 
+            CASE WHEN a.deadline IS NULL THEN 1 ELSE 0 END,
+            a.deadline ASC
+          LIMIT ${limit * 2}
+        `;
+        
+        const result = await query;
+        
+        // Formatar para resposta padrão
+        const formattedActivities = result.map((activity: any) => ({
+          ...activity,
+          client: activity.clientName,
+          clientInfo: activity.description || null,
+          currentDepartment: activity.currentDepartment || 'gabarito',
+        }));
+        
+        // Paginar os resultados
+        const paginatedResult = {
+          items: formattedActivities.slice((page - 1) * limit, page * limit),
+          total: formattedActivities.length,
+          page,
+          totalPages: Math.ceil(formattedActivities.length / limit)
+        };
+        
+        // Cache mais longo para resposta rápida (30 segundos)
+        if (cache) {
+          cache.set(cacheKey, paginatedResult, 30000);
         }
+        
+        console.log(`[ULTRA-RÁPIDO] Retornando ${formattedActivities.length} pedidos em produção via SQL direto`);
+        return res.json(paginatedResult);
       } catch (error) {
         console.error('[ULTRA-RÁPIDO] Erro no modo direto:', error);
         
@@ -206,7 +202,7 @@ router.get('/activities', isAdmin, async (req, res) => {
         }
       }
     }
-
+    
     // Timeout para garantir resposta rápida - mais curto para pedidos em produção
     const timeoutPromise = new Promise((_, reject) => {
       setTimeout(() => reject(new Error('Timeout')), status === 'producao' ? 3000 : 5000);
@@ -320,7 +316,7 @@ router.get('/department-stats', isAdmin, async (req, res) => {
     const activitiesWithProgress = await preloadActivitiesWithProgress();
     
     // Inicializar contador por departamento
-    const departmentCounts = {};
+    const departmentCounts: Record<string, number> = {};
     DEPARTMENTS.forEach(dept => {
       departmentCounts[dept] = 0;
     });
