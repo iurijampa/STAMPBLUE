@@ -12,7 +12,7 @@ import {
 import createMemoryStore from "memorystore";
 import session from "express-session";
 import { db } from "./db";
-import { eq, and, desc, asc, sql } from "drizzle-orm";
+import { eq, and, desc, asc, or, isNull, isNotNull, ne, gt, lt, gte, lte, sql } from "drizzle-orm";
 import connectPg from "connect-pg-simple";
 // Para armazenamento em memória (sessões)
 const MemoryStore = createMemoryStore(session);
