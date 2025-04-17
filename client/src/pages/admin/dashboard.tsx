@@ -208,7 +208,7 @@ export default function AdminDashboard() {
               </CardHeader>
               
               <CardContent>
-                <SimpleProductionList />
+                <ActivitiesList />
               </CardContent>
             </Card>
           </div>
@@ -562,90 +562,290 @@ function RecentActivities() {
   );
 }
 
-// Versão ultra simplificada para listar pedidos em produção
-function SimpleProductionList() {
-  const [data, setData] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+// Componente para listar atividades em produção
+function ActivitiesList() {
+  const [, navigate] = useLocation();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [selectedActivity, setSelectedActivity] = useState<ActivityType | null>(null);
+  const [viewModalOpen, setViewModalOpen] = useState(false);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterDepartment, setFilterDepartment] = useState<string | null>(null);
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   
-  // Carregar dados diretamente, sem componentes complexos
-  useEffect(() => {
-    async function carregarPedidos() {
+  // Estado para paginação
+  const [page, setPage] = useState(1);
+  
+  // Consulta usando o React Query para obter atividades em produção
+  const { data: activitiesResponse, isLoading } = useQuery({
+    queryKey: ["/api/admin-dashboard/activities", "producao", page, searchQuery, filterDepartment],
+    queryFn: async () => {
+      console.log("Buscando pedidos em produção, página", page);
+      
+      // Construir URL com parâmetros
+      const url = new URL("/api/admin-dashboard/activities", window.location.origin);
+      url.searchParams.append("status", "producao");
+      url.searchParams.append("page", page.toString());
+      url.searchParams.append("limit", "30");
+      
+      if (searchQuery) {
+        url.searchParams.append("search", searchQuery);
+      }
+      
+      if (filterDepartment) {
+        url.searchParams.append("department", filterDepartment);
+      }
+      
+      const response = await fetch(url.toString());
+      
+      if (!response.ok) {
+        throw new Error(`Erro ao buscar atividades: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log(`Recebidos ${data.items.length} pedidos em produção`);
+      return data;
+    },
+    staleTime: 30000, // 30 segundos
+    gcTime: 5 * 60 * 1000, // 5 minutos
+    refetchInterval: 30000, // A cada 30 segundos
+    retry: 3
+  });
+  
+  // Extrair dados da resposta paginada
+  const activities = activitiesResponse?.items || [];
+  const totalItems = activitiesResponse?.total || 0;
+  const totalPages = activitiesResponse?.totalPages || 1;
+  
+  // Função para abrir modal de visualização
+  const handleView = (activity: ActivityType) => {
+    setSelectedActivity(activity);
+    setViewModalOpen(true);
+  };
+  
+  // Função para abrir modal de edição
+  const handleEdit = (activity: ActivityType) => {
+    setSelectedActivity(activity);
+    setEditModalOpen(true);
+  };
+  
+  // Função para excluir atividade
+  const handleDelete = async (id: number) => {
+    if (confirm("Tem certeza que deseja excluir este pedido? Esta ação não pode ser desfeita.")) {
       try {
-        setLoading(true);
-        const response = await fetch("/api/admin-dashboard/activities?status=producao");
+        const response = await fetch(`/api/activities/${id}`, {
+          method: 'DELETE',
+        });
         
         if (response.ok) {
-          const resultado = await response.json();
-          setData(resultado.items || []);
-          console.log(`PEDIDOS CARREGADOS: ${resultado.items.length}`);
+          toast({
+            title: "Sucesso",
+            description: "Pedido excluído com sucesso",
+          });
+          queryClient.invalidateQueries({ queryKey: ["/api/activities"] });
+          queryClient.invalidateQueries({ queryKey: ["/api/admin-dashboard/activities"] });
         } else {
-          console.error("Erro ao carregar pedidos:", response.status);
+          toast({
+            title: "Erro",
+            description: "Não foi possível excluir o pedido",
+            variant: "destructive",
+          });
         }
-      } catch (err) {
-        console.error("Falha ao carregar pedidos:", err);
-      } finally {
-        setLoading(false);
+      } catch (error) {
+        toast({
+          title: "Erro",
+          description: "Erro ao excluir pedido",
+          variant: "destructive",
+        });
       }
     }
+  };
+  
+  // Verificar se um prazo está próximo ou vencido
+  const getDeadlineStyle = (deadline: string) => {
+    if (!deadline) return { color: "text-gray-500", badge: "Sem prazo" };
     
-    carregarPedidos();
+    try {
+      const deadlineDate = new Date(deadline);
+      const today = new Date();
+      const diffDays = Math.floor((deadlineDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+      
+      if (diffDays < 0) {
+        return { color: "text-red-500", badge: "Atrasado" };
+      } else if (diffDays <= 3) {
+        return { color: "text-amber-500", badge: "Próximo" };
+      } else {
+        return { color: "text-green-500", badge: "No prazo" };
+      }
+    } catch (e) {
+      return { color: "text-gray-500", badge: "Data inválida" };
+    }
+  };
+  
+  // Formatar data para exibição
+  const formatDate = (dateString: string) => {
+    if (!dateString) return "Data não disponível";
     
-    // Recarregar a cada 30 segundos
-    const interval = setInterval(carregarPedidos, 30000);
-    return () => clearInterval(interval);
-  }, []);
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('pt-BR');
+    } catch (e) {
+      return "Data inválida";
+    }
+  };
   
-  if (loading) {
-    return (
-      <div className="flex justify-center p-8">
-        <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />
-        <span className="ml-3">Carregando pedidos...</span>
-      </div>
-    );
-  }
-  
-  if (data.length === 0) {
-    return (
-      <div className="text-center p-8">
-        <p>Nenhum pedido em produção no momento.</p>
-      </div>
-    );
-  }
-  
-  // Renderização extremamente simples sem dependências de componentes complexos
   return (
     <div className="space-y-4">
-      <div className="overflow-x-auto">
-        <table className="w-full border-collapse">
-          <thead>
-            <tr className="bg-gray-100 dark:bg-gray-800">
-              <th className="px-4 py-2 text-left">ID</th>
-              <th className="px-4 py-2 text-left">Cliente</th>
-              <th className="px-4 py-2 text-left">Título</th>
-              <th className="px-4 py-2 text-left">Departamento</th>
-              <th className="px-4 py-2 text-left">Data Entrega</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.map((item) => (
-              <tr key={item.id} className="border-b dark:border-gray-700">
-                <td className="px-4 py-2">{item.id}</td>
-                <td className="px-4 py-2">{item.client || item.clientName}</td>
-                <td className="px-4 py-2 font-medium">{item.title}</td>
-                <td className="px-4 py-2">
-                  {item.department || item.currentDepartment || "N/A"}
-                </td>
-                <td className="px-4 py-2">
-                  {item.deadline ? new Date(item.deadline).toLocaleDateString('pt-BR') : "Sem data"}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      {/* Barra de filtros e ações */}
+      <div className="flex flex-col sm:flex-row justify-between gap-3 mb-6">
+        <div className="flex flex-1 max-w-md relative">
+          <Input
+            type="text"
+            placeholder="Buscar pedidos..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9"
+          />
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+        </div>
+        
+        <div className="flex gap-2 flex-wrap">
+          <Button 
+            onClick={() => setCreateModalOpen(true)}
+            className="flex items-center gap-1"
+          >
+            <Plus className="h-4 w-4" />
+            Novo Pedido
+          </Button>
+        </div>
       </div>
-      <p className="text-xs text-muted-foreground text-center mt-2">
-        {data.length} pedidos em produção
-      </p>
+      
+      {/* Tabela de atividades */}
+      {isLoading ? (
+        <div className="flex justify-center py-8">
+          <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full"></div>
+        </div>
+      ) : activities.length === 0 ? (
+        <div className="text-center py-8 text-muted-foreground">
+          Nenhum pedido em produção encontrado.
+        </div>
+      ) : (
+        <>
+          <div className="rounded-md border overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")} className="cursor-pointer">
+                    ID {sortOrder === "asc" ? <ChevronUp className="inline h-3 w-3" /> : <ChevronDown className="inline h-3 w-3" />}
+                  </TableHead>
+                  <TableHead>Cliente</TableHead>
+                  <TableHead>Título</TableHead>
+                  <TableHead>Departamento</TableHead>
+                  <TableHead>Data de Entrega</TableHead>
+                  <TableHead>Ações</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {activities.map((activity) => {
+                  const deadlineStyle = getDeadlineStyle(activity.deadline);
+                  
+                  return (
+                    <TableRow key={activity.id}>
+                      <TableCell>{activity.id}</TableCell>
+                      <TableCell>{activity.client}</TableCell>
+                      <TableCell className="font-medium">{activity.title}</TableCell>
+                      <TableCell>
+                        {activity.department || activity.currentDepartment || "Não definido"}
+                      </TableCell>
+                      <TableCell className={deadlineStyle.color}>
+                        {formatDate(activity.deadline)}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex space-x-2">
+                          <Button 
+                            variant="ghost" 
+                            size="icon"
+                            onClick={() => handleView(activity)}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="icon"
+                            onClick={() => handleEdit(activity)}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="icon"
+                            onClick={() => handleDelete(activity.id)}
+                            className="text-red-500"
+                          >
+                            <Trash className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+          
+          {/* Paginação */}
+          {totalPages > 1 && (
+            <div className="flex justify-end space-x-2 mt-4">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+                disabled={page === 1}
+              >
+                Anterior
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+                disabled={page === totalPages}
+              >
+                Próxima
+              </Button>
+            </div>
+          )}
+        </>
+      )}
+      
+      {/* Modais */}
+      {selectedActivity && (
+        <>
+          <ViewActivityModal 
+            isOpen={viewModalOpen} 
+            onClose={() => setViewModalOpen(false)} 
+            activity={selectedActivity}
+          />
+          <EditActivityModal 
+            isOpen={editModalOpen}
+            onClose={() => {
+              setEditModalOpen(false);
+              setSelectedActivity(null);
+              queryClient.invalidateQueries({ queryKey: ["/api/admin-dashboard/activities"] });
+            }}
+            activity={selectedActivity}
+          />
+        </>
+      )}
+      
+      <CreateActivityModal 
+        isOpen={createModalOpen}
+        onClose={() => {
+          setCreateModalOpen(false);
+          queryClient.invalidateQueries({ queryKey: ["/api/admin-dashboard/activities"] });
+        }}
+      />
     </div>
   );
 }
@@ -1252,7 +1452,7 @@ function OptimizedActivitiesList({ showCompleted }: { showCompleted: boolean }):
 }
 
 // Componente original para listar atividades (em produção ou concluídas) - mantido para compatibilidade
-function ActivitiesList(showCompleted: boolean = false) {
+function OriginalActivitiesList(showCompleted: boolean = false) {
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
   const { toast } = useToast();

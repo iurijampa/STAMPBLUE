@@ -954,19 +954,22 @@ export class DatabaseStorage implements IStorage {
     console.log(`[DB OTIMIZADO] Buscando até ${limit} atividades em progresso usando método emergencial`);
 
     try {
-      // ABORDAGEM SIMPLIFICADA E ALTAMENTE OTIMIZADA:
-      // 1. Obter todas as atividades
-      const allActivities = await db.select().from(activities).limit(100);
+      // ABORDAGEM SUPER SIMPLIFICADA COM MÁXIMA PERFORMANCE:
+      // 1. Obter as atividades mais recentes (limite maior para garantir que temos suficientes)
+      const allActivities = await db.select().from(activities).orderBy(desc(activities.id)).limit(Math.min(limit * 2, 200));
 
       // 2. Filtrar atividades concluídas (que têm progresso em "embalagem" com status "completed")
-      const completedActivitiesQuery = await db
-        .select({ activityId: activityProgress.activityId })
-        .from(activityProgress)
-        .where(and(
-          eq(activityProgress.department, 'embalagem'), 
+      // Use consulta mais simples para melhorar performance
+      const completedActivitiesQuery = await db.query.activityProgress.findMany({
+        where: and(
+          eq(activityProgress.department, 'embalagem'),
           eq(activityProgress.status, 'completed')
-        ));
-        
+        ),
+        columns: {
+          activityId: true
+        }
+      });
+      
       const completedIds = new Set(completedActivitiesQuery.map(item => item.activityId));
       
       // 3. Obter apenas atividades não concluídas
