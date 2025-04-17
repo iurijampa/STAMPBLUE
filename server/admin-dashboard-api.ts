@@ -1,7 +1,6 @@
 import express from 'express';
 import { storage } from './storage';
 import { DEPARTMENTS } from '@shared/schema';
-import { sql } from './db';
 
 const router = express.Router();
 
@@ -42,14 +41,14 @@ async function preloadActivitiesWithProgress() {
       
       // Ordenar os progressos por departamento
       const pendingProgress = progresses
-        .filter((p: any) => p.status === 'pending')
-        .sort((a: any, b: any) => {
+        .filter(p => p.status === 'pending')
+        .sort((a, b) => {
           const deptOrder = ['gabarito', 'impressao', 'batida', 'costura', 'embalagem'];
           return deptOrder.indexOf(a.department as any) - deptOrder.indexOf(b.department as any);
         })[0];
         
       // Verificar se o pedido foi concluído pelo último departamento (embalagem)
-      const embalagemProgress = progresses.find((p: any) => p.department === 'embalagem');
+      const embalagemProgress = progresses.find(p => p.department === 'embalagem');
       const pedidoConcluido = embalagemProgress && embalagemProgress.status === 'completed';
       
       // Determinar o departamento atual ou marcar como concluído se embalagem já finalizou
@@ -97,44 +96,9 @@ router.get('/activities', isAdmin, async (req, res) => {
       return res.json(cachedData);
     }
     
-    // MODO ULTRA-RÁPIDO para pedidos em produção (mais críticos para o usuário)
-    if (status === 'producao') {
-      console.log('[ULTRA-RÁPIDO] Iniciando modo otimizado para pedidos em produção');
-      
-      try {
-        // Buscando diretamente da função otimizada
-        const activities = await storage.getActivitiesInProgress(limit * 2);
-        
-        // Formatar para resposta padrão
-        const formattedActivities = activities.map(activity => ({
-          ...activity,
-          client: activity.clientName,
-          clientInfo: activity.description || null
-        }));
-        
-        // Paginar os resultados
-        const paginatedResult = {
-          items: formattedActivities.slice((page - 1) * limit, page * limit),
-          total: formattedActivities.length,
-          page,
-          totalPages: Math.ceil(formattedActivities.length / limit)
-        };
-        
-        // Cache médio para resposta rápida (20 segundos)
-        if (cache) {
-          cache.set(cacheKey, paginatedResult, 20000);
-        }
-        
-        console.log(`[ULTRA-RÁPIDO] Retornando ${formattedActivities.length} pedidos em produção via método otimizado`);
-        return res.json(paginatedResult);
-      } catch (error) {
-        console.error('[ULTRA-RÁPIDO] Erro no modo otimizado:', error);
-      }
-    }
-    
-    // Timeout para garantir resposta rápida - mais curto para pedidos em produção
+    // Timeout para garantir resposta rápida
     const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Timeout')), status === 'producao' ? 3000 : 5000);
+      setTimeout(() => reject(new Error('Timeout')), 5000);
     });
     
     try {
@@ -170,15 +134,6 @@ router.get('/activities', isAdmin, async (req, res) => {
         return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
       });
       
-      // Log para diagnóstico: mostrar quantos pedidos estamos retornando
-      if (status === 'producao') {
-        console.log(`[ADMIN] Retornando ${filteredActivities.length} pedidos EM PRODUÇÃO`);
-      } else if (status === 'concluido') {
-        console.log(`[ADMIN] Retornando ${filteredActivities.length} pedidos CONCLUÍDOS`);
-      } else {
-        console.log(`[ADMIN] Retornando ${filteredActivities.length} pedidos NO TOTAL`);
-      }
-      
       // Aplicar paginação
       const paginatedResult = {
         items: filteredActivities.slice((page - 1) * limit, page * limit),
@@ -187,9 +142,9 @@ router.get('/activities', isAdmin, async (req, res) => {
         totalPages: Math.ceil(filteredActivities.length / limit)
       };
       
-      // Reduzindo tempo de cache para 15 segundos para atualizações mais rápidas
+      // Salvar no cache por 30 segundos (aumentado para melhor performance)
       if (cache) {
-        cache.set(cacheKey, paginatedResult, 15000);
+        cache.set(cacheKey, paginatedResult, 30000);
       }
       
       return res.json(paginatedResult);
@@ -245,7 +200,7 @@ router.get('/department-stats', isAdmin, async (req, res) => {
     const activitiesWithProgress = await preloadActivitiesWithProgress();
     
     // Inicializar contador por departamento
-    const departmentCounts: Record<string, number> = {};
+    const departmentCounts = {};
     DEPARTMENTS.forEach(dept => {
       departmentCounts[dept] = 0;
     });

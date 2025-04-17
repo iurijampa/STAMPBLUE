@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useRef } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { useLocation } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -6,17 +6,15 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { 
   RefreshCw, Activity, Clock, Calendar, Users, ChevronRight, 
-  AlertTriangle, AlertCircle, Layers, CheckCircle2, Bell, Eye, Edit, 
+  AlertTriangle, Layers, CheckCircle2, Bell, Eye, Edit, 
   Trash, Plus, Loader2, Search, ArrowUpCircle, ArrowDownCircle,
-  Briefcase, Printer, Hammer, Scissors, Package, ChevronDown, ChevronUp,
-  Pencil, Inbox
+  Briefcase, Printer, Hammer, Scissors, Package, ChevronDown, ChevronUp
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import Layout from "@/components/Layout";
 import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -174,43 +172,9 @@ export default function AdminDashboard() {
             </div>
           </div>
           
-          {/* Pedidos em produção - VERSÃO NOVA SUPER SIMPLIFICADA */}
+          {/* Pedidos em produção */}
           <div>
-            <Card className="w-full">
-              <CardHeader className="pb-3 pt-5">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <CardTitle className="text-xl flex items-center">
-                      <Layers className="h-5 w-5 mr-2 text-primary" />
-                      Pedidos em Produção
-                    </CardTitle>
-                    <CardDescription>
-                      Lista de pedidos atualmente em produção
-                    </CardDescription>
-                  </div>
-                  <Button 
-                    onClick={() => {
-                      queryClient.invalidateQueries({ queryKey: ["/api/admin-dashboard/activities"]});
-                      toast({
-                        title: "Atualizando dados",
-                        description: "Dados dos pedidos em produção estão sendo atualizados.",
-                        variant: "default",
-                      });
-                    }}
-                    variant="outline" 
-                    size="sm" 
-                    className="h-8 px-2"
-                  >
-                    <RefreshCw className="h-3.5 w-3.5 mr-1" />
-                    Atualizar
-                  </Button>
-                </div>
-              </CardHeader>
-              
-              <CardContent>
-                <ActivitiesList />
-              </CardContent>
-            </Card>
+            <OptimizedActivitiesList showCompleted={false} />
           </div>
         </div>
         
@@ -562,294 +526,6 @@ function RecentActivities() {
   );
 }
 
-// Componente para listar atividades em produção
-function ActivitiesList() {
-  const [, navigate] = useLocation();
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
-  const [selectedActivity, setSelectedActivity] = useState<ActivityType | null>(null);
-  const [viewModalOpen, setViewModalOpen] = useState(false);
-  const [editModalOpen, setEditModalOpen] = useState(false);
-  const [createModalOpen, setCreateModalOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [filterDepartment, setFilterDepartment] = useState<string | null>(null);
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
-  
-  // Estado para paginação
-  const [page, setPage] = useState(1);
-  
-  // Consulta usando o React Query para obter atividades em produção
-  const { data: activitiesResponse, isLoading } = useQuery({
-    queryKey: ["/api/admin-dashboard/activities", "producao", page, searchQuery, filterDepartment],
-    queryFn: async () => {
-      console.log("Buscando pedidos em produção, página", page);
-      
-      // Construir URL com parâmetros
-      const url = new URL("/api/admin-dashboard/activities", window.location.origin);
-      url.searchParams.append("status", "producao");
-      url.searchParams.append("page", page.toString());
-      url.searchParams.append("limit", "30");
-      
-      if (searchQuery) {
-        url.searchParams.append("search", searchQuery);
-      }
-      
-      if (filterDepartment) {
-        url.searchParams.append("department", filterDepartment);
-      }
-      
-      const response = await fetch(url.toString());
-      
-      if (!response.ok) {
-        throw new Error(`Erro ao buscar atividades: ${response.status}`);
-      }
-      
-      const data = await response.json();
-      console.log(`Recebidos ${data.items.length} pedidos em produção`);
-      return data;
-    },
-    staleTime: 30000, // 30 segundos
-    gcTime: 5 * 60 * 1000, // 5 minutos
-    refetchInterval: 30000, // A cada 30 segundos
-    retry: 3
-  });
-  
-  // Extrair dados da resposta paginada
-  const activities = activitiesResponse?.items || [];
-  const totalItems = activitiesResponse?.total || 0;
-  const totalPages = activitiesResponse?.totalPages || 1;
-  
-  // Função para abrir modal de visualização
-  const handleView = (activity: ActivityType) => {
-    setSelectedActivity(activity);
-    setViewModalOpen(true);
-  };
-  
-  // Função para abrir modal de edição
-  const handleEdit = (activity: ActivityType) => {
-    setSelectedActivity(activity);
-    setEditModalOpen(true);
-  };
-  
-  // Função para excluir atividade
-  const handleDelete = async (id: number) => {
-    if (confirm("Tem certeza que deseja excluir este pedido? Esta ação não pode ser desfeita.")) {
-      try {
-        const response = await fetch(`/api/activities/${id}`, {
-          method: 'DELETE',
-        });
-        
-        if (response.ok) {
-          toast({
-            title: "Sucesso",
-            description: "Pedido excluído com sucesso",
-          });
-          queryClient.invalidateQueries({ queryKey: ["/api/activities"] });
-          queryClient.invalidateQueries({ queryKey: ["/api/admin-dashboard/activities"] });
-        } else {
-          toast({
-            title: "Erro",
-            description: "Não foi possível excluir o pedido",
-            variant: "destructive",
-          });
-        }
-      } catch (error) {
-        toast({
-          title: "Erro",
-          description: "Erro ao excluir pedido",
-          variant: "destructive",
-        });
-      }
-    }
-  };
-  
-  // Verificar se um prazo está próximo ou vencido
-  const getDeadlineStyle = (deadline: string) => {
-    if (!deadline) return { color: "text-gray-500", badge: "Sem prazo" };
-    
-    try {
-      const deadlineDate = new Date(deadline);
-      const today = new Date();
-      const diffDays = Math.floor((deadlineDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-      
-      if (diffDays < 0) {
-        return { color: "text-red-500", badge: "Atrasado" };
-      } else if (diffDays <= 3) {
-        return { color: "text-amber-500", badge: "Próximo" };
-      } else {
-        return { color: "text-green-500", badge: "No prazo" };
-      }
-    } catch (e) {
-      return { color: "text-gray-500", badge: "Data inválida" };
-    }
-  };
-  
-  // Formatar data para exibição
-  const formatDate = (dateString: string) => {
-    if (!dateString) return "Data não disponível";
-    
-    try {
-      const date = new Date(dateString);
-      return date.toLocaleDateString('pt-BR');
-    } catch (e) {
-      return "Data inválida";
-    }
-  };
-  
-  return (
-    <div className="space-y-4">
-      {/* Barra de filtros e ações */}
-      <div className="flex flex-col sm:flex-row justify-between gap-3 mb-6">
-        <div className="flex flex-1 max-w-md relative">
-          <Input
-            type="text"
-            placeholder="Buscar pedidos..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9"
-          />
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-        </div>
-        
-        <div className="flex gap-2 flex-wrap">
-          <Button 
-            onClick={() => setCreateModalOpen(true)}
-            className="flex items-center gap-1"
-          >
-            <Plus className="h-4 w-4" />
-            Novo Pedido
-          </Button>
-        </div>
-      </div>
-      
-      {/* Tabela de atividades */}
-      {isLoading ? (
-        <div className="flex justify-center py-8">
-          <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full"></div>
-        </div>
-      ) : activities.length === 0 ? (
-        <div className="text-center py-8 text-muted-foreground">
-          Nenhum pedido em produção encontrado.
-        </div>
-      ) : (
-        <>
-          <div className="rounded-md border overflow-hidden">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")} className="cursor-pointer">
-                    ID {sortOrder === "asc" ? <ChevronUp className="inline h-3 w-3" /> : <ChevronDown className="inline h-3 w-3" />}
-                  </TableHead>
-                  <TableHead>Cliente</TableHead>
-                  <TableHead>Título</TableHead>
-                  <TableHead>Departamento</TableHead>
-                  <TableHead>Data de Entrega</TableHead>
-                  <TableHead>Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {activities.map((activity) => {
-                  const deadlineStyle = getDeadlineStyle(activity.deadline);
-                  
-                  return (
-                    <TableRow key={activity.id}>
-                      <TableCell>{activity.id}</TableCell>
-                      <TableCell>{activity.client}</TableCell>
-                      <TableCell className="font-medium">{activity.title}</TableCell>
-                      <TableCell>
-                        {activity.department || activity.currentDepartment || "Não definido"}
-                      </TableCell>
-                      <TableCell className={deadlineStyle.color}>
-                        {formatDate(activity.deadline)}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex space-x-2">
-                          <Button 
-                            variant="ghost" 
-                            size="icon"
-                            onClick={() => handleView(activity)}
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="icon"
-                            onClick={() => handleEdit(activity)}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="icon"
-                            onClick={() => handleDelete(activity.id)}
-                            className="text-red-500"
-                          >
-                            <Trash className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
-          
-          {/* Paginação */}
-          {totalPages > 1 && (
-            <div className="flex justify-end space-x-2 mt-4">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setPage((prev) => Math.max(1, prev - 1))}
-                disabled={page === 1}
-              >
-                Anterior
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
-                disabled={page === totalPages}
-              >
-                Próxima
-              </Button>
-            </div>
-          )}
-        </>
-      )}
-      
-      {/* Modais */}
-      {selectedActivity && (
-        <>
-          <ViewActivityModal 
-            isOpen={viewModalOpen} 
-            onClose={() => setViewModalOpen(false)} 
-            activity={selectedActivity}
-          />
-          <EditActivityModal 
-            isOpen={editModalOpen}
-            onClose={() => {
-              setEditModalOpen(false);
-              setSelectedActivity(null);
-              queryClient.invalidateQueries({ queryKey: ["/api/admin-dashboard/activities"] });
-            }}
-            activity={selectedActivity}
-          />
-        </>
-      )}
-      
-      <CreateActivityModal 
-        isOpen={createModalOpen}
-        onClose={() => {
-          setCreateModalOpen(false);
-          queryClient.invalidateQueries({ queryKey: ["/api/admin-dashboard/activities"] });
-        }}
-      />
-    </div>
-  );
-}
-
 // Departamentos disponíveis - definido fora do componente para evitar recriação, ordenados conforme linha de produção
 const departmentOptions = [
   { value: null, label: "Todos os departamentos", icon: <Activity className="h-4 w-4 mr-1" /> },
@@ -876,120 +552,12 @@ function OptimizedActivitiesList({ showCompleted }: { showCompleted: boolean }):
   // Estado para paginação
   const [page, setPage] = useState(1);
   
-  // Pré-carregamento direto para pedidos em produção (ULTRA RÁPIDO)
-  useEffect(() => {
-    // Aplicar o pré-carregamento apenas para pedidos em produção
-    if (!showCompleted) {
-      const loadProductionActivities = async () => {
-        console.log("[ULTRA-RÁPIDO] Pré-carregando pedidos em produção...");
-        try {
-          // Construir URL otimizada
-          const url = new URL("/api/admin-dashboard/activities", window.location.origin);
-          url.searchParams.append("status", "producao");
-          url.searchParams.append("page", page.toString());
-          url.searchParams.append("limit", "30");
-          url.searchParams.append("_t", Date.now().toString()); // Cache busting
-          
-          if (searchQuery) {
-            url.searchParams.append("search", searchQuery);
-          }
-          
-          console.log("[ULTRA-RÁPIDO] Pré-carregando pedidos em produção...");
-          
-          // Fetch com timeout curto
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 segundos apenas
-          
-          const response = await fetch(url.toString(), {
-            signal: controller.signal,
-            headers: {
-              'Cache-Control': 'no-cache',
-              'Pragma': 'no-cache'
-            }
-          });
-          
-          clearTimeout(timeoutId);
-          
-          if (response.ok) {
-            const data = await response.json();
-            // Atualizar o cache manualmente para disponibilidade imediata
-            queryClient.setQueryData(
-              ["/api/admin-dashboard/activities", "producao", page, searchQuery], 
-              data
-            );
-            console.log(`[ULTRA-RÁPIDO] Pré-carregados ${data?.items?.length || 0} pedidos em produção`);
-          }
-        } catch (error) {
-          console.error("[ULTRA-RÁPIDO] Erro no pré-carregamento:", error);
-          // Erros silenciosos para não atrapalhar o fluxo principal
-        }
-      };
-      
-      // Executar imediatamente
-      loadProductionActivities();
-    }
-  }, [showCompleted, page, searchQuery, queryClient]);
-
-  // ULTRA OTIMIZAÇÃO APRIMORADA: Usando a nova API especializada para o admin
-  // com foco em velocidade, estabilidade e resiliência
-  // Referência para manter o estado antigo enquanto carrega
-  const activitiesCache = useRef<any>(null);
-  const cacheKey = !showCompleted ? 'production_activities_cache' : 'completed_activities_cache';
-
-  // Armazenar localmente os dados para acesso imediato durante recargas
-  useEffect(() => {
-    // Carregar dados iniciais do localStorage se disponíveis
-    try {
-      if (!activitiesCache.current) {
-        const storedData = localStorage.getItem(cacheKey);
-        if (storedData) {
-          const parsedData = JSON.parse(storedData);
-          activitiesCache.current = parsedData;
-          console.log(`[CACHE-ULTRA] Carregados ${parsedData?.items?.length || 0} pedidos do cache local`);
-        }
-      }
-    } catch (err) {
-      console.error('[CACHE-ULTRA] Erro ao carregar cache:', err);
-    }
-    
-    if (!showCompleted) {
-      try {
-        const cachedData = localStorage.getItem('activities_production_cache');
-        if (cachedData) {
-          const parsed = JSON.parse(cachedData);
-          // Verificar se o cache não é muito antigo (< 10 minutos)
-          const cacheTime = localStorage.getItem('activities_production_cache_time');
-          const isValidCache = cacheTime && (Date.now() - parseInt(cacheTime)) < 10 * 60 * 1000;
-          
-          if (isValidCache && parsed?.items?.length > 0) {
-            console.log(`[CACHE-ULTRA] Usando cache local com ${parsed.items.length} pedidos para exibição instantânea`);
-            activitiesCache.current = parsed;
-            // Pré-carregar o cache do TanStack Query para exibição imediata
-            queryClient.setQueryData(
-              ["/api/admin-dashboard/activities", "producao", page, searchQuery], 
-              parsed
-            );
-          }
-        }
-      } catch (e) {
-        console.error("[CACHE-ULTRA] Erro ao carregar cache:", e);
-      }
-    }
-  }, [showCompleted, queryClient, page, searchQuery]);
-
-  // Monitorar o status do carregamento (para mostrar feedback visual)
-  const [loadingState, setLoadingState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
-  
-  // Manter um contador de tentativas de carregamento para aumentar a resiliência
-  const retryCountRef = useRef(0);
-  
+  // ULTRA OTIMIZAÇÃO: Usando a nova API especializada para o admin
   const { data: activitiesResponse, isLoading } = useQuery({
     queryKey: ["/api/admin-dashboard/activities", showCompleted ? 'concluido' : 'producao', page, searchQuery],
     queryFn: async () => {
       try {
-        setLoadingState('loading');
         console.log(`Buscando pedidos ${showCompleted ? 'concluídos' : 'em produção'}, página ${page}`);
-        
         // Construir URL com parâmetros de paginação e filtro usando a nova API otimizada
         const url = new URL("/api/admin-dashboard/activities", window.location.origin);
         
@@ -1005,32 +573,13 @@ function OptimizedActivitiesList({ showCompleted }: { showCompleted: boolean }):
           url.searchParams.append("search", searchQuery);
         }
         
-        // Para pedidos em produção, usar cache-busting para garantir dados frescos
-        url.searchParams.append("_t", Date.now().toString());
-        
         // Timeout mais curto para evitar esperas muito longas
         const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 segundos de timeout
         
-        // Reduzir ainda mais o timeout para pedidos em produção
-        const timeoutMs = showCompleted ? 8000 : 5000; // 5s para produção, 8s para concluídos
-        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-        
-        // Headers para evitar cache do navegador
-        const fetchOptions: RequestInit = {
-          signal: controller.signal,
-          headers: {
-            'Cache-Control': 'no-cache, no-store',
-            'Pragma': 'no-cache'
-          }
-        };
-        
-        // Adicionar um curto atraso antes da primeira requisição para dar tempo
-        // de outras requisições mais cruciais terminarem primeiro (apenas na primeira carga)
-        if (retryCountRef.current === 0 && !showCompleted) {
-          await new Promise(resolve => setTimeout(resolve, 300));
-        }
-        
-        const response = await fetch(url.toString(), fetchOptions);
+        const response = await fetch(url.toString(), {
+          signal: controller.signal
+        });
         
         clearTimeout(timeoutId);
         
@@ -1040,68 +589,17 @@ function OptimizedActivitiesList({ showCompleted }: { showCompleted: boolean }):
         
         const data = await response.json();
         console.log(`Recebidos ${data?.items?.length || 0} pedidos ${showCompleted ? 'concluídos' : 'em produção'}`);
-        
-        // Resetar contador de tentativas após sucesso
-        retryCountRef.current = 0;
-        
-        // Guardar no cache local para ter um fallback sempre disponível
-        activitiesCache.current = data;
-        setLoadingState('success');
-        
-        // Salvar no localStorage para carregamentos futuros (apenas para pedidos em produção)
-        if (!showCompleted && data?.items?.length > 0) {
-          try {
-            localStorage.setItem('activities_production_cache', JSON.stringify(data));
-            localStorage.setItem('activities_production_cache_time', Date.now().toString());
-          } catch (e) {
-            console.error("[CACHE-ULTRA] Erro ao salvar cache:", e);
-          }
-        }
-        
         return data;
       } catch (error) {
         console.error("Erro na busca de pedidos:", error);
-        setLoadingState('error');
-        
-        // Incrementar contador de tentativas
-        retryCountRef.current++;
-        
-        // ESTRATÉGIA DE SUPER-RESILIÊNCIA
-        // Em caso de erro, usar o cache local como fallback (não dispara erro)
-        if (activitiesCache.current) {
-          console.log(`Usando cache local como fallback devido a erro (tentativa ${retryCountRef.current})`);
-          return activitiesCache.current;
-        }
-        
-        // Se não tem cache local e os pedidos são em produção (mais críticos), gerar um objeto vazio válido
-        // para não quebrar a UI e possibilitar nova tentativa automática de carregamento
-        if (!showCompleted) {
-          console.log("Sem cache disponível. Criando estrutura em branco para tentar novamente.");
-          return { 
-            items: [], 
-            total: 0,
-            page: 1,
-            totalPages: 1
-          };
-        }
-        
         throw error;
       }
     },
-    staleTime: showCompleted ? 30000 : 8000, // Tempo mais curto para pedidos em produção
-    retry: 2, // Mais tentativas para garantir carregamento
-    retryDelay: attempt => Math.min(1000 * 2 ** attempt, 10000), // Exponential backoff com máximo de 10s
-    refetchOnWindowFocus: !showCompleted, // Recarregar quando a janela ganha foco (apenas para pedidos em produção)
-    refetchInterval: showCompleted ? false : 15000, // Recarrega a cada 15s (apenas para pedidos em produção)
-    placeholderData: (prev) => prev, // Mantém dados anteriores enquanto carrega novos
-    // Definir InitialData para garantir que algo seja exibido imediatamente
-    initialData: () => {
-      if (activitiesCache.current) {
-        console.log("[ULTRA-INITIAL] Usando cache existente como dados iniciais");
-        return activitiesCache.current;
-      }
-      return undefined;
-    }
+    staleTime: 15000, // 15 segundos - reduz chamadas frequentes à API
+    retry: 1, // Apenas uma tentativa adicional em caso de falha
+    retryDelay: 3000, // 3 segundos entre tentativas
+    refetchOnWindowFocus: false, // Evita recarregar quando a janela ganha foco
+    placeholderData: (prev) => prev // Mantém dados anteriores enquanto carrega novos
   });
   
   // Extrair dados da resposta paginada
@@ -1282,36 +780,13 @@ function OptimizedActivitiesList({ showCompleted }: { showCompleted: boolean }):
         
         {isLoading ? (
           <div className="flex justify-center py-8">
-            <div className="flex flex-col items-center">
-              <div className="animate-spin h-6 w-6 border-2 border-primary border-t-transparent rounded-full mb-2"></div>
-              <p className="text-sm text-muted-foreground">{loadingState === 'error' ? 'Tentando reconectar...' : 'Carregando...'}</p>
-            </div>
+            <div className="animate-spin h-6 w-6 border-2 border-primary border-t-transparent rounded-full"></div>
           </div>
         ) : !filteredActivities || filteredActivities.length === 0 ? (
-          <div className="text-center py-8">
-            {loadingState === 'error' ? (
-              <div className="flex flex-col items-center">
-                <AlertCircle className="h-6 w-6 text-orange-500 mb-2" />
-                <p className="text-muted-foreground mb-2">
-                  {!showCompleted ? "Ocorreu um erro temporário ao carregar pedidos em produção." : "Ocorreu um erro ao carregar pedidos concluídos."}
-                </p>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={() => queryClient.invalidateQueries({ queryKey: ["/api/admin-dashboard/activities"] })}
-                  className="mt-2"
-                >
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Tentar novamente
-                </Button>
-              </div>
-            ) : (
-              <div className="text-muted-foreground">
-                {searchQuery ? 
-                  "Nenhum pedido encontrado com os filtros aplicados." : 
-                  showCompleted ? "Nenhum pedido concluído." : "Nenhum pedido em produção."}
-              </div>
-            )}
+          <div className="text-center py-8 text-muted-foreground">
+            {searchQuery ? 
+              "Nenhum pedido encontrado com os filtros aplicados." : 
+              showCompleted ? "Nenhum pedido concluído." : "Nenhum pedido em produção."}
           </div>
         ) : (
           <div className="overflow-auto">
@@ -1452,7 +927,7 @@ function OptimizedActivitiesList({ showCompleted }: { showCompleted: boolean }):
 }
 
 // Componente original para listar atividades (em produção ou concluídas) - mantido para compatibilidade
-function OriginalActivitiesList(showCompleted: boolean = false) {
+function ActivitiesList(showCompleted: boolean = false) {
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -1468,35 +943,25 @@ function OriginalActivitiesList(showCompleted: boolean = false) {
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState<'concluido' | 'producao' | null>(null);
   
-  // Otimização: Usar staleTime mais curto e endpoint especializado para carregamento mais rápido
-  const { data: activitiesResponse, isLoading, isError } = useQuery({
-    queryKey: ["/api/admin-dashboard/activities", showCompleted ? 'concluido' : 'producao', page],
+  // Otimização: Usar staleTime e paginação para reduzir carga
+  const { data: activitiesResponse, isLoading } = useQuery({
+    queryKey: ["/api/activities", status, page],
     queryFn: async () => {
-      try {
-        // Construir URL com parâmetros de paginação e filtro
-        const url = new URL("/api/admin-dashboard/activities", window.location.origin);
-        url.searchParams.append("status", showCompleted ? 'concluido' : 'producao');
-        url.searchParams.append("page", page.toString());
-        url.searchParams.append("limit", "50"); // 50 itens por página
-        
-        console.log(`Buscando pedidos ${showCompleted ? 'concluídos' : 'em produção'}, página ${page}`);
-        
-        const response = await fetch(url.toString());
-        if (!response.ok) {
-          throw new Error("Erro ao buscar atividades");
-        }
-        const data = await response.json();
-        console.log(`Recebidos ${data.items.length} pedidos ${showCompleted ? 'concluídos' : 'em produção'}`);
-        return data;
-      } catch (error) {
-        console.error("Erro na busca de pedidos:", error);
-        throw error;
+      // Construir URL com parâmetros de paginação e filtro
+      const url = new URL("/api/activities", window.location.origin);
+      if (status) url.searchParams.append("status", status);
+      url.searchParams.append("page", page.toString());
+      url.searchParams.append("limit", "50"); // 50 itens por página
+      
+      const response = await fetch(url.toString());
+      if (!response.ok) {
+        throw new Error("Erro ao buscar atividades");
       }
+      return response.json();
     },
-    staleTime: 15000, // 15 segundos - permite atualizações mais frequentes
-    refetchOnWindowFocus: true, // Recarrega quando a janela ganha foco para manter dados atuais
-    placeholderData: keepPreviousData, // Mantém dados anteriores enquanto carrega novos (UX melhor)
-    refetchInterval: showCompleted ? false : 30000, // Para pedidos em produção, recarrega a cada 30 segundos
+    staleTime: 30000, // 30 segundos - reduz chamadas frequentes à API
+    refetchOnWindowFocus: false, // Evita recarregar quando a janela ganha foco
+    placeholderData: keepPreviousData // Mantém dados anteriores enquanto carrega novos (UX melhor)
   });
   
   // Extrair dados da resposta paginada
@@ -1936,4 +1401,3 @@ function NotificationsList() {
     </Card>
   );
 }
-

@@ -155,10 +155,7 @@ export const insertReprintRequestSchema = createInsertSchema(reprintRequests).pi
 // Export types
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
-export type Activity = typeof activities.$inferSelect & {
-  // Campo virtual para armazenar o departamento atual do fluxo
-  currentDepartment?: string;
-};
+export type Activity = typeof activities.$inferSelect;
 export type InsertActivity = z.infer<typeof insertActivitySchema>;
 export type ActivityProgress = typeof activityProgress.$inferSelect;
 export type InsertActivityProgress = z.infer<typeof insertActivityProgressSchema>;
