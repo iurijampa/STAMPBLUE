@@ -44,6 +44,7 @@ export interface IStorage {
   // Activity Progress
   createActivityProgress(progress: InsertActivityProgress): Promise<ActivityProgress>;
   getActivityProgress(activityId: number): Promise<ActivityProgress[]>;
+  getAllActivitiesProgress(): Promise<ActivityProgress[]>; // Novo método para alta performance
   getActivityProgressByDepartment(activityId: number, department: string): Promise<ActivityProgress | undefined>;
   completeActivityProgress(
     activityId: number, 
@@ -253,6 +254,12 @@ export class MemStorage implements IStorage {
   async getActivityProgress(activityId: number): Promise<ActivityProgress[]> {
     return Array.from(this.activitiesProgress.values())
       .filter(progress => progress.activityId === activityId);
+  }
+  
+  // Implementação do método getAllActivitiesProgress na MemStorage
+  async getAllActivitiesProgress(): Promise<ActivityProgress[]> {
+    console.log("[MEMORY] Obtendo TODOS os progressos de TODAS as atividades de uma vez só");
+    return Array.from(this.activitiesProgress.values());
   }
 
   async getActivityProgressByDepartment(
@@ -628,6 +635,14 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(activityProgress)
       .where(eq(activityProgress.activityId, activityId));
+  }
+  
+  // Novo método otimizado para alta performance - retorna progressos de todas as atividades de uma vez
+  async getAllActivitiesProgress(): Promise<ActivityProgress[]> {
+    console.log("[DB] Obtendo TODOS os progressos de TODAS as atividades de uma vez só");
+    return db
+      .select()
+      .from(activityProgress);
   }
 
   async getActivityProgressByDepartment(
