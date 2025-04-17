@@ -8,13 +8,15 @@ import {
   RefreshCw, Activity, Clock, Calendar, Users, ChevronRight, 
   AlertTriangle, AlertCircle, Layers, CheckCircle2, Bell, Eye, Edit, 
   Trash, Plus, Loader2, Search, ArrowUpCircle, ArrowDownCircle,
-  Briefcase, Printer, Hammer, Scissors, Package, ChevronDown, ChevronUp
+  Briefcase, Printer, Hammer, Scissors, Package, ChevronDown, ChevronUp,
+  Pencil, Inbox
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import Layout from "@/components/Layout";
 import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -206,7 +208,7 @@ export default function AdminDashboard() {
               </CardHeader>
               
               <CardContent>
-                <OptimizedActivitiesList showCompleted={false} />
+                <SimpleProductionList />
               </CardContent>
             </Card>
           </div>
@@ -557,6 +559,194 @@ function RecentActivities() {
         )}
       </CardContent>
     </Card>
+  );
+}
+
+// Componente super simples apenas para listar os pedidos em produção
+function SimpleProductionList() {
+  const [, navigate] = useLocation();
+  const { toast } = useToast();
+  const [selectedActivity, setSelectedActivity] = useState<any>(null);
+  const [viewModalOpen, setViewModalOpen] = useState(false);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [activities, setActivities] = useState<any[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  
+  // Buscar pedidos em produção diretamente
+  useEffect(() => {
+    const fetchActivities = async () => {
+      setIsLoading(true);
+      setError(null);
+      
+      try {
+        const response = await fetch("/api/admin-dashboard/activities?status=producao&limit=50");
+        
+        if (!response.ok) {
+          throw new Error(`Erro ao buscar pedidos: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        setActivities(data.items || []);
+        console.log(`Recebidos ${data.items.length} pedidos em produção`);
+      } catch (err) {
+        console.error("Erro na busca de pedidos:", err);
+        setError("Falha ao carregar pedidos. Tente novamente.");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchActivities();
+    
+    // Atualizar a cada 30 segundos
+    const intervalId = setInterval(fetchActivities, 30000);
+    
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, []);
+  
+  const handleView = (activity: any) => {
+    setSelectedActivity(activity);
+    setViewModalOpen(true);
+  };
+  
+  const handleEdit = (activity: any) => {
+    setSelectedActivity(activity);
+    setEditModalOpen(true);
+  };
+  
+  // Calcular cor com base na data de entrega
+  const getDeadlineStyle = (deadline: string) => {
+    if (!deadline) return { color: "text-gray-500", badge: "Sem prazo" };
+    
+    try {
+      const deadlineDate = new Date(deadline);
+      const today = new Date();
+      const diffDays = Math.floor((deadlineDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+      
+      if (diffDays < 0) {
+        return { color: "text-red-500", badge: "Atrasado" };
+      } else if (diffDays <= 3) {
+        return { color: "text-amber-500", badge: "Próximo" };
+      } else {
+        return { color: "text-green-500", badge: "No prazo" };
+      }
+    } catch (e) {
+      return { color: "text-gray-500", badge: "Data inválida" };
+    }
+  };
+  
+  // Formatar data para exibição
+  const formatDate = (dateString: string) => {
+    if (!dateString) return "Data não disponível";
+    
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('pt-BR');
+    } catch (e) {
+      return "Data inválida";
+    }
+  };
+  
+  return (
+    <div className="space-y-4">
+      {isLoading ? (
+        <div className="flex justify-center py-8">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <span className="ml-2">Carregando pedidos...</span>
+        </div>
+      ) : error ? (
+        <div className="text-center py-8 text-red-500">
+          <AlertTriangle className="h-8 w-8 mx-auto mb-2" />
+          <p>{error}</p>
+          <Button 
+            onClick={() => window.location.reload()}
+            className="mt-4"
+            variant="outline"
+          >
+            Recarregar página
+          </Button>
+        </div>
+      ) : activities.length === 0 ? (
+        <div className="text-center py-8 text-muted-foreground">
+          <Inbox className="h-8 w-8 mx-auto mb-2" />
+          <p>Nenhum pedido em produção no momento.</p>
+        </div>
+      ) : (
+        <>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>ID</TableHead>
+                <TableHead>Cliente</TableHead>
+                <TableHead>Título</TableHead>
+                <TableHead>Departamento</TableHead>
+                <TableHead>Data de Entrega</TableHead>
+                <TableHead>Ações</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {activities.map((activity) => {
+                const deadlineStyle = getDeadlineStyle(activity.deadline);
+                
+                return (
+                  <TableRow key={activity.id}>
+                    <TableCell>{activity.id}</TableCell>
+                    <TableCell>{activity.client}</TableCell>
+                    <TableCell className="font-medium">{activity.title}</TableCell>
+                    <TableCell>
+                      {activity.department || activity.currentDepartment || "Não definido"}
+                    </TableCell>
+                    <TableCell className={deadlineStyle.color}>
+                      {formatDate(activity.deadline)}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex space-x-2">
+                        <Button 
+                          variant="ghost" 
+                          size="icon"
+                          onClick={() => handleView(activity)}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          size="icon"
+                          onClick={() => handleEdit(activity)}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+          
+          {/* Modais de ação */}
+          {selectedActivity && (
+            <>
+              <ViewActivityModal 
+                open={viewModalOpen} 
+                onClose={() => setViewModalOpen(false)} 
+                activity={selectedActivity}
+              />
+              <EditActivityModal 
+                open={editModalOpen}
+                onClose={() => {
+                  setEditModalOpen(false);
+                  setSelectedActivity(null);
+                }}
+                activity={selectedActivity}
+              />
+            </>
+          )}
+        </>
+      )}
+    </div>
   );
 }
 
