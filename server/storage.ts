@@ -44,7 +44,6 @@ export interface IStorage {
   // Activity Progress
   createActivityProgress(progress: InsertActivityProgress): Promise<ActivityProgress>;
   getActivityProgress(activityId: number): Promise<ActivityProgress[]>;
-  getAllActivitiesProgress(): Promise<ActivityProgress[]>; // Novo método para alta performance
   getActivityProgressByDepartment(activityId: number, department: string): Promise<ActivityProgress | undefined>;
   completeActivityProgress(
     activityId: number, 
@@ -255,12 +254,6 @@ export class MemStorage implements IStorage {
     return Array.from(this.activitiesProgress.values())
       .filter(progress => progress.activityId === activityId);
   }
-  
-  // Implementação do método getAllActivitiesProgress na MemStorage
-  async getAllActivitiesProgress(): Promise<ActivityProgress[]> {
-    console.log("[MEMORY] Obtendo TODOS os progressos de TODAS as atividades de uma vez só");
-    return Array.from(this.activitiesProgress.values());
-  }
 
   async getActivityProgressByDepartment(
     activityId: number, 
@@ -412,91 +405,6 @@ export class MemStorage implements IStorage {
     const updatedNotification = { ...notification, read: true };
     this.notifications.set(id, updatedNotification);
     return updatedNotification;
-  }
-  
-  // Métodos para otimização ultrarrápida
-  async getCompletedActivities(limit: number = 50): Promise<Activity[]> {
-    console.log(`[DB OTIMIZADO] Buscando até ${limit} atividades concluídas`);
-    const activities = Array.from(this.activities.values());
-    const completedActivities = [];
-    
-    // Buscar todos os progressos de embalagem concluídos
-    const completedInEmbalagem = Array.from(this.activitiesProgress.values())
-      .filter(p => p.department === 'embalagem' && p.status === 'completed')
-      .map(p => p.activityId);
-      
-    // Buscar as atividades correspondentes
-    for (const activityId of completedInEmbalagem) {
-      const activity = this.activities.get(activityId);
-      if (activity) {
-        completedActivities.push({
-          ...activity,
-          currentDepartment: 'concluido' as any
-        });
-        
-        if (completedActivities.length >= limit) break;
-      }
-    }
-    
-    return completedActivities;
-  }
-  
-  async getActivitiesInProgress(limit: number = 50): Promise<Activity[]> {
-    console.log(`[DB OTIMIZADO] Buscando até ${limit} atividades em progresso`);
-    const activities = Array.from(this.activities.values());
-    const activitiesInProgress = [];
-    
-    // Primeiro encontrar atividades que não estão em embalagem concluída
-    const completedInEmbalagem = new Set(
-      Array.from(this.activitiesProgress.values())
-        .filter(p => p.department === 'embalagem' && p.status === 'completed')
-        .map(p => p.activityId)
-    );
-    
-    // Agrupar progressos por atividade para determinar o departamento atual
-    const progressByActivity = new Map();
-    for (const progress of Array.from(this.activitiesProgress.values())) {
-      if (!progressByActivity.has(progress.activityId)) {
-        progressByActivity.set(progress.activityId, []);
-      }
-      progressByActivity.get(progress.activityId).push(progress);
-    }
-    
-    // Encontrar atividades em progresso
-    for (const activity of activities) {
-      // Pular se já está concluída
-      if (completedInEmbalagem.has(activity.id)) continue;
-      
-      const progresses = progressByActivity.get(activity.id) || [];
-      
-      // Encontrar o departamento pendente
-      const pendingProgress = progresses
-        .filter(p => p.status === 'pending')
-        .sort((a, b) => {
-          const deptOrder = ['gabarito', 'impressao', 'batida', 'costura', 'embalagem'];
-          return deptOrder.indexOf(a.department as any) - deptOrder.indexOf(b.department as any);
-        })[0];
-        
-      // Se encontramos um departamento pendente, adicionar à lista
-      if (pendingProgress) {
-        activitiesInProgress.push({
-          ...activity,
-          currentDepartment: pendingProgress.department
-        });
-        
-        if (activitiesInProgress.length >= limit) break;
-      } else if (progresses.length === 0) {
-        // Se não tem nenhum progresso, está em gabarito
-        activitiesInProgress.push({
-          ...activity,
-          currentDepartment: 'gabarito'
-        });
-        
-        if (activitiesInProgress.length >= limit) break;
-      }
-    }
-    
-    return activitiesInProgress;
   }
 }
 
@@ -721,14 +629,6 @@ export class DatabaseStorage implements IStorage {
       .from(activityProgress)
       .where(eq(activityProgress.activityId, activityId));
   }
-  
-  // Novo método otimizado para alta performance - retorna progressos de todas as atividades de uma vez
-  async getAllActivitiesProgress(): Promise<ActivityProgress[]> {
-    console.log("[DB] Obtendo TODOS os progressos de TODAS as atividades de uma vez só");
-    return db
-      .select()
-      .from(activityProgress);
-  }
 
   async getActivityProgressByDepartment(
     activityId: number, 
@@ -908,145 +808,6 @@ export class DatabaseStorage implements IStorage {
     }
     
     return updatedNotification;
-  }
-  
-  // Métodos de otimização ultra-rápida
-  async getCompletedActivities(limit: number = 50): Promise<Activity[]> {
-    console.log(`[DB OTIMIZADO] Buscando até ${limit} atividades concluídas no banco de dados`);
-    
-    // Buscar progressos concluídos em embalagem
-    const embalagemProgresses = await db
-      .select()
-      .from(activityProgress)
-      .where(
-        sql`${activityProgress.department} = 'embalagem' AND ${activityProgress.status} = 'completed'`
-      )
-      .limit(limit);
-    
-    if (embalagemProgresses.length === 0) return [];
-    
-    // Extrair IDs das atividades
-    const activityIds = embalagemProgresses.map(p => p.activityId);
-    
-    // Buscar as atividades correspondentes uma a uma (evita erro de sintaxe)
-    let completedActivities = [];
-    for (const id of activityIds) {
-      const [activity] = await db
-        .select()
-        .from(activities)
-        .where(eq(activities.id, id));
-        
-      if (activity) {
-        completedActivities.push(activity);
-      }
-      
-      if (completedActivities.length >= limit) break;
-    }
-    
-    // Adicionar o campo currentDepartment = 'concluido' para compatibilidade
-    return completedActivities.map(activity => ({
-      ...activity,
-      currentDepartment: 'concluido' as any
-    }));
-  }
-  
-  async getActivitiesInProgress(limit: number = 50): Promise<Activity[]> {
-    console.log(`[DB OTIMIZADO] Buscando até ${limit} atividades em progresso no banco de dados`);
-    try {
-      // OTIMIZAÇÃO: Buscar primeiro todos os IDs das atividades que têm pelo menos um progresso pendente
-      const pendingProgresses = await db
-        .select({ activityId: activityProgress.activityId })
-        .from(activityProgress)
-        .where(eq(activityProgress.status, 'pending'))
-        .limit(limit * 2);
-      
-      const activityIds = pendingProgresses.map(row => row.activityId);
-      
-      if (activityIds.length === 0) {
-        console.log('[DB OTIMIZADO] Nenhuma atividade em progresso encontrada');
-        return [];
-      }
-      
-      // OTIMIZAÇÃO: Buscar todas as atividades de uma vez
-      // Evitando o loop que estava causando lentidão e buscando em lote
-      const activitiesData: Activity[] = [];
-      
-      // Como não podemos usar IN com muitos valores, vamos buscar em lotes de 10
-      const batchSize = 10;
-      for (let i = 0; i < activityIds.length; i += batchSize) {
-        const batchIds = activityIds.slice(i, i + batchSize);
-        
-        // Buscar cada ID individualmente e concatenar resultados
-        for (const id of batchIds) {
-          const [activity] = await db
-            .select()
-            .from(activities)
-            .where(eq(activities.id, id));
-            
-          if (activity) {
-            activitiesData.push(activity);
-          }
-          
-          if (activitiesData.length >= limit) break;
-        }
-        
-        if (activitiesData.length >= limit) break;
-      }
-      
-      if (activitiesData.length === 0) {
-        console.log('[DB OTIMIZADO] Nenhuma atividade em progresso encontrada depois da busca');
-        return [];
-      }
-      
-      // OTIMIZAÇÃO: Buscar o departamento atual para cada atividade de uma vez
-      const deptMap = new Map();
-      
-      // Buscar todos os progressos pendentes para estas atividades
-      const progressResults = [];
-      
-      // Como não podemos usar inArray diretamente, vamos fazer múltiplas consultas
-      for (const activity of activitiesData) {
-        const result = await db
-          .select()
-          .from(activityProgress)
-          .where(and(
-            eq(activityProgress.activityId, activity.id),
-            eq(activityProgress.status, 'pending')
-          ));
-          
-        progressResults.push(...result);
-      }
-      
-      const progresses = progressResults;
-      
-      // Determinar departamento atual para cada atividade
-      const deptOrder = ['gabarito', 'impressao', 'batida', 'costura', 'embalagem'];
-      activitiesData.forEach(activity => {
-        const activityProgresses = progresses.filter(p => p.activityId === activity.id);
-        
-        if (activityProgresses.length === 0) {
-          deptMap.set(activity.id, 'gabarito'); // Fallback
-          return;
-        }
-        
-        // Ordenar por ordem do departamento
-        activityProgresses.sort((a, b) => 
-          deptOrder.indexOf(a.department as any) - deptOrder.indexOf(b.department as any)
-        );
-        
-        deptMap.set(activity.id, activityProgresses[0].department);
-      });
-      
-      // Retornar atividades com departamento atual
-      return activitiesData.map(activity => ({
-        ...activity,
-        currentDepartment: deptMap.get(activity.id) || 'gabarito'
-      }));
-    } catch (error) {
-      console.error('[DB ERROR] Erro ao buscar atividades em progresso:', error);
-      // Não queremos que falhas aqui interrompam a execução
-      return [];
-    }
   }
 }
 

@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import Layout from "@/components/Layout";
-import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -49,16 +49,10 @@ export default function AdminDashboard() {
 
   // Função para atualizar dados
   const handleRefresh = () => {
-    // Invalidar consultas antigas
     queryClient.invalidateQueries({ queryKey: ["/api/activities"] });
     queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
     queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
     queryClient.invalidateQueries({ queryKey: ["/api/stats/department-counts"] });
-    
-    // Invalidar consultas da nova API ultra-otimizada
-    queryClient.invalidateQueries({ queryKey: ["/api/admin-dashboard/activities"] });
-    queryClient.invalidateQueries({ queryKey: ["/api/admin-dashboard/department-stats"] });
-    
     toast({
       title: "Atualizado",
       description: "Dados atualizados com sucesso",
@@ -157,7 +151,7 @@ export default function AdminDashboard() {
         <div className="space-y-8 mt-8">
           {/* Pedidos concluídos */}
           <div>
-            <OptimizedActivitiesList showCompleted={true} />
+            {ActivitiesList(true)}
           </div>
           
           {/* Separador visual */}
@@ -174,7 +168,7 @@ export default function AdminDashboard() {
           
           {/* Pedidos em produção */}
           <div>
-            <OptimizedActivitiesList showCompleted={false} />
+            {ActivitiesList(false)}
           </div>
         </div>
         
@@ -289,7 +283,6 @@ function StatsAndDepartmentsOverview() {
     embalagem: "Embalagem",
   };
   
-  // ULTRA OTIMIZAÇÃO: Usando a nova API especializada para o admin
   useEffect(() => {
     let isMounted = true;
     const controller = new AbortController();
@@ -308,8 +301,7 @@ function StatsAndDepartmentsOverview() {
           }
         }, 5000);
         
-        // Usar a nova API otimizada para contagens de departamentos
-        const response = await fetch("/api/admin-dashboard/department-stats", {
+        const response = await fetch("/api/stats/department-counts", {
           signal,
           headers: {
             "Cache-Control": "max-age=30"
@@ -323,7 +315,6 @@ function StatsAndDepartmentsOverview() {
         }
         
         const data = await response.json();
-        console.log("[ULTRA OTIMIZAÇÃO] Contagens de departamentos carregadas com sucesso");
         
         if (isMounted) {
           setDepartmentCounts(data);
@@ -332,24 +323,8 @@ function StatsAndDepartmentsOverview() {
       } catch (err) {
         if (isMounted && !signal.aborted) {
           console.error("Erro ao carregar contadores:", err);
-          
-          // Em caso de falha, tentar usar a API antiga como fallback
-          try {
-            if (isMounted) {
-              console.log("[FALLBACK] Tentando API antiga para contagens de departamentos");
-              const fallbackResponse = await fetch("/api/stats/department-counts");
-              if (fallbackResponse.ok) {
-                const fallbackData = await fallbackResponse.json();
-                setDepartmentCounts(fallbackData);
-              } else {
-                setDeptError("Não foi possível carregar os contadores");
-              }
-            }
-          } catch (fallbackErr) {
-            setDeptError(err instanceof Error ? err.message : "Erro desconhecido");
-          } finally {
-            if (isMounted) setDeptLoading(false);
-          }
+          setDeptError(err instanceof Error ? err.message : "Erro desconhecido");
+          setDeptLoading(false);
         }
       }
     };
@@ -536,397 +511,7 @@ const departmentOptions = [
   { value: "embalagem", label: "Embalagem", icon: <Package className="h-4 w-4 mr-1" /> },
 ];
 
-// Novo componente otimizado para listar atividades
-function OptimizedActivitiesList({ showCompleted }: { showCompleted: boolean }): React.ReactNode {
-  const [, navigate] = useLocation();
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
-  const [selectedActivity, setSelectedActivity] = useState<ActivityType | null>(null);
-  const [viewModalOpen, setViewModalOpen] = useState(false);
-  const [editModalOpen, setEditModalOpen] = useState(false);
-  const [createModalOpen, setCreateModalOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [filterStatus, setFilterStatus] = useState<string | null>(null);
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
-  
-  // Estado para paginação
-  const [page, setPage] = useState(1);
-  
-  // ULTRA OTIMIZAÇÃO: Usando a nova API especializada para o admin
-  const { data: activitiesResponse, isLoading } = useQuery({
-    queryKey: ["/api/admin-dashboard/activities", showCompleted ? 'concluido' : 'producao', page, searchQuery],
-    queryFn: async () => {
-      try {
-        console.log(`Buscando pedidos ${showCompleted ? 'concluídos' : 'em produção'}, página ${page}`);
-        // Construir URL com parâmetros de paginação e filtro usando a nova API otimizada
-        const url = new URL("/api/admin-dashboard/activities", window.location.origin);
-        
-        // Definir o tipo de pedidos que queremos (concluídos ou em produção)
-        url.searchParams.append("status", showCompleted ? 'concluido' : 'producao');
-        
-        // Parâmetros de paginação
-        url.searchParams.append("page", page.toString());
-        url.searchParams.append("limit", "30");
-        
-        // Adicionar termo de busca se existir
-        if (searchQuery) {
-          url.searchParams.append("search", searchQuery);
-        }
-        
-        // Timeout mais curto para evitar esperas muito longas
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 segundos de timeout
-        
-        const response = await fetch(url.toString(), {
-          signal: controller.signal
-        });
-        
-        clearTimeout(timeoutId);
-        
-        if (!response.ok) {
-          throw new Error(`Erro ao buscar atividades: ${response.status} ${response.statusText}`);
-        }
-        
-        const data = await response.json();
-        console.log(`Recebidos ${data?.items?.length || 0} pedidos ${showCompleted ? 'concluídos' : 'em produção'}`);
-        return data;
-      } catch (error) {
-        console.error("Erro na busca de pedidos:", error);
-        throw error;
-      }
-    },
-    staleTime: 15000, // 15 segundos - reduz chamadas frequentes à API
-    retry: 1, // Apenas uma tentativa adicional em caso de falha
-    retryDelay: 3000, // 3 segundos entre tentativas
-    refetchOnWindowFocus: false, // Evita recarregar quando a janela ganha foco
-    placeholderData: (prev) => prev // Mantém dados anteriores enquanto carrega novos
-  });
-  
-  // Extrair dados da resposta paginada
-  const activities = activitiesResponse?.items || [];
-  const totalItems = activitiesResponse?.total || 0;
-  const totalPages = activitiesResponse?.totalPages || 1;
-
-  // Função para abrir modal de visualização
-  const handleView = (activity: ActivityType) => {
-    setSelectedActivity(activity);
-    setViewModalOpen(true);
-  };
-  
-  // Função para abrir modal de edição
-  const handleEdit = (activity: ActivityType) => {
-    setSelectedActivity(activity);
-    setEditModalOpen(true);
-  };
-  
-  // Função para excluir atividade
-  const handleDelete = async (id: number) => {
-    if (confirm("Tem certeza que deseja excluir este pedido? Esta ação não pode ser desfeita.")) {
-      try {
-        const response = await fetch(`/api/activities/${id}`, {
-          method: 'DELETE',
-        });
-        
-        if (response.ok) {
-          toast({
-            title: "Sucesso",
-            description: "Pedido excluído com sucesso",
-          });
-          queryClient.invalidateQueries({ queryKey: ["/api/activities"] });
-        } else {
-          toast({
-            title: "Erro",
-            description: "Não foi possível excluir o pedido",
-            variant: "destructive",
-          });
-        }
-      } catch (error) {
-        toast({
-          title: "Erro",
-          description: "Erro ao excluir pedido",
-          variant: "destructive",
-        });
-      }
-    }
-  };
-
-  // Verificar se um prazo está próximo ou vencido e retorna a classe de cor correspondente
-  const getPriorityClass = (deadline: string | null) => {
-    if (!deadline) return "";
-    
-    const today = new Date();
-    const deadlineDate = new Date(deadline);
-    const diffDays = Math.ceil((deadlineDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-    
-    if (diffDays < 0) return "text-white bg-red-500 font-medium"; // Vencido - vermelho
-    if (diffDays <= 2) return "text-white bg-amber-500 font-medium"; // Próximo - amarelo
-    return "text-white bg-green-500 font-medium"; // Normal - verde
-  };
-
-  // Filtragem de atividades apenas por texto de busca (performance melhorada)
-  const filteredActivities = useMemo(() => {
-    if (!activities) return [];
-    
-    if (!searchQuery.trim()) return activities;
-    
-    const searchLower = searchQuery.toLowerCase();
-    
-    return activities.filter((activity: any) => {
-      return (activity.title && activity.title.toLowerCase().includes(searchLower)) ||
-             (activity.id && activity.id.toString().includes(searchQuery)) ||
-             (activity.client && activity.client.toLowerCase().includes(searchLower));
-    });
-  }, [activities, searchQuery]);
-  
-  // Componente para paginação simplificada
-  const Pagination = () => {
-    if (totalPages <= 1) return null;
-    
-    return (
-      <div className="flex justify-center gap-2 mt-6">
-        <Button 
-          variant="outline" 
-          size="sm" 
-          disabled={page === 1}
-          onClick={() => setPage(p => Math.max(1, p - 1))}
-        >
-          Anterior
-        </Button>
-        <div className="flex items-center gap-1">
-          {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
-            // Se temos mais de 5 páginas, mostramos de forma inteligente
-            let pageNum = i + 1;
-            if (totalPages > 5) {
-              if (page > 3 && page < totalPages - 1) {
-                // Estamos no meio
-                pageNum = page - 2 + i;
-                if (i === 0) return <span key="start">1...</span>;
-                if (i === 4) return <span key="end">...{totalPages}</span>;
-              } else if (page >= totalPages - 1) {
-                // Estamos no final
-                pageNum = totalPages - 4 + i;
-                if (i === 0) return <span key="start">1...</span>;
-              } else {
-                // Estamos no início
-                if (i === 4) return <span key="end">...{totalPages}</span>;
-              }
-            }
-            
-            return (
-              <Button 
-                key={pageNum}
-                variant={page === pageNum ? "default" : "outline"}
-                size="sm"
-                className="w-8 h-8 p-0"
-                onClick={() => setPage(pageNum)}
-              >
-                {pageNum}
-              </Button>
-            );
-          })}
-        </div>
-        <Button 
-          variant="outline" 
-          size="sm"
-          disabled={page === totalPages}
-          onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-        >
-          Próxima
-        </Button>
-      </div>
-    );
-  };
-
-  return (
-    <>
-      <div className="bg-white dark:bg-gray-900 p-6 rounded-lg shadow-sm">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-bold flex items-center">
-            {showCompleted ? (
-              <>
-                <CheckCircle2 className="mr-2 h-5 w-5 text-green-500" />
-                Pedidos Concluídos
-              </>
-            ) : (
-              <>
-                <Clock className="mr-2 h-5 w-5 text-amber-500" />
-                Pedidos em Produção
-              </>
-            )}
-          </h2>
-          {!showCompleted && (
-            <Button 
-              onClick={() => setCreateModalOpen(true)}
-              className="bg-gray-900 text-white dark:bg-primary"
-            >
-              Novo Pedido
-            </Button>
-          )}
-        </div>
-        
-        {/* Barra de pesquisa */}
-        <div className="mb-6">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-            <Input
-              type="search"
-              placeholder="Buscar por título, cliente ou código..."
-              className="pl-10 border rounded-md w-full"
-              value={searchQuery}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
-            />
-          </div>
-        </div>
-        
-        {isLoading ? (
-          <div className="flex justify-center py-8">
-            <div className="animate-spin h-6 w-6 border-2 border-primary border-t-transparent rounded-full"></div>
-          </div>
-        ) : !filteredActivities || filteredActivities.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground">
-            {searchQuery ? 
-              "Nenhum pedido encontrado com os filtros aplicados." : 
-              showCompleted ? "Nenhum pedido concluído." : "Nenhum pedido em produção."}
-          </div>
-        ) : (
-          <div className="overflow-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="bg-gray-50 dark:bg-gray-800 text-left">
-                  <th className="px-4 py-3 font-medium text-sm">Título</th>
-                  <th className="px-4 py-3 font-medium text-sm">Cliente</th>
-                  <th className="px-4 py-3 font-medium text-sm">Setor Atual</th>
-                  <th className="px-4 py-3 font-medium text-sm">Data de Entrega</th>
-                  <th className="px-4 py-3 font-medium text-sm text-right">Ações</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {filteredActivities.map((activity: any) => {
-                  // Busca o departamento atual da atividade
-                  const currentDept = activity.currentDepartment || 'gabarito'; 
-                  
-                  return (
-                  <tr key={activity.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
-                    <td className="px-4 py-3">
-                      <div className="font-medium">{activity.title}</div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="font-medium">{activity.client}</div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className={`px-3 py-1 text-center text-white rounded-md text-sm ${
-                        currentDept === 'gabarito' ? 'bg-blue-600' : 
-                        currentDept === 'impressao' ? 'bg-violet-600' : 
-                        currentDept === 'batida' ? 'bg-amber-600' : 
-                        currentDept === 'costura' ? 'bg-emerald-600' : 
-                        currentDept === 'embalagem' ? 'bg-slate-600' : 
-                        currentDept === 'concluido' ? 'bg-green-600' : 'bg-gray-600'
-                      }`}>
-                        {currentDept === 'gabarito' ? 'Gabarito' : 
-                         currentDept === 'impressao' ? 'Impressão' : 
-                         currentDept === 'batida' ? 'Batida' : 
-                         currentDept === 'costura' ? 'Costura' : 
-                         currentDept === 'embalagem' ? 'Embalagem' : 
-                         currentDept === 'concluido' ? 'Concluído' : 'Pendente'}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      {activity.deadline ? (
-                        <div className={`font-medium ${
-                          new Date(activity.deadline) < new Date() ? 'text-red-600' : 
-                          new Date(activity.deadline) < new Date(Date.now() + 3 * 24 * 60 * 60 * 1000) ? 'text-amber-600' : 
-                          'text-green-600'
-                        }`}>
-                          {new Date(activity.deadline).toLocaleDateString('pt-BR')}
-                        </div>
-                      ) : (
-                        <div className="text-muted-foreground">Não definida</div>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex justify-end gap-2">
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          onClick={() => handleView(activity as ActivityType)}
-                          title="Visualizar"
-                          className="h-8 w-8"
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        {!showCompleted && (
-                          <>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              onClick={() => handleEdit(activity as ActivityType)}
-                              title="Editar"
-                              className="h-8 w-8"
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              onClick={() => handleDelete(activity.id)}
-                              title="Excluir"
-                              className="h-8 w-8 text-red-500 hover:text-red-700"
-                            >
-                              <Trash className="h-4 w-4" />
-                            </Button>
-                          </>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                )})}
-              </tbody>
-            </table>
-            
-            {/* Paginação */}
-            <Pagination />
-          </div>
-        )}
-      </div>
-      
-      {/* Modais */}
-      <ViewActivityModal
-        isOpen={viewModalOpen}
-        onClose={() => setViewModalOpen(false)}
-        activity={selectedActivity}
-      />
-      
-      <EditActivityModal
-        isOpen={editModalOpen}
-        onClose={() => setEditModalOpen(false)}
-        onSuccess={() => {
-          setEditModalOpen(false);
-          queryClient.invalidateQueries({ queryKey: ["/api/activities"] });
-          toast({
-            title: "Sucesso",
-            description: "Pedido atualizado com sucesso",
-          });
-        }}
-        activity={selectedActivity}
-      />
-      
-      <CreateActivityModal 
-        isOpen={createModalOpen}
-        onClose={() => setCreateModalOpen(false)}
-        onSuccess={() => {
-          setCreateModalOpen(false);
-          queryClient.invalidateQueries({ queryKey: ["/api/activities"] });
-          toast({
-            title: "Sucesso",
-            description: "Pedido criado com sucesso",
-          });
-        }}
-      />
-    </>
-  );
-}
-
-// Componente original para listar atividades (em produção ou concluídas) - mantido para compatibilidade
+// Componente para listar atividades (em produção ou concluídas)
 function ActivitiesList(showCompleted: boolean = false) {
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
@@ -939,33 +524,19 @@ function ActivitiesList(showCompleted: boolean = false) {
   const [filterStatus, setFilterStatus] = useState<string | null>(null);
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   
-  // Estado para paginação
-  const [page, setPage] = useState(1);
-  const [status, setStatus] = useState<'concluido' | 'producao' | null>(null);
-  
-  // Otimização: Usar staleTime e paginação para reduzir carga
-  const { data: activitiesResponse, isLoading } = useQuery({
-    queryKey: ["/api/activities", status, page],
+  // Otimização: Usar staleTime para reduzir as chamadas à API
+  const { data: activities, isLoading } = useQuery({
+    queryKey: ["/api/activities"],
     queryFn: async () => {
-      // Construir URL com parâmetros de paginação e filtro
-      const url = new URL("/api/activities", window.location.origin);
-      if (status) url.searchParams.append("status", status);
-      url.searchParams.append("page", page.toString());
-      url.searchParams.append("limit", "50"); // 50 itens por página
-      
-      const response = await fetch(url.toString());
+      const response = await fetch("/api/activities");
       if (!response.ok) {
         throw new Error("Erro ao buscar atividades");
       }
       return response.json();
     },
     staleTime: 30000, // 30 segundos - reduz chamadas frequentes à API
-    refetchOnWindowFocus: false, // Evita recarregar quando a janela ganha foco
-    placeholderData: keepPreviousData // Mantém dados anteriores enquanto carrega novos (UX melhor)
+    refetchOnWindowFocus: false // Evita recarregar quando a janela ganha foco
   });
-  
-  // Extrair dados da resposta paginada
-  const activities = activitiesResponse?.items || [];
   
   // Função para abrir modal de visualização
   const handleView = (activity: ActivityType) => {

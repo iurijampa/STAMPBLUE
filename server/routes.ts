@@ -18,7 +18,6 @@ import path from 'path';
 import { db } from "./db";
 import { createBackup } from "./backup";
 import { and, eq, sql } from "drizzle-orm";
-import adminDashboardRouter from './admin-dashboard-api';
 
 // LRU Cache ultra-otimizado para máxima performance e eficiência
 class LRUCache {
@@ -155,7 +154,7 @@ class LRUCache {
 }
 
 // Cache global otimizado para uso em toda a aplicação
-const cache = new LRUCache(1000); // Suporta até 1000 itens em cache (aumentado ainda mais)
+const cache = new LRUCache(800); // Suporta até 800 itens em cache (aumentado)
 // Expor globalmente para uso em outras partes do código
 (global as any).cache = cache;
 import impressaoRouter from "./solucao-impressao";
@@ -310,25 +309,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Setup authentication routes
   setupAuth(app);
-  
-  // Usar API especial ultra-otimizada para o dashboard do admin
-  console.log('[ULTRA OTIMIZAÇÂO] Registrando router especializado para o dashboard admin');
-  app.use('/api/admin-dashboard', adminDashboardRouter);
 
   // API routes
   // Activities
   app.get("/api/activities", isAuthenticated, async (req, res) => {
     try {
-      // Verificar se têm parâmetros para paginação (status e page)
-      const status = req.query.status as string || null;
-      const page = parseInt(req.query.page as string) || 1;
-      const limit = parseInt(req.query.limit as string) || 100;
+      // Adiciona cabeçalhos de cache para o navegador
+      res.setHeader('Cache-Control', 'private, max-age=15');
       
-      // Adiciona cabeçalhos de cache para o navegador - aumentado para 30 segundos
-      res.setHeader('Cache-Control', 'private, max-age=30');
-      
-      // Cria uma chave de cache baseada no usuário e nos parâmetros de paginação
-      const cacheKey = `activities_main_${req.user.role}_${req.user.id}_${status || 'all'}_p${page}_l${limit}`;
+      // Cria uma chave de cache baseada no usuário
+      const cacheKey = `activities_main_${req.user.role}_${req.user.id}`;
       const cachedData = cache.get(cacheKey);
       
       // Se tiver em cache, retorna imediatamente (grande ganho de performance)
@@ -338,126 +328,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       if (req.user && req.user.role === "admin") {
-        console.log(`[OTIMIZAÇÃO] Buscando atividades para admin com status=${status || 'all'}, page=${page}, limit=${limit}`);
-        
-        // Buscar todas as atividades - mas agora processamos em lotes para melhor performance
+        // Otimização para o admin - cache por 15 segundos
+        // Buscar todas as atividades
         const activities = await storage.getAllActivities();
         
-        // Filtragem inicial antes de processamento pesado
-        let filteredActivities = activities;
-        
-        // Processamento em lotes para evitar sobrecarga
-        const batchSize = 10; // Processar 10 atividades por lote
-        const activitiesWithProgress = [];
-        
-        // Verificar se é uma solicitação para um status específico para otimizar ainda mais
-        // Armazenando resultados por tipo para melhorar desempenho nas próximas requisições
-        const statusFilter = status || '';
-        const statusCacheKey = `activities_processed_${statusFilter}_${new Date().toISOString().split('T')[0]}`;
-
-        // Tentamos usar dados processados anteriormente se existirem em cache
-        const cachedProcessedData = cache.get(statusCacheKey);
-        if (cachedProcessedData) {
-          console.log(`[OTIMIZAÇÃO AVANÇADA] Usando cache processado para status=${statusFilter}`);
-          activitiesWithProgress.push(...cachedProcessedData);
-        } else {
-          console.log(`[OTIMIZAÇÃO] Processando ${filteredActivities.length} atividades em lotes`);
-
-          // Dividir o processamento em lotes
-          for (let i = 0; i < filteredActivities.length; i += batchSize) {
-            console.log(`[OTIMIZAÇÃO] Processando lote ${Math.floor(i/batchSize)+1}/${Math.ceil(filteredActivities.length/batchSize)}`);
-            const batch = filteredActivities.slice(i, i + batchSize);
+        // Para cada atividade, buscar o progresso para determinar o departamento atual
+        const activitiesWithProgress = await Promise.all(
+          activities.map(async (activity) => {
+            const progresses = await storage.getActivityProgress(activity.id);
             
-            // Processar lote em paralelo
-            const processedBatch = await Promise.all(
-              batch.map(async (activity) => {
-                const progresses = await storage.getActivityProgress(activity.id);
-                
-                // Ordenar os progressos por departamento e encontrar o pendente mais recente
-                // para determinar em qual departamento a atividade está atualmente
-                const pendingProgress = progresses
-                  .filter(p => p.status === 'pending')
-                  .sort((a, b) => {
-                    const deptOrder = ['gabarito', 'impressao', 'batida', 'costura', 'embalagem'];
-                    return deptOrder.indexOf(a.department as any) - deptOrder.indexOf(b.department as any);
-                  })[0];
-                  
-                // Verificar se o pedido foi concluído pelo último departamento (embalagem)
-                const embalagemProgress = progresses.find(p => p.department === 'embalagem');
-                const pedidoConcluido = embalagemProgress && embalagemProgress.status === 'completed';
-                
-                // Determinar o departamento atual ou marcar como concluído se embalagem já finalizou
-                let currentDepartment = pendingProgress ? pendingProgress.department : 'gabarito';
-                
-                // Se o pedido foi concluído pela embalagem, vamos marcar como "concluido" em vez de voltar para o gabarito
-                if (!pendingProgress && pedidoConcluido) {
-                  currentDepartment = 'concluido';
-                }
-                
-                return {
-                  ...activity,
-                  currentDepartment,
-                  client: activity.clientName,  // Nome do cliente
-                  clientInfo: activity.description || null, // Adiciona informações adicionais do cliente (descrição)
-                  progress: progresses
-                };
-              })
-            );
+            // Ordenar os progressos por departamento e encontrar o pendente mais recente
+            // para determinar em qual departamento a atividade está atualmente
+            const pendingProgress = progresses
+              .filter(p => p.status === 'pending')
+              .sort((a, b) => {
+                const deptOrder = ['gabarito', 'impressao', 'batida', 'costura', 'embalagem'];
+                return deptOrder.indexOf(a.department as any) - deptOrder.indexOf(b.department as any);
+              })[0];
+              
+            // Verificar se o pedido foi concluído pelo último departamento (embalagem)
+            const embalagemProgress = progresses.find(p => p.department === 'embalagem');
+            const pedidoConcluido = embalagemProgress && embalagemProgress.status === 'completed';
             
-            activitiesWithProgress.push(...processedBatch);
-          }
-          
-          // Armazena dados processados no cache por 5 minutos para otimizar requisições futuras
-          cache.set(statusCacheKey, activitiesWithProgress, 300000); // 5 minutos
-        }
+            // Determinar o departamento atual ou marcar como concluído se embalagem já finalizou
+            let currentDepartment = pendingProgress ? pendingProgress.department : 'gabarito';
+            
+            // Se o pedido foi concluído pela embalagem, vamos marcar como "concluido" em vez de voltar para o gabarito
+            if (!pendingProgress && pedidoConcluido) {
+              currentDepartment = 'concluido';
+            }
+            
+            return {
+              ...activity,
+              currentDepartment,
+              client: activity.clientName,  // Nome do cliente
+              clientInfo: activity.description || null, // Adiciona informações adicionais do cliente (descrição)
+              progress: progresses
+            };
+          })
+        );
         
-        // Filtragem por status após processamento
-        let result = activitiesWithProgress;
-        if (status === 'concluido') {
-          result = activitiesWithProgress.filter(act => act.currentDepartment === 'concluido');
-        } else if (status === 'producao') {
-          result = activitiesWithProgress.filter(act => act.currentDepartment !== 'concluido');
-        }
+        // Guardar em cache por 15 segundos
+        cache.set(cacheKey, activitiesWithProgress, 15000);
         
-        // Ordenar por data de entrega para melhorar usabilidade
-        result.sort((a, b) => {
-          if (!a.deadline && !b.deadline) return 0;
-          if (!a.deadline) return 1;  // Sem data vai para o final
-          if (!b.deadline) return -1; // Sem data vai para o final
-          return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
-        });
-        
-        // Aplicar paginação
-        const paginatedResult = {
-          items: result.slice((page - 1) * limit, page * limit),
-          total: result.length,
-          page,
-          totalPages: Math.ceil(result.length / limit)
-        };
-        
-        // Guardar em cache por 30 segundos (aumentado para reduzir requisições)
-        cache.set(cacheKey, paginatedResult, 30000);
-        
-        return res.json(paginatedResult);
+        return res.json(activitiesWithProgress);
       } else if (req.user) {
         const department = req.user.role;
+        console.log(`[DEBUG] Usuario ${req.user.username} (${department}) solicitando atividades`);
         
         // Usar a solução emergencial para TODOS os departamentos
         console.log(`[EMERGENCIA] Usando método direto para buscar atividades do departamento ${department}`);
         const activities = await buscarAtividadesPorDepartamentoEmergencia(department);
         
-        // Aplicar paginação também para departamentos
-        const result = {
-          items: activities.slice((page - 1) * limit, page * limit),
-          total: activities.length,
-          page,
-          totalPages: Math.ceil(activities.length / limit)
-        };
+        // Guardar em cache por 15 segundos
+        cache.set(cacheKey, activities, 15000);
         
-        // Guardar em cache por 30 segundos
-        cache.set(cacheKey, result, 30000);
-        
-        return res.json(result);
+        return res.json(activities);
       } else {
         return res.status(401).json({ message: "Usuário não autenticado" });
       }
