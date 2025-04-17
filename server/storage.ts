@@ -954,14 +954,13 @@ export class DatabaseStorage implements IStorage {
     console.log(`[DB OTIMIZADO] Buscando até ${limit} atividades em progresso no banco de dados`);
     try {
       // OTIMIZAÇÃO: Buscar primeiro todos os IDs das atividades que têm pelo menos um progresso pendente
-      const result = await db.execute(sql`
-        SELECT DISTINCT "activityId" 
-        FROM "activity_progress" 
-        WHERE "status" = 'pending'
-        LIMIT ${limit * 2}
-      `);
+      const pendingProgresses = await db
+        .select({ activityId: activityProgress.activityId })
+        .from(activityProgress)
+        .where(eq(activityProgress.status, 'pending'))
+        .limit(limit * 2);
       
-      const activityIds = result.rows.map(row => Number(row.activityId));
+      const activityIds = pendingProgresses.map(row => row.activityId);
       
       if (activityIds.length === 0) {
         console.log('[DB OTIMIZADO] Nenhuma atividade em progresso encontrada');
@@ -1003,13 +1002,22 @@ export class DatabaseStorage implements IStorage {
       const deptMap = new Map();
       
       // Buscar todos os progressos pendentes para estas atividades
-      const progresses = await db
-        .select()
-        .from(activityProgress)
-        .where(and(
-          inArray(activityProgress.activityId, activitiesData.map(a => a.id)),
-          eq(activityProgress.status, 'pending')
-        ));
+      const progressResults = [];
+      
+      // Como não podemos usar inArray diretamente, vamos fazer múltiplas consultas
+      for (const activity of activitiesData) {
+        const result = await db
+          .select()
+          .from(activityProgress)
+          .where(and(
+            eq(activityProgress.activityId, activity.id),
+            eq(activityProgress.status, 'pending')
+          ));
+          
+        progressResults.push(...result);
+      }
+      
+      const progresses = progressResults;
       
       // Determinar departamento atual para cada atividade
       const deptOrder = ['gabarito', 'impressao', 'batida', 'costura', 'embalagem'];
