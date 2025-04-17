@@ -6,7 +6,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { 
   RefreshCw, Activity, Clock, Calendar, Users, ChevronRight, 
-  AlertTriangle, Layers, CheckCircle2, Bell, Eye, Edit, 
+  AlertTriangle, AlertCircle, Layers, CheckCircle2, Bell, Eye, Edit, 
   Trash, Plus, Loader2, Search, ArrowUpCircle, ArrowDownCircle,
   Briefcase, Printer, Hammer, Scissors, Package, ChevronDown, ChevronUp
 } from "lucide-react";
@@ -610,8 +610,39 @@ function OptimizedActivitiesList({ showCompleted }: { showCompleted: boolean }):
   // Referência para manter o estado antigo enquanto carrega
   const activitiesCache = useRef<any>(null);
 
+  // Armazenar localmente os dados para acesso imediato durante recargas
+  useEffect(() => {
+    // Carregar dados iniciais do localStorage se disponíveis (apenas para pedidos em produção)
+    if (!showCompleted && !activitiesCache.current) {
+      try {
+        const cachedData = localStorage.getItem('activities_production_cache');
+        if (cachedData) {
+          const parsed = JSON.parse(cachedData);
+          // Verificar se o cache não é muito antigo (< 10 minutos)
+          const cacheTime = localStorage.getItem('activities_production_cache_time');
+          const isValidCache = cacheTime && (Date.now() - parseInt(cacheTime)) < 10 * 60 * 1000;
+          
+          if (isValidCache && parsed?.items?.length > 0) {
+            console.log(`[CACHE-ULTRA] Usando cache local com ${parsed.items.length} pedidos para exibição instantânea`);
+            activitiesCache.current = parsed;
+            // Pré-carregar o cache do TanStack Query para exibição imediata
+            queryClient.setQueryData(
+              ["/api/admin-dashboard/activities", "producao", page, searchQuery], 
+              parsed
+            );
+          }
+        }
+      } catch (e) {
+        console.error("[CACHE-ULTRA] Erro ao carregar cache:", e);
+      }
+    }
+  }, [showCompleted, queryClient, page, searchQuery]);
+
   // Monitorar o status do carregamento (para mostrar feedback visual)
   const [loadingState, setLoadingState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  
+  // Manter um contador de tentativas de carregamento para aumentar a resiliência
+  const retryCountRef = useRef(0);
   
   const { data: activitiesResponse, isLoading } = useQuery({
     queryKey: ["/api/admin-dashboard/activities", showCompleted ? 'concluido' : 'producao', page, searchQuery],
@@ -635,6 +666,9 @@ function OptimizedActivitiesList({ showCompleted }: { showCompleted: boolean }):
           url.searchParams.append("search", searchQuery);
         }
         
+        // Para pedidos em produção, usar cache-busting para garantir dados frescos
+        url.searchParams.append("_t", Date.now().toString());
+        
         // Timeout mais curto para evitar esperas muito longas
         const controller = new AbortController();
         
@@ -642,18 +676,19 @@ function OptimizedActivitiesList({ showCompleted }: { showCompleted: boolean }):
         const timeoutMs = showCompleted ? 8000 : 5000; // 5s para produção, 8s para concluídos
         const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
         
-        // Para pedidos em produção, usar cache-busting para garantir dados frescos
+        // Headers para evitar cache do navegador
         const fetchOptions: RequestInit = {
-          signal: controller.signal
-        };
-        
-        if (!showCompleted) {
-          // Adicionar timestamp para evitar cache do navegador e garantir dados frescos
-          url.searchParams.append("_t", Date.now().toString());
-          fetchOptions.headers = {
+          signal: controller.signal,
+          headers: {
             'Cache-Control': 'no-cache, no-store',
             'Pragma': 'no-cache'
-          };
+          }
+        };
+        
+        // Adicionar um curto atraso antes da primeira requisição para dar tempo
+        // de outras requisições mais cruciais terminarem primeiro (apenas na primeira carga)
+        if (retryCountRef.current === 0 && !showCompleted) {
+          await new Promise(resolve => setTimeout(resolve, 300));
         }
         
         const response = await fetch(url.toString(), fetchOptions);
@@ -667,30 +702,67 @@ function OptimizedActivitiesList({ showCompleted }: { showCompleted: boolean }):
         const data = await response.json();
         console.log(`Recebidos ${data?.items?.length || 0} pedidos ${showCompleted ? 'concluídos' : 'em produção'}`);
         
+        // Resetar contador de tentativas após sucesso
+        retryCountRef.current = 0;
+        
         // Guardar no cache local para ter um fallback sempre disponível
         activitiesCache.current = data;
         setLoadingState('success');
+        
+        // Salvar no localStorage para carregamentos futuros (apenas para pedidos em produção)
+        if (!showCompleted && data?.items?.length > 0) {
+          try {
+            localStorage.setItem('activities_production_cache', JSON.stringify(data));
+            localStorage.setItem('activities_production_cache_time', Date.now().toString());
+          } catch (e) {
+            console.error("[CACHE-ULTRA] Erro ao salvar cache:", e);
+          }
+        }
         
         return data;
       } catch (error) {
         console.error("Erro na busca de pedidos:", error);
         setLoadingState('error');
         
+        // Incrementar contador de tentativas
+        retryCountRef.current++;
+        
+        // ESTRATÉGIA DE SUPER-RESILIÊNCIA
         // Em caso de erro, usar o cache local como fallback (não dispara erro)
         if (activitiesCache.current) {
-          console.log("Usando cache local como fallback devido a erro");
+          console.log(`Usando cache local como fallback devido a erro (tentativa ${retryCountRef.current})`);
           return activitiesCache.current;
+        }
+        
+        // Se não tem cache local e os pedidos são em produção (mais críticos), gerar um objeto vazio válido
+        // para não quebrar a UI e possibilitar nova tentativa automática de carregamento
+        if (!showCompleted) {
+          console.log("Sem cache disponível. Criando estrutura em branco para tentar novamente.");
+          return { 
+            items: [], 
+            total: 0,
+            page: 1,
+            totalPages: 1
+          };
         }
         
         throw error;
       }
     },
-    staleTime: showCompleted ? 30000 : 10000, // Tempo mais curto para pedidos em produção (10s vs 30s)
-    retry: 1, // Apenas uma tentativa adicional em caso de falha
-    retryDelay: 1500, // 1.5 segundos entre tentativas (reduzido)
+    staleTime: showCompleted ? 30000 : 8000, // Tempo mais curto para pedidos em produção
+    retry: 2, // Mais tentativas para garantir carregamento
+    retryDelay: attempt => Math.min(1000 * 2 ** attempt, 10000), // Exponential backoff com máximo de 10s
     refetchOnWindowFocus: !showCompleted, // Recarregar quando a janela ganha foco (apenas para pedidos em produção)
-    refetchInterval: showCompleted ? false : 20000, // Recarrega a cada 20 segundos (apenas para pedidos em produção)
-    placeholderData: (prev) => prev // Mantém dados anteriores enquanto carrega novos
+    refetchInterval: showCompleted ? false : 15000, // Recarrega a cada 15s (apenas para pedidos em produção)
+    placeholderData: (prev) => prev, // Mantém dados anteriores enquanto carrega novos
+    // Definir InitialData para garantir que algo seja exibido imediatamente
+    initialData: () => {
+      if (activitiesCache.current) {
+        console.log("[ULTRA-INITIAL] Usando cache existente como dados iniciais");
+        return activitiesCache.current;
+      }
+      return undefined;
+    }
   });
   
   // Extrair dados da resposta paginada
