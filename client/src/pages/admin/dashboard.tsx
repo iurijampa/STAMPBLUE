@@ -562,190 +562,90 @@ function RecentActivities() {
   );
 }
 
-// Componente super simples apenas para listar os pedidos em produção
+// Versão ultra simplificada para listar pedidos em produção
 function SimpleProductionList() {
-  const [, navigate] = useLocation();
-  const { toast } = useToast();
-  const [selectedActivity, setSelectedActivity] = useState<any>(null);
-  const [viewModalOpen, setViewModalOpen] = useState(false);
-  const [editModalOpen, setEditModalOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [activities, setActivities] = useState<any[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const [data, setData] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   
-  // Buscar pedidos em produção diretamente
+  // Carregar dados diretamente, sem componentes complexos
   useEffect(() => {
-    const fetchActivities = async () => {
-      setIsLoading(true);
-      setError(null);
-      
+    async function carregarPedidos() {
       try {
-        const response = await fetch("/api/admin-dashboard/activities?status=producao&limit=50");
+        setLoading(true);
+        const response = await fetch("/api/admin-dashboard/activities?status=producao");
         
-        if (!response.ok) {
-          throw new Error(`Erro ao buscar pedidos: ${response.status}`);
+        if (response.ok) {
+          const resultado = await response.json();
+          setData(resultado.items || []);
+          console.log(`PEDIDOS CARREGADOS: ${resultado.items.length}`);
+        } else {
+          console.error("Erro ao carregar pedidos:", response.status);
         }
-        
-        const data = await response.json();
-        setActivities(data.items || []);
-        console.log(`Recebidos ${data.items.length} pedidos em produção`);
       } catch (err) {
-        console.error("Erro na busca de pedidos:", err);
-        setError("Falha ao carregar pedidos. Tente novamente.");
+        console.error("Falha ao carregar pedidos:", err);
       } finally {
-        setIsLoading(false);
+        setLoading(false);
       }
-    };
+    }
     
-    fetchActivities();
+    carregarPedidos();
     
-    // Atualizar a cada 30 segundos
-    const intervalId = setInterval(fetchActivities, 30000);
-    
-    return () => {
-      clearInterval(intervalId);
-    };
+    // Recarregar a cada 30 segundos
+    const interval = setInterval(carregarPedidos, 30000);
+    return () => clearInterval(interval);
   }, []);
   
-  const handleView = (activity: any) => {
-    setSelectedActivity(activity);
-    setViewModalOpen(true);
-  };
+  if (loading) {
+    return (
+      <div className="flex justify-center p-8">
+        <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />
+        <span className="ml-3">Carregando pedidos...</span>
+      </div>
+    );
+  }
   
-  const handleEdit = (activity: any) => {
-    setSelectedActivity(activity);
-    setEditModalOpen(true);
-  };
+  if (data.length === 0) {
+    return (
+      <div className="text-center p-8">
+        <p>Nenhum pedido em produção no momento.</p>
+      </div>
+    );
+  }
   
-  // Calcular cor com base na data de entrega
-  const getDeadlineStyle = (deadline: string) => {
-    if (!deadline) return { color: "text-gray-500", badge: "Sem prazo" };
-    
-    try {
-      const deadlineDate = new Date(deadline);
-      const today = new Date();
-      const diffDays = Math.floor((deadlineDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-      
-      if (diffDays < 0) {
-        return { color: "text-red-500", badge: "Atrasado" };
-      } else if (diffDays <= 3) {
-        return { color: "text-amber-500", badge: "Próximo" };
-      } else {
-        return { color: "text-green-500", badge: "No prazo" };
-      }
-    } catch (e) {
-      return { color: "text-gray-500", badge: "Data inválida" };
-    }
-  };
-  
-  // Formatar data para exibição
-  const formatDate = (dateString: string) => {
-    if (!dateString) return "Data não disponível";
-    
-    try {
-      const date = new Date(dateString);
-      return date.toLocaleDateString('pt-BR');
-    } catch (e) {
-      return "Data inválida";
-    }
-  };
-  
+  // Renderização extremamente simples sem dependências de componentes complexos
   return (
     <div className="space-y-4">
-      {isLoading ? (
-        <div className="flex justify-center py-8">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <span className="ml-2">Carregando pedidos...</span>
-        </div>
-      ) : error ? (
-        <div className="text-center py-8 text-red-500">
-          <AlertTriangle className="h-8 w-8 mx-auto mb-2" />
-          <p>{error}</p>
-          <Button 
-            onClick={() => window.location.reload()}
-            className="mt-4"
-            variant="outline"
-          >
-            Recarregar página
-          </Button>
-        </div>
-      ) : activities.length === 0 ? (
-        <div className="text-center py-8 text-muted-foreground">
-          <Inbox className="h-8 w-8 mx-auto mb-2" />
-          <p>Nenhum pedido em produção no momento.</p>
-        </div>
-      ) : (
-        <>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>ID</TableHead>
-                <TableHead>Cliente</TableHead>
-                <TableHead>Título</TableHead>
-                <TableHead>Departamento</TableHead>
-                <TableHead>Data de Entrega</TableHead>
-                <TableHead>Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {activities.map((activity) => {
-                const deadlineStyle = getDeadlineStyle(activity.deadline);
-                
-                return (
-                  <TableRow key={activity.id}>
-                    <TableCell>{activity.id}</TableCell>
-                    <TableCell>{activity.client}</TableCell>
-                    <TableCell className="font-medium">{activity.title}</TableCell>
-                    <TableCell>
-                      {activity.department || activity.currentDepartment || "Não definido"}
-                    </TableCell>
-                    <TableCell className={deadlineStyle.color}>
-                      {formatDate(activity.deadline)}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex space-x-2">
-                        <Button 
-                          variant="ghost" 
-                          size="icon"
-                          onClick={() => handleView(activity)}
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="icon"
-                          onClick={() => handleEdit(activity)}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-          
-          {/* Modais de ação */}
-          {selectedActivity && (
-            <>
-              <ViewActivityModal 
-                open={viewModalOpen} 
-                onClose={() => setViewModalOpen(false)} 
-                activity={selectedActivity}
-              />
-              <EditActivityModal 
-                open={editModalOpen}
-                onClose={() => {
-                  setEditModalOpen(false);
-                  setSelectedActivity(null);
-                }}
-                activity={selectedActivity}
-              />
-            </>
-          )}
-        </>
-      )}
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse">
+          <thead>
+            <tr className="bg-gray-100 dark:bg-gray-800">
+              <th className="px-4 py-2 text-left">ID</th>
+              <th className="px-4 py-2 text-left">Cliente</th>
+              <th className="px-4 py-2 text-left">Título</th>
+              <th className="px-4 py-2 text-left">Departamento</th>
+              <th className="px-4 py-2 text-left">Data Entrega</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.map((item) => (
+              <tr key={item.id} className="border-b dark:border-gray-700">
+                <td className="px-4 py-2">{item.id}</td>
+                <td className="px-4 py-2">{item.client || item.clientName}</td>
+                <td className="px-4 py-2 font-medium">{item.title}</td>
+                <td className="px-4 py-2">
+                  {item.department || item.currentDepartment || "N/A"}
+                </td>
+                <td className="px-4 py-2">
+                  {item.deadline ? new Date(item.deadline).toLocaleDateString('pt-BR') : "Sem data"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-xs text-muted-foreground text-center mt-2">
+        {data.length} pedidos em produção
+      </p>
     </div>
   );
 }
