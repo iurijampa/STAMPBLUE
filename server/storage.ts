@@ -413,6 +413,91 @@ export class MemStorage implements IStorage {
     this.notifications.set(id, updatedNotification);
     return updatedNotification;
   }
+  
+  // Métodos para otimização ultrarrápida
+  async getCompletedActivities(limit: number = 50): Promise<Activity[]> {
+    console.log(`[DB OTIMIZADO] Buscando até ${limit} atividades concluídas`);
+    const activities = Array.from(this.activities.values());
+    const completedActivities = [];
+    
+    // Buscar todos os progressos de embalagem concluídos
+    const completedInEmbalagem = Array.from(this.activitiesProgress.values())
+      .filter(p => p.department === 'embalagem' && p.status === 'completed')
+      .map(p => p.activityId);
+      
+    // Buscar as atividades correspondentes
+    for (const activityId of completedInEmbalagem) {
+      const activity = this.activities.get(activityId);
+      if (activity) {
+        completedActivities.push({
+          ...activity,
+          currentDepartment: 'concluido' as any
+        });
+        
+        if (completedActivities.length >= limit) break;
+      }
+    }
+    
+    return completedActivities;
+  }
+  
+  async getActivitiesInProgress(limit: number = 50): Promise<Activity[]> {
+    console.log(`[DB OTIMIZADO] Buscando até ${limit} atividades em progresso`);
+    const activities = Array.from(this.activities.values());
+    const activitiesInProgress = [];
+    
+    // Primeiro encontrar atividades que não estão em embalagem concluída
+    const completedInEmbalagem = new Set(
+      Array.from(this.activitiesProgress.values())
+        .filter(p => p.department === 'embalagem' && p.status === 'completed')
+        .map(p => p.activityId)
+    );
+    
+    // Agrupar progressos por atividade para determinar o departamento atual
+    const progressByActivity = new Map();
+    for (const progress of Array.from(this.activitiesProgress.values())) {
+      if (!progressByActivity.has(progress.activityId)) {
+        progressByActivity.set(progress.activityId, []);
+      }
+      progressByActivity.get(progress.activityId).push(progress);
+    }
+    
+    // Encontrar atividades em progresso
+    for (const activity of activities) {
+      // Pular se já está concluída
+      if (completedInEmbalagem.has(activity.id)) continue;
+      
+      const progresses = progressByActivity.get(activity.id) || [];
+      
+      // Encontrar o departamento pendente
+      const pendingProgress = progresses
+        .filter(p => p.status === 'pending')
+        .sort((a, b) => {
+          const deptOrder = ['gabarito', 'impressao', 'batida', 'costura', 'embalagem'];
+          return deptOrder.indexOf(a.department as any) - deptOrder.indexOf(b.department as any);
+        })[0];
+        
+      // Se encontramos um departamento pendente, adicionar à lista
+      if (pendingProgress) {
+        activitiesInProgress.push({
+          ...activity,
+          currentDepartment: pendingProgress.department
+        });
+        
+        if (activitiesInProgress.length >= limit) break;
+      } else if (progresses.length === 0) {
+        // Se não tem nenhum progresso, está em gabarito
+        activitiesInProgress.push({
+          ...activity,
+          currentDepartment: 'gabarito'
+        });
+        
+        if (activitiesInProgress.length >= limit) break;
+      }
+    }
+    
+    return activitiesInProgress;
+  }
 }
 
 // Implementação de armazenamento de banco de dados PostgreSQL usando Drizzle ORM
@@ -823,6 +908,101 @@ export class DatabaseStorage implements IStorage {
     }
     
     return updatedNotification;
+  }
+  
+  // Métodos de otimização ultra-rápida
+  async getCompletedActivities(limit: number = 50): Promise<Activity[]> {
+    console.log(`[DB OTIMIZADO] Buscando até ${limit} atividades concluídas no banco de dados`);
+    
+    // Buscar progressos concluídos em embalagem
+    const embalagemProgresses = await db
+      .select()
+      .from(activityProgress)
+      .where(
+        sql`${activityProgress.department} = 'embalagem' AND ${activityProgress.status} = 'completed'`
+      )
+      .limit(limit);
+    
+    if (embalagemProgresses.length === 0) return [];
+    
+    // Extrair IDs das atividades
+    const activityIds = embalagemProgresses.map(p => p.activityId);
+    
+    // Buscar as atividades correspondentes
+    const completedActivities = await db
+      .select()
+      .from(activities)
+      .where(sql`${activities.id} IN (${activityIds.join(',')})`)
+      .limit(limit);
+    
+    // Adicionar o campo currentDepartment = 'concluido' para compatibilidade
+    return completedActivities.map(activity => ({
+      ...activity,
+      currentDepartment: 'concluido' as any
+    }));
+  }
+  
+  async getActivitiesInProgress(limit: number = 50): Promise<Activity[]> {
+    console.log(`[DB OTIMIZADO] Buscando até ${limit} atividades em progresso no banco de dados`);
+    
+    // Buscar progresso pendente em cada departamento
+    const pendingProgresses = await db
+      .select()
+      .from(activityProgress)
+      .where(sql`${activityProgress.status} = 'pending'`)
+      .orderBy(activityProgress.activityId)
+      .limit(limit * 2); // Buscar mais para filtrar depois
+    
+    if (pendingProgresses.length === 0) return [];
+    
+    // Agrupar por ID de atividade para determinar o departamento atual de cada uma
+    const progressByActivity = new Map();
+    for (const progress of pendingProgresses) {
+      if (!progressByActivity.has(progress.activityId)) {
+        progressByActivity.set(progress.activityId, []);
+      }
+      progressByActivity.get(progress.activityId).push(progress);
+    }
+    
+    // Para cada atividade, determinar o departamento atual (o primeiro pendente na ordem)
+    const activityWithDepartment = [];
+    for (const [activityId, progresses] of progressByActivity.entries()) {
+      // Ordenar progresso pelo ordem dos departamentos
+      const sortedProgresses = progresses.sort((a, b) => {
+        const deptOrder = ['gabarito', 'impressao', 'batida', 'costura', 'embalagem'];
+        return deptOrder.indexOf(a.department as any) - deptOrder.indexOf(b.department as any);
+      });
+      
+      // O primeiro é o departamento atual
+      const currentDepartment = sortedProgresses[0].department;
+      activityWithDepartment.push({
+        activityId,
+        currentDepartment
+      });
+      
+      if (activityWithDepartment.length >= limit) break;
+    }
+    
+    if (activityWithDepartment.length === 0) return [];
+    
+    // Extrair IDs para buscar as atividades
+    const activityIds = activityWithDepartment.map(a => a.activityId);
+    
+    // Buscar as atividades
+    const activitiesData = await db
+      .select()
+      .from(activities)
+      .where(sql`${activities.id} IN (${activityIds.join(',')})`)
+      .limit(limit);
+    
+    // Mapear departamento atual para cada atividade
+    return activitiesData.map(activity => {
+      const deptInfo = activityWithDepartment.find(a => a.activityId === activity.id);
+      return {
+        ...activity,
+        currentDepartment: deptInfo ? deptInfo.currentDepartment : 'gabarito'
+      };
+    });
   }
 }
 
