@@ -134,6 +134,15 @@ router.get('/activities', isAdmin, async (req, res) => {
         return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
       });
       
+      // Log para diagnóstico: mostrar quantos pedidos estamos retornando
+      if (status === 'producao') {
+        console.log(`[ADMIN] Retornando ${filteredActivities.length} pedidos EM PRODUÇÃO`);
+      } else if (status === 'concluido') {
+        console.log(`[ADMIN] Retornando ${filteredActivities.length} pedidos CONCLUÍDOS`);
+      } else {
+        console.log(`[ADMIN] Retornando ${filteredActivities.length} pedidos NO TOTAL`);
+      }
+      
       // Aplicar paginação
       const paginatedResult = {
         items: filteredActivities.slice((page - 1) * limit, page * limit),

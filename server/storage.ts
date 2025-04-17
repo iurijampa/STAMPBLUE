@@ -1003,7 +1003,7 @@ export class DatabaseStorage implements IStorage {
       const activitiesData = await db
         .select()
         .from(activities)
-        .where(sql`${activities.id} IN (${activityIds.join(',')})`);
+        .where(inArray(activities.id, activityIds));
       
       // Mapear atividades por ID para acesso rápido
       const activitiesById = new Map();
