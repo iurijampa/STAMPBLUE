@@ -154,7 +154,7 @@ class LRUCache {
 }
 
 // Cache global otimizado para uso em toda a aplicação
-const cache = new LRUCache(800); // Suporta até 800 itens em cache (aumentado)
+const cache = new LRUCache(1000); // Suporta até 1000 itens em cache (aumentado ainda mais)
 // Expor globalmente para uso em outras partes do código
 (global as any).cache = cache;
 import impressaoRouter from "./solucao-impressao";
