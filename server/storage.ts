@@ -951,97 +951,62 @@ export class DatabaseStorage implements IStorage {
   }
   
   async getActivitiesInProgress(limit: number = 50): Promise<Activity[]> {
-    console.log(`[DB OTIMIZADO] Buscando até ${limit} atividades em progresso no banco de dados`);
+    console.log(`[DB SUPER OTIMIZADO] Buscando até ${limit} atividades em progresso`);
     try {
-      // OTIMIZAÇÃO: Buscar primeiro todos os IDs das atividades que têm pelo menos um progresso pendente
-      const pendingProgresses = await db
-        .select({ activityId: activityProgress.activityId })
-        .from(activityProgress)
-        .where(eq(activityProgress.status, 'pending'))
-        .limit(limit * 2);
+      // SUPER OTIMIZAÇÃO: Buscar atividades diretamente com uma única consulta SQL
+      const result = await db.execute(sql`
+        WITH completed_in_embalagem AS (
+          SELECT DISTINCT "activity_id" 
+          FROM "activity_progress" 
+          WHERE "department" = 'embalagem' AND "status" = 'completed'
+        ),
+        pending_activities AS (
+          SELECT DISTINCT "activity_id" 
+          FROM "activity_progress" 
+          WHERE "status" = 'pending'
+          AND "activity_id" NOT IN (SELECT "activity_id" FROM completed_in_embalagem)
+        )
+        SELECT a.*, MIN(ap."department") as current_department
+        FROM "activities" a
+        JOIN "activity_progress" ap ON a."id" = ap."activity_id"
+        WHERE a."id" IN (SELECT "activity_id" FROM pending_activities)
+        AND ap."status" = 'pending'
+        GROUP BY a."id"
+        ORDER BY a."deadline" ASC NULLS LAST
+        LIMIT ${limit}
+      `);
       
-      const activityIds = pendingProgresses.map(row => row.activityId);
-      
-      if (activityIds.length === 0) {
-        console.log('[DB OTIMIZADO] Nenhuma atividade em progresso encontrada');
-        return [];
-      }
-      
-      // OTIMIZAÇÃO: Buscar todas as atividades de uma vez
-      // Evitando o loop que estava causando lentidão e buscando em lote
+      // Mapear resultados para o formato esperado com tipagem correta
       const activitiesData: Activity[] = [];
       
-      // Como não podemos usar IN com muitos valores, vamos buscar em lotes de 10
-      const batchSize = 10;
-      for (let i = 0; i < activityIds.length; i += batchSize) {
-        const batchIds = activityIds.slice(i, i + batchSize);
-        
-        // Buscar cada ID individualmente e concatenar resultados
-        for (const id of batchIds) {
-          const [activity] = await db
-            .select()
-            .from(activities)
-            .where(eq(activities.id, id));
-            
-          if (activity) {
-            activitiesData.push(activity);
-          }
-          
-          if (activitiesData.length >= limit) break;
-        }
-        
-        if (activitiesData.length >= limit) break;
+      // @ts-ignore - Ignorar erros de tipagem ao acessar resultado SQL bruto
+      for (const row of result.rows) {
+        activitiesData.push({
+          id: Number(row.id),
+          title: row.title,
+          description: row.description,
+          image: row.image,
+          additionalImages: row.additionalImages,
+          quantity: Number(row.quantity),
+          clientName: row.clientName,
+          priority: row.priority,
+          deadline: row.deadline ? new Date(row.deadline) : null,
+          notes: row.notes,
+          createdAt: new Date(row.createdAt),
+          createdBy: Number(row.createdBy),
+          status: row.status,
+          currentDepartment: row.current_department
+        });
       }
       
       if (activitiesData.length === 0) {
-        console.log('[DB OTIMIZADO] Nenhuma atividade em progresso encontrada depois da busca');
+        console.log('[DB SUPER OTIMIZADO] Nenhuma atividade em progresso encontrada');
         return [];
       }
       
-      // OTIMIZAÇÃO: Buscar o departamento atual para cada atividade de uma vez
-      const deptMap = new Map();
-      
-      // Buscar todos os progressos pendentes para estas atividades
-      const progressResults = [];
-      
-      // Como não podemos usar inArray diretamente, vamos fazer múltiplas consultas
-      for (const activity of activitiesData) {
-        const result = await db
-          .select()
-          .from(activityProgress)
-          .where(and(
-            eq(activityProgress.activityId, activity.id),
-            eq(activityProgress.status, 'pending')
-          ));
-          
-        progressResults.push(...result);
-      }
-      
-      const progresses = progressResults;
-      
-      // Determinar departamento atual para cada atividade
-      const deptOrder = ['gabarito', 'impressao', 'batida', 'costura', 'embalagem'];
-      activitiesData.forEach(activity => {
-        const activityProgresses = progresses.filter(p => p.activityId === activity.id);
-        
-        if (activityProgresses.length === 0) {
-          deptMap.set(activity.id, 'gabarito'); // Fallback
-          return;
-        }
-        
-        // Ordenar por ordem do departamento
-        activityProgresses.sort((a, b) => 
-          deptOrder.indexOf(a.department as any) - deptOrder.indexOf(b.department as any)
-        );
-        
-        deptMap.set(activity.id, activityProgresses[0].department);
-      });
-      
-      // Retornar atividades com departamento atual
-      return activitiesData.map(activity => ({
-        ...activity,
-        currentDepartment: deptMap.get(activity.id) || 'gabarito'
-      }));
+      // Retornar diretamente o resultado já com o departamento atual
+      // Não precisamos fazer mais consultas, pois o SQL já buscou tudo de uma vez só
+      return activitiesData;
     } catch (error) {
       console.error('[DB ERROR] Erro ao buscar atividades em progresso:', error);
       // Não queremos que falhas aqui interrompam a execução
